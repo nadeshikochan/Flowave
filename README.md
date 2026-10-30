@@ -37,25 +37,27 @@ Flowave 用于沉浸式听音乐，注重歌曲之间风格和听感的连续性
 
 ## 用户界面
 
-### 歌曲
+### 歌曲播放
 
-多目录曲库、搜索、歌单和播放队列。以下以 ChouCho《大切な宝物》为例。
+多目录曲库、搜索、歌单和播放队列。以下以ヨルシカ《雨とカプチーノ》1:00处为例，展示从歌曲列表进入歌词页。
 
-<p><img width="100%" src="docs/images/library.png" alt="歌曲页面：ChouCho 大切な宝物"></p>
+<p><a href="docs/images/playback.mp4"><img width="100%" src="docs/images/playback.gif" alt="雨とカプチーノ 1:00–1:10 播放演示"></a></p>
+
+[观看 MP4 视频](docs/images/playback.mp4) · [查看 1:00 歌曲页面](docs/images/library.png)
 
 ### 歌词
 
 支持逐字歌词、多语言歌词和桌面歌词，可以调整字号、配色与背景。
 
-<p><img width="100%" src="docs/images/lyrics.png" alt="歌词页面：ChouCho 大切な宝物"></p>
+<p><img width="100%" src="docs/images/lyrics.png" alt="歌词页面：雨とカプチーノ 1:00"></p>
 
 ### 声音地图
 
 查看这首歌附近的音乐，也可以切换全库视图、歌曲比较和听歌轨迹。
 
-<p><img width="100%" src="docs/images/map.png" alt="大切な宝物附近的歌曲关系"></p>
+<p><img width="100%" src="docs/images/map.png" alt="雨とカプチーノ附近的歌曲关系"></p>
 
-这三张图使用当前界面、本地已有歌曲资料及保存的音频向量关系渲染，仅用于界面展示，未附带音乐文件。
+以上演示使用当前界面、本地已有歌曲资料及保存的音频向量关系渲染。静态页面停在1:00，播放动画为1:00–1:10的无声演示，不含歌曲音频。
 
 ### 在线搜索
 
