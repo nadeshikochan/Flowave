@@ -1,0 +1,14 @@
+/* Keep readable theme text; color identifies form, with labels as a second cue. */
+.analysis-structure-timeline>button,.training-navigation>.training-segment{
+  background:color-mix(in srgb,var(--section-color,#90969f) 24%,var(--bg,#f6f6f8));
+  color:var(--text,#20232b);
+  box-shadow:inset 0 3px var(--section-color,#90969f);
+}
+.analysis-structure-timeline>button.current{
+  background:color-mix(in srgb,var(--section-color,#90969f) 40%,var(--bg,#f6f6f8));
+  box-shadow:inset 0 3px var(--section-color,#90969f),inset 0 -3px var(--text,#20232b);
+}
+.analysis-structure-now>strong::before,.analysis-structure-list button>strong::before{
+  content:'';display:inline-block;width:8px;height:8px;border-radius:50%;
+  margin-right:8px;background:var(--section-color,#90969f);
+}

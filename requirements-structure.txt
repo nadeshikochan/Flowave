@@ -1,0 +1,15 @@
+# Optional offline structure component; never loaded by the resident API.
+# Keep the already verified CUDA PyTorch runtime (BF16 capable), no CPU replacement.
+# Exact promoted assets/provenance: data/components/music-structure/manifest.json.
+numpy>=2.0,<3
+scipy>=1.14,<2
+soundfile>=0.13,<0.14
+muq==0.1.0
+transformers==4.48.3
+tokenizers==0.21.4
+huggingface_hub==0.36.0
+safetensors>=0.4,<1
+x-transformers==2.3.9
+ema-pytorch==0.7.7
+einx==0.3.0
+frozendict==2.4.6

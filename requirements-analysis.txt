@@ -1,0 +1,11 @@
+# Optional music-analysis component, installed separately from the resident API.
+# Use an existing verified CUDA PyTorch runtime; do not replace it with CPU torch.
+numpy>=2.0,<3
+scipy>=1.14,<2
+soundfile>=0.13,<0.14
+onnxruntime>=1.20,<2
+muq==0.1.0
+transformers==4.48.3
+tokenizers==0.21.4
+huggingface_hub==0.36.0
+sentencepiece==0.2.1

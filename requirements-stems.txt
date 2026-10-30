@@ -1,0 +1,13 @@
+# Optional isolated GPU separation runtime. Never imported or installed at startup.
+# Install the appropriate CUDA torch wheel separately; retain the existing index environment.
+torch>=2.7.1
+numpy>=1.26
+scipy>=1.12
+soundfile>=0.13
+av>=14
+librosa>=0.10.2
+pyyaml>=6.0.1
+tqdm>=4.60
+imageio-ffmpeg==0.6.0
+# Pinned pymss 2.1.9 / pymss-core 0.1.11 wheels are verified and extracted by
+# scripts/prepare-stem-runtime.py into models/stem-separation/runtime.

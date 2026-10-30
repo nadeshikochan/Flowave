@@ -1,0 +1,53 @@
+{
+  "audio_dir": "",
+  "download_dir": "",
+  "similarity": {
+    "like_min": 0.98,
+    "like_max": 0.99,
+    "fallback_top_n": 10
+  },
+  "dislike": {
+    "min_sim": 0.85,
+    "max_sim": 0.93
+  },
+  "dislike_correction": {
+    "enabled": true,
+    "enable_recommend_rate_fix": true,
+    "rec_strength": 1.0,
+    "rec_fix_min": 0.1,
+    "rec_fix_max": 20.0,
+    "auto_rebuild_recommend_rate": true,
+    "enable_skip_rate_fix": true,
+    "skip_strength": 1.0,
+    "skip_fix_min": 0.33,
+    "skip_fix_max": 2.0,
+    "skip_smooth_k": 20,
+    "daily_decay": 0.98,
+    "consecutive_dislike_threshold": 0,
+    "long_pause_reset_minutes": 10
+  },
+  "history": {
+    "allow_duplicates": false,
+    "repeat_policy": "disallow",
+    "no_repeat_within": 100
+  },
+  "index": {
+    "per_file_timeout": 30
+  },
+  "model": {
+    "source": "m-a-p/MERT-v1-330M",
+    "local_dir": "models/MERT-v1-330M"
+  },
+  "seed": {
+    "tau": 30,
+    "tau_pos": 20,
+    "tau_neg": 5,
+    "lambda_neg": 0.5
+  },
+  "online": {
+    "auto_index_enabled": true,
+    "auto_index_after_seconds": 60,
+    "default_quality": "320k",
+    "exclude_tokens": []
+  }
+}

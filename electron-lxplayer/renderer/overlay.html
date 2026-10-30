@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: kumiko-media: http: https:; object-src 'none'; base-uri 'none'; frame-src 'none';" />
+  <title>Flowave 桌面歌词</title>
+  <link rel="stylesheet" href="overlay.css" />
+</head>
+<body>
+  <div id="overlay" class="overlay-root">
+    <div class="overlay-top drag-region">
+      <div class="overlay-title">桌面歌词</div>
+      <div class="overlay-actions no-drag">
+        <button id="btn-lock" class="ov-btn" type="button">锁定</button>
+        <button id="btn-font" class="ov-btn" type="button">字号</button>
+        <button id="btn-opacity" class="ov-btn" type="button">透明</button>
+        <button id="btn-current-only" class="ov-btn" type="button">仅当前句</button>
+      </div>
+    </div>
+    <div class="overlay-content">
+      <div id="meta" class="overlay-meta"></div>
+      <div id="current-main" class="overlay-current"></div>
+      <div id="current-sub" class="overlay-sub"></div>
+      <div id="next-main" class="overlay-next"></div>
+      <div id="next-sub" class="overlay-next-sub"></div>
+    </div>
+  </div>
+  <script src="lyric-timing.js"></script>
+  <script src="overlay.js"></script>
+</body>
+</html>

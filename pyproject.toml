@@ -1,0 +1,20 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py310"
+exclude = [
+  ".git",
+  ".venv",
+  "build",
+  "data",
+  "electron-lxplayer/dist",
+  "electron-lxplayer/node_modules",
+  "models",
+  "test",
+  "备份",
+]
+
+[tool.ruff.lint]
+select = ["E9", "F401", "F63", "F7", "F81", "F82", "F841"]

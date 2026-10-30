@@ -1,0 +1,140 @@
+const { contextBridge, ipcRenderer } = require("electron");
+const SUBSCRIPTION_CHANNELS = new Set([
+  'lx-audio-output-changed',
+  "hotkey",
+  "lx-media-diag",
+  "lx-lyric-overlay-action",
+  "lx-lyric-overlay-state",
+  "lx-player-control",
+  "lx-audio-focus-event",
+  "lx-installer-progress",
+  "lx-song-info-batch-updated",
+  "lx-song-tags-updated",
+]);
+
+async function getSongInfo(trackPath, options = {}) {
+  if (!trackPath) return null;
+  try {
+    const info = await ipcRenderer.invoke("lx-get-song-info", trackPath, {
+      includeLyricsModel: options?.includeLyricsModel === true,
+      includeLyrics: options?.includeLyrics !== false,
+      includeAudioDetails: options?.includeAudioDetails === true,
+      resourceId: String(options?.resourceId || ""),
+    });
+    if (info) return info;
+  } catch (e) {
+    // ignore
+  }
+  return {
+    path: trackPath,
+    title: trackPath,
+    artist: "未知艺术家",
+    album: "",
+    duration: 0,
+    cover: "",
+    lyrics: "",
+  };
+}
+
+function subscribe(channel, callback) {
+  if (!SUBSCRIPTION_CHANNELS.has(channel)) {
+    throw new Error("不允许订阅该主进程事件");
+  }
+  const listener = (_event, data) => callback?.(data);
+  ipcRenderer.on(channel, listener);
+  return () => ipcRenderer.removeListener(channel, listener);
+}
+
+contextBridge.exposeInMainWorld("lxEnv", {
+  getFeatureSelectionSync: () => ipcRenderer.sendSync('lx-features-get-sync'),
+  selectFeature: value => ipcRenderer.invoke('lx-features-select', value),
+  getAudioOutput:()=>ipcRenderer.invoke('lx-audio-output-get'),
+  acquireAudioOutput:id=>ipcRenderer.invoke('lx-audio-output-acquire',id),
+  releaseAudioOutput:id=>ipcRenderer.invoke('lx-audio-output-release',id),
+  onAudioOutputChanged:callback=>subscribe('lx-audio-output-changed',callback),
+  getSongInfo,
+  querySongInfo: (payload) => ipcRenderer.invoke("lx-song-info-query", payload || {}),
+  showLyricInFolder: (trackPath) => ipcRenderer.invoke("lx-lyric-show-in-folder", trackPath),
+  cancelSongInfoQuery: (requestId) => ipcRenderer.invoke("lx-song-info-query-cancel", requestId),
+  getSongInfoCover: (payload) => ipcRenderer.invoke("lx-song-info-cover-get", payload || {}),
+  cancelSongInfoCover: (requestId) => ipcRenderer.invoke("lx-song-info-cover-cancel", requestId),
+  clearSongInfoCache: () => ipcRenderer.invoke("lx-song-info-cache-clear"),
+  listSongInfoBatchTasks: () => ipcRenderer.invoke("lx-song-info-batch-list"),
+  createSongInfoBatchTask: (payload) => ipcRenderer.invoke("lx-song-info-batch-create", payload || {}),
+  startSongInfoBatchTask: (taskId) => ipcRenderer.invoke("lx-song-info-batch-start", taskId),
+  cancelSongInfoBatchTask: (taskId) => ipcRenderer.invoke("lx-song-info-batch-cancel", taskId),
+  retrySongInfoBatchTask: (payload) => ipcRenderer.invoke("lx-song-info-batch-retry", payload || {}),
+  confirmSongInfoBatchCandidate: (payload) => ipcRenderer.invoke("lx-song-info-batch-confirm", payload || {}),
+  skipSongInfoBatchItem: (payload) => ipcRenderer.invoke("lx-song-info-batch-skip", payload || {}),
+  onSongInfoBatchUpdated: (callback) => subscribe("lx-song-info-batch-updated", callback),
+  getBackendConfigSync: () => ipcRenderer.sendSync("lx-backend-config-get-sync"),
+  getRendererStateSync: () => ipcRenderer.sendSync("lx-renderer-state-get-sync"),
+  getStartupBackgroundSync: () => ipcRenderer.sendSync('lx-startup-background-get-sync'),
+  setStartupBackground: reset => ipcRenderer.invoke('lx-startup-background-set', reset === true),
+  getRendererState: () => ipcRenderer.invoke("lx-renderer-state-get"),
+  setRendererState: (key, value) => ipcRenderer.invoke("lx-renderer-state-set", { key, value }),
+  removeRendererState: (key) => ipcRenderer.invoke("lx-renderer-state-remove", { key }),
+  appendListeningTrace: (event) => ipcRenderer.invoke("lx-listening-trace-append", event),
+  saveListeningTraceHot: payload => ipcRenderer.invoke('lx-listening-trace-hot', payload),
+  prepareListeningTrace: raw => ipcRenderer.invoke('lx-listening-trace-prepare', raw),
+  getListeningTraceRoutes: payload => ipcRenderer.invoke('lx-listening-trace-routes', payload),
+  getListeningTraceRoute: traceId => ipcRenderer.invoke('lx-listening-trace-route', {traceId}),
+  getListeningTraceAttempt: attemptId => ipcRenderer.invoke('lx-listening-trace-attempt', {attemptId}),
+  rebuildListeningTrace: () => ipcRenderer.invoke('lx-listening-trace-rebuild'),
+  rollbackListeningTrace: () => ipcRenderer.invoke('lx-listening-trace-rollback'),
+  getListeningHistory: () => ipcRenderer.invoke("lx-listening-history-get"),
+  getListeningHistoryStatus: () => ipcRenderer.invoke("lx-listening-history-status"),
+  setListeningHistory: (payload) => ipcRenderer.invoke("lx-listening-history-set", payload || {}),
+  clearListeningStats: () => ipcRenderer.invoke("lx-listening-history-clear-stats"),
+  resetRecommendationBehavior: () => ipcRenderer.invoke("lx-listening-history-reset-recommendation-behavior"),
+  resetListeningHistory: () => ipcRenderer.invoke("lx-listening-history-reset"),
+  showSongInFolder: (trackPath) => ipcRenderer.invoke("lx-show-song-in-folder", trackPath),
+  openAnalysisData: () => ipcRenderer.invoke("lx-open-analysis-data"),
+  windowControl: (action) => ipcRenderer.invoke("lx-window-control", action),
+  installModel: () => ipcRenderer.invoke("lx-install-model"),
+  installRecommendationEngine: () => ipcRenderer.invoke("lx-install-recommendation-engine"),
+  onInstallerProgress: (cb) => subscribe("lx-installer-progress", cb),
+  getLyricSourceConfig: () => ipcRenderer.invoke("lx-lyric-source-get"),
+  setLyricSourceConfig: (payload) => ipcRenderer.invoke("lx-lyric-source-set", payload || {}),
+  pickLyricSourceDirectory: () => ipcRenderer.invoke("lx-lyric-source-pick"),
+  getLyricFileState: (trackPath) => ipcRenderer.invoke("lx-lyric-file-state", trackPath),
+  getSongTagCapabilities: () => ipcRenderer.invoke("lx-song-tags-capabilities"),
+  prepareSongTagSave: payload => ipcRenderer.invoke("lx-song-tags-prepare", payload),
+  cancelQueuedSongTagSave: requestId => ipcRenderer.invoke("lx-song-tags-cancel-queued", { requestId }),
+  commitSongTagSave: confirmationId => ipcRenderer.invoke("lx-song-tags-commit", { confirmationId }),
+  cancelSongTagSave: confirmationId => ipcRenderer.invoke("lx-song-tags-cancel", { confirmationId }),
+  undoSongTagSave: payload => ipcRenderer.invoke("lx-song-tags-undo", payload),
+  setTagPlaybackTarget: payload => ipcRenderer.invoke("lx-song-tags-playback", payload),
+  waitForTagWrite: path => ipcRenderer.invoke("lx-song-tags-wait", { path }),
+  onSongTagsUpdated: cb => subscribe("lx-song-tags-updated", cb),
+  prepareLyricSave: (payload) => ipcRenderer.invoke("lx-lyric-save-prepare", payload || {}),
+  commitLyricSave: (payload) => ipcRenderer.invoke("lx-lyric-save-commit", payload || {}),
+  cancelLyricSave: (confirmationId) => ipcRenderer.invoke("lx-lyric-save-cancel", confirmationId),
+  getRecentLyricSave: () => ipcRenderer.invoke("lx-lyric-save-recent"),
+  undoLyricSave: (transactionId) => ipcRenderer.invoke("lx-lyric-save-undo", transactionId),
+  onHotkey: (cb) => subscribe("hotkey", cb),
+  getMediaDiag: () => ipcRenderer.invoke("lx-media-diag-get"),
+  onMediaDiag: (cb) => subscribe("lx-media-diag", cb),
+  getShortcuts: () => ipcRenderer.invoke("lx-shortcuts-get"),
+  setShortcuts: (partial) => ipcRenderer.invoke("lx-shortcuts-set", partial),
+  resetShortcuts: () => ipcRenderer.invoke("lx-shortcuts-reset"),
+  openLyricOverlay: (payload) => ipcRenderer.invoke("lx-lyric-overlay-open", payload || {}),
+  closeLyricOverlay: () => ipcRenderer.invoke("lx-lyric-overlay-close"),
+  updateLyricOverlay: (payload) => ipcRenderer.invoke("lx-lyric-overlay-update", payload || {}),
+  onLyricOverlayAction: (cb) => subscribe("lx-lyric-overlay-action", cb),
+  onLyricOverlayState: (cb) => subscribe("lx-lyric-overlay-state", cb),
+  onlineSearch: (payload) => ipcRenderer.invoke("lx-online-search", payload || {}),
+  onlineSonglistSearch: (payload) => ipcRenderer.invoke("lx-online-songlist-search", payload || {}),
+  onlineSonglistTracks: (payload) => ipcRenderer.invoke("lx-online-songlist-tracks", payload || {}),
+  resolveOnlineUrl: (payload) => ipcRenderer.invoke("lx-online-resolve-url", payload || {}),
+  getOnlineLyric: (payload) => ipcRenderer.invoke("lx-online-get-lyric", payload || {}),
+  getOnlineSourceInfo: () => ipcRenderer.invoke("lx-online-source-info"),
+  getOnlineSourceConfig: () => ipcRenderer.invoke("lx-online-source-config-get"),
+  pickOnlineSourceScript: () => ipcRenderer.invoke("lx-online-source-config-pick"),
+  setOnlineSourceScript: (payload) => ipcRenderer.invoke("lx-online-source-config-set", payload || {}),
+  reloadOnlineSource: () => ipcRenderer.invoke("lx-online-source-reload"),
+  pickDirectory: () => ipcRenderer.invoke("lx-pick-directory"),
+  downloadOnlineTrack: (payload) => ipcRenderer.invoke("lx-online-download", payload || {}),
+  send: (channel, data) => ipcRenderer.send(channel, data),
+  on: (channel, cb) => subscribe(channel, cb),
+});

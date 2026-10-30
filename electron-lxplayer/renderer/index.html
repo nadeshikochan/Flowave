@@ -1,0 +1,2173 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src http://127.0.0.1:*; img-src 'self' data: blob: kumiko-media: http: https:; media-src 'self' data: blob: kumiko-media: http: https:; font-src 'self' data:; object-src 'none'; base-uri 'none'; frame-src 'none';" />
+  <title>Flowave</title>
+  <link rel="icon" type="image/png" href="assets/app-icon.png" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="song-info.css" />
+  <link rel="stylesheet" href="sound-map.css" />
+  <link rel="stylesheet" href="music-analysis.css" />
+  <link rel="stylesheet" href="practice.css" />
+  <link rel="stylesheet" href="practice-score.css" />
+  <link rel="stylesheet" href="section-colors.css" />
+  <script src="error-capture.js"></script>
+  <script src="vendor/vue.global.prod.js"></script>
+  <script src="vendor/axios.min.js"></script>
+</head>
+<body>
+  <div id="app" :data-theme="themeName" v-cloak>
+    <transition name="startup-splash">
+      <div
+        v-if="startupSplashVisible"
+        class="startup-splash"
+        :class="{ hiding: startupSplashHiding, 'custom-background': startupBackground.custom }"
+        role="status"
+        aria-label="Flowave 正在启动"
+      >
+        <div class="startup-splash-image" :style="{ backgroundImage: startupSplashBackgroundStyle }"></div>
+        <div class="startup-splash-brand" aria-hidden="true">
+          <span>Flowave</span>
+        </div>
+      </div>
+    </transition>
+    <div class="app-shell" :class="{'immersive-open':showLyric}">
+      <header class="app-titlebar">
+        <div class="titlebar-drag-region"></div>
+        <div class="titlebar-window-controls">
+          <button class="titlebar-btn" @click="windowControl('minimize')" title="最小化" aria-label="最小化">
+            <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M6 15h12"/></svg>
+          </button>
+          <button class="titlebar-btn" @click="windowControl('toggle-maximize')" title="最大化/还原" aria-label="最大化/还原">
+            <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><rect x="6.5" y="6.5" width="11" height="11" rx="0.8"/></svg>
+          </button>
+          <button class="titlebar-btn close" @click="windowControl('close')" title="关闭" aria-label="关闭">
+            <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg>
+          </button>
+        </div>
+      </header>
+      <aside class="nav">
+        <div class="nav-logo" title="Flowave" aria-label="Flowave">
+          <img class="nav-logo-symbol" src="assets/flowave-symbol.png" width="32" height="32" alt="" aria-hidden="true" draggable="false" />
+          <span class="nav-logo-word" aria-hidden="true">Flowave</span>
+        </div>
+        <nav class="nav-primary" aria-label="主导航">
+          <button class="nav-btn" :class="{active:view==='library' && libraryBrowseMode==='songs' && currentPlaylist==='all'}" :aria-current="view==='library' && libraryBrowseMode==='songs' && currentPlaylist==='all' ? 'page' : null" @click="openLibrarySongs" title="全部歌曲">
+            <svg viewBox="0 0 24 24" class="icon">
+              <path d="M9 18V6l10-2v12"/>
+              <circle cx="6.5" cy="18" r="2.5"/>
+              <circle cx="16.5" cy="16" r="2.5"/>
+            </svg>
+            <span>歌曲</span>
+          </button>
+          <button
+            v-if="featureEnabled('recommendation')" class="nav-btn nav-seeds"
+            :class="{ active: view === 'seeds' }"
+            :aria-current="view === 'seeds' ? 'page' : null"
+            @click="setView('seeds')"
+          >
+            <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><circle cx="7" cy="8" r="3"/><circle cx="17" cy="8" r="3"/><path d="M7 11v3a5 5 0 0 0 10 0v-3M12 19v3"/></svg>
+            <span>复合种子</span>
+          </button>
+          <button v-if="featureEnabled('recommendation')" class="nav-btn" :class="{active:view==='sound-map'}" :aria-current="view==='sound-map' ? 'page' : null" @click="setView('sound-map')" title="声音地图">
+            <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><circle cx="6" cy="7" r="2.5"/><circle cx="18" cy="6" r="2"/><circle cx="15" cy="18" r="3"/><path d="m8 8 5 8M8 7l8-1M17 8l-2 7"/></svg><span>声音地图</span>
+          </button>
+
+          <button class="nav-btn" :class="{active:view==='online'}" :aria-current="view==='online' ? 'page' : null" @click="setView('online')" title="在线音乐">
+            <svg viewBox="0 0 24 24" class="icon">
+              <circle cx="12" cy="12" r="8.5"/>
+              <path d="M3.8 12h16.4M12 3.5c2.1 2.3 3.2 5.1 3.2 8.5S14.1 18.2 12 20.5M12 3.5C9.9 5.8 8.8 8.6 8.8 12s1.1 6.2 3.2 8.5"/>
+            </svg>
+            <span>在线音乐</span>
+          </button>
+
+        </nav>
+
+        <section class="nav-context nav-library" aria-label="音乐库歌单">
+          <div class="nav-context-header">
+            <span>歌单</span>
+            <button class="mini" @click="promptNewPlaylist" title="新建歌单" aria-label="新建歌单">
+              <svg viewBox="0 0 24 24" class="icon"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+          </div>
+          <transition-group name="pl-move" tag="div" class="playlists">
+            <div v-for="(pl, plIndex) in sidebarPlaylists" :key="pl.id" class="playlist-entry">
+              <div v-if="pl.type !== 'custom' && sidebarPlaylists[plIndex - 1]?.type !== pl.type" class="playlist-section-label">{{ ({folder:'文件夹', custom:'我的歌单', seed:'组合歌单',session:'播放队列'})[pl.type] || '歌单' }}</div>
+            <div
+                 :title="pl.name + ' · ' + pl.tracks.length + ' 首'"
+                 role="button"
+                 :class="['playlist-item', view==='library' && libraryBrowseMode==='songs' && currentPlaylist===pl.id?'active':'', dragState.draggingId===pl.id?'dragging':'', playlistLocateFlashId===pl.id?'locate-target':'']"
+                 tabindex="0"
+                 @click="selectPlaylist(pl.id)"
+                 @keydown.enter.prevent="selectPlaylist(pl.id)"
+                 @keydown.space.prevent="selectPlaylist(pl.id)"
+                 @contextmenu.prevent.stop="openPlaylistContextMenu($event, pl)"
+                 :draggable="pl.type!=='system'"
+                 @dragstart="handleDragStart($event, pl)"
+                 @dragover.prevent="handleDragOver($event, pl)"
+                 @drop.prevent="handleDrop(pl)"
+                 @dragend="handleDragEnd"
+                 @mousedown="startLongPress(pl)"
+                 @mouseup="cancelLongPress"
+                 @mouseleave="cancelLongPress">
+              <div class="pl-name">{{ pl.name }}</div>
+              <div class="pl-count">{{ pl.tracks.length }}</div>
+              <div class="drag-hint" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M8 7h8M8 12h8M8 17h8"/></svg>
+              </div>
+            </div>
+            </div>
+          </transition-group>
+
+        </section>
+
+        <div class="nav-footer">
+          <button class="nav-btn" :class="{active:view==='settings' || view==='insights' || (view==='library' && libraryBrowseMode==='folders')}" :aria-current="view==='settings' || view==='insights' || (view==='library' && libraryBrowseMode==='folders') ? 'page' : null" @click="openSettingsSection('overview')" title="设置">
+            <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M4 12h4M12 12h8"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/><circle cx="10" cy="12" r="2"/></svg>
+            <span>设置</span>
+          </button>
+        </div>
+      </aside>
+
+      <section class="main">
+        <nav v-if="view==='insights' || (view==='library' && libraryBrowseMode==='folders')" class="settings-tool-return" aria-label="工具位置"><button class="mini" @click="openSettingsSection('overview')">‹ 返回设置</button><span>曲库工具 / {{view==='insights' ? '曲库概览' : '文件夹'}}</span></nav>
+        <music-insights v-if="shouldRenderView('insights')" kind="library" :active="view==='insights' && !showLyric" :base-url="baseUrl" :tracks="tracks" :library-revision="soundMapLibraryRevision" @inspect="openSongAnalysis" @queue="playAnalysisQueue"></music-insights>
+        <music-insights v-if="shouldRenderView('analysis')" kind="player" :active="view==='analysis' && !showLyric" :base-url="baseUrl" :tracks="tracks" :path="analysisPinnedPath || currentPath" :playing-path="currentPath" :current-time="view==='analysis' && !showLyric ? Math.floor(currentTime*4)/4 : 0" :library-revision="soundMapLibraryRevision" @back="closeSongAnalysis" @current="analysisPinnedPath=''" @play="playByPath($event)" @seek="seekAnalysisTime"></music-insights>
+        <practice-page :configure-training="configurePracticeTraining" :create-calibration-output="createPracticeCalibrationOutput" :preview-metronome="previewPracticeMetronome" :set-metronome-sound="setPracticeMetronomeSound" :configure-metronome="configurePracticeMetronome" :set-metronome-volume="setPracticeMetronomeVolume" :switching="!!pendingPlaybackTransition" v-if="shouldRenderView('practice')" :active="view==='practice' && !showLyric" :base-url="baseUrl" :path="currentPath" :title="currentMeta.title || extractName(currentPath)" :artist="currentMeta.artist" :enabled="practiceEnabled" :loading-mix="practiceLoading" :load-progress="practiceLoadProgress" :library-revision="soundMapLibraryRevision" :read-clock="readPracticeClock" :current-time="currentTime" :playing="isPlaying" @play="playSavedPracticeTrack" @seek="seekPracticeTime" @back="closePractice" @enable="enablePractice" @disable="disablePractice" @mix="updatePracticeMix"></practice-page>
+        <sound-map :read-preferences="readSoundMapPreferences" :write-preferences="writeSoundMapPreferences" ref="soundMap" v-if="shouldRenderView('sound-map')" :active="view==='sound-map' && !showLyric" :base-url="baseUrl" :playing-path="listeningSession?.path===currentPath ? currentPath : ''" :library-revision="soundMapLibraryRevision" :route-revision="soundMapTraceRevision" :get-track="soundMapTrack" :get-routes="soundMapRoutes" :load-route="loadSoundMapRoute" :load-attempt="loadSoundMapAttempt" :rebuild-archive="rebuildSoundMapArchive" :load-metadata="soundMapMetadata" @details="openAudioDetail" @play="playByPath($event)"></sound-map>
+        <view-boundary class="content library" v-if="shouldRenderView('library')" :active="view==='library'">
+          <header class="page-header">
+            <div>
+              <h1>{{ libraryPageTitle }}</h1>
+              <p>{{ librarySearchPending ? '正在搜索…' : libraryBrowseMode==='folders' ? filteredTracks.length + ' 首歌曲 · ' + folderBrowserDirectory.children.length + ' 个子文件夹' : filteredTracks.length + ' 首歌曲' }}</p>
+            </div>
+            <div class="library-toolbar" role="search" aria-label="搜索音乐库">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>
+              <library-search-input ref="librarySearchInput" class="search-input library-search-input" :model-value="keywordDraft" :reset-revision="searchInputResetRevision" @commit="commitLibrarySearch" @activity="onLibrarySearchActivity" :placeholder="libraryBrowseMode==='folders' ? '搜索此文件夹中的歌曲' : '搜索歌曲、歌手或专辑'" aria-label="搜索音乐库"></library-search-input>
+              <button class="search-clear" v-if="keywordDraft" @click="clearLibrarySearch" title="清除搜索" aria-label="清除搜索">×</button>
+            </div>
+          </header>
+          <section v-if="libraryBrowseMode==='folders'" class="folder-browser" aria-label="浏览音乐文件夹">
+            <nav class="folder-breadcrumbs" aria-label="文件夹位置"><template v-for="(folder,i) in folderBreadcrumbs" :key="folder.key"><span v-if="i" aria-hidden="true">›</span><button @click="openFolderBrowser(folder.path)" :aria-current="i===folderBreadcrumbs.length-1 ? 'location' : null">{{ folder.name }}</button></template></nav>
+            <div class="folder-directory-list" v-if="folderBrowserDirectory.children.length">
+              <button class="folder-directory" v-for="folder in folderBrowserDirectory.children" :key="folder.key" @click="openFolderBrowser(folder.path)">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h7l2 2h9v12H3z"/></svg><span>{{ folder.name }}</span><small>{{ folder.count }} 首</small><span aria-hidden="true">›</span>
+              </button>
+            </div>
+          <details class="nav-folder-shortcuts settings-folder-shortcuts" v-if="folderShortcutPlaylists.length"><summary>文件夹快捷入口</summary><div class="folder-shortcut-list">            <div v-for="pl in folderShortcutPlaylists" :key="pl.id" class="playlist-entry">
+
+            <div
+                 :title="pl.name + ' · ' + pl.tracks.length + ' 首'"
+                 role="button"
+                 :class="['playlist-item', view==='library' && libraryBrowseMode==='songs' && currentPlaylist===pl.id?'active':'', dragState.draggingId===pl.id?'dragging':'', playlistLocateFlashId===pl.id?'locate-target':'']"
+                 tabindex="0"
+                 @click="selectPlaylist(pl.id)"
+                 @keydown.enter.prevent="selectPlaylist(pl.id)"
+                 @keydown.space.prevent="selectPlaylist(pl.id)"
+                 @contextmenu.prevent.stop="openPlaylistContextMenu($event, pl)"
+                 :draggable="pl.type!=='system'"
+                 @dragstart="handleDragStart($event, pl)"
+                 @dragover.prevent="handleDragOver($event, pl)"
+                 @drop.prevent="handleDrop(pl)"
+                 @dragend="handleDragEnd"
+                 @mousedown="startLongPress(pl)"
+                 @mouseup="cancelLongPress"
+                 @mouseleave="cancelLongPress">
+              <div class="pl-name">{{ pl.name }}</div>
+              <div class="pl-count">{{ pl.tracks.length }}</div>
+              <div class="drag-hint" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M8 7h8M8 12h8M8 17h8"/></svg>
+              </div>
+            </div>
+            </div>
+</div></details>
+</section>
+          <section class="tracks-pane">
+            <div class="table-head">
+              <div class="col-idx">#</div>
+              <div class="col-title">歌曲</div>
+              <div class="col-artist">艺术家</div>
+              <div class="col-album">专辑</div>
+              <div class="col-duration">时长</div>
+            </div>
+            <div class="table-body" ref="libraryTableBody" :aria-busy="librarySearchPending"
+                 @scroll.passive="onLibraryScroll"
+                 @wheel.passive="markLibraryUserInteraction"
+                 @pointerdown="markLibraryUserInteraction"
+                 @keydown="markLibraryUserInteraction">
+              <div v-if="libraryVirtualEnabled" :style="{height: libraryTopSpacer + 'px'}"></div>
+              <div v-for="(t,idx) in libraryRenderTracks"
+                   :key="t.path"
+                   v-memo="[t, t.title, t.name, t.artist, t.album, t.cover_thumb, t.cover, t.durationText, t.duration, currentPath===t.path, selectedPath===t.path, locateHighlightPath===t.path, libraryStart + idx, libraryVirtualEnabled]"
+                   role="button"
+                   :class="['row', currentPath===t.path?'active':'', selectedPath===t.path?'selected':'', locateHighlightPath===t.path?'locating':'']"
+                   @click="selectedPath=t.path"
+                   @dblclick="playByPath(t.path)"
+                   @keydown.enter.prevent="playByPath(t.path)"
+                   @keydown.space.prevent="selectedPath=t.path"
+                   @contextmenu.prevent.stop="openTrackContextMenu($event, t.path)"
+                   tabindex="0"
+                   :data-path="t.path">
+                <div class="col-idx">{{ libraryVirtualEnabled ? (libraryStart + idx + 1) : (idx + 1) }}</div>
+                <div class="col-title track-primary">
+                  <span class="track-cover-slot" aria-hidden="true">
+                    <img v-if="t.cover_thumb || t.cover" :src="isOnlineToken(t.path) ? onlineCoverUrl(t.cover_thumb || t.cover) : (t.cover_thumb || t.cover)" alt="" class="cover-thumb" loading="lazy" decoding="async">
+                    <svg v-else viewBox="0 0 24 24" aria-hidden="true"><path d="M9 17V6l10-2v11M9 8l10-2"/><circle cx="6" cy="17" r="3"/><circle cx="16" cy="15" r="3"/></svg>
+                  </span>
+                  <span class="track-title-text">{{ t.title || t.name || extractName(t.path) }}</span>
+                </div>
+                <div class="col-artist">{{ t.artist || '—' }}</div>
+                <div class="col-album">{{ t.album || '—' }}</div>
+                <div class="col-duration">{{ t.durationText || formatTime(t.duration || 0) }}</div>
+              </div>
+              <div v-if="libraryVirtualEnabled" :style="{height: libraryBottomSpacer + 'px'}"></div>
+              <div v-if="!tracks.length" class="library-empty-state">
+                <div class="library-empty-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M3.5 7.5h6l1.8 2H20.5v8.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2V7.5z"></path>
+                    <path d="M14 12v5.1a2 2 0 1 1-1.4-1.9V13l4-.9v3.8a2 2 0 1 1-1.4-1.9v-2.3L14 12z"></path>
+                  </svg>
+                </div>
+                <h2>添加本地音乐</h2>
+                <p>选择音乐文件夹开始播放。</p>
+                <button @click="setupMusicLibrary" :disabled="loading">
+                  {{ loading ? '正在载入…' : '选择音乐文件夹' }}
+                </button>
+                <small v-if="libraryRefreshMessage" class="library-refresh-message">{{ libraryRefreshMessage }}</small>
+              </div>
+              <div v-else-if="!currentPlaylistTracks.length && libraryBrowseMode!=='folders'" class="library-empty-state">
+                <div class="library-empty-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M5 6h10M5 11h10M5 16h6"></path>
+                    <path d="M17 13v5.2a2.2 2.2 0 1 1-1.5-2.1V14l3.5-.8v3.7"></path>
+                  </svg>
+                </div>
+                <h2>歌单为空</h2>
+                <p>从音乐库将歌曲加入这个歌单。</p>
+                <button class="mini" @click="showAllLibraryTracks">查看全部歌曲</button>
+              </div>
+              <div v-else-if="libraryBrowseMode==='folders' && !currentPlaylistTracks.length && !keyword" class="library-empty-state"><h2>此文件夹内没有歌曲</h2><p v-if="folderBrowserDirectory.children.length">进入上方子文件夹查看歌曲。</p><p v-else>刷新音乐库后重试。</p></div>
+              <div v-else-if="!filteredTracks.length" class="library-empty-state search-empty-state">
+                <h2>暂无匹配歌曲</h2>
+                <button class="mini" @click="clearLibrarySearch">清除搜索</button>
+              </div>
+            </div>
+          </section>
+        </view-boundary>
+
+        <view-boundary class="content online" v-if="shouldRenderView('online')" :active="view==='online'">
+          <header class="page-header">
+            <div>
+              <h1>在线音乐</h1>
+            </div>
+          </header>
+          <section v-if="!onlineSourceScriptExists" class="online-empty-state">
+            <div class="online-empty-mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M14 4v11.5a3.5 3.5 0 1 1-2-3.16V7l7-1.5V13a3.5 3.5 0 1 1-2-3.16V4.9L14 5.5"/></svg>
+            </div>
+            <h2>在线音乐尚未启用</h2>
+            <p>Flowave 不附带音源脚本。请只导入你信任的脚本。</p>
+            <button @click="settingsTab='source'; setView('settings')">导入音源脚本</button>
+          </section>
+          <section v-else class="tracks-pane">
+            <div class="online-topbar">
+              <button class="mini icon-btn online-back" v-if="onlineSonglistExpanded" @click="backToSonglistResults" title="返回歌单">
+                <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="m14.5 6-6 6 6 6"/></svg>
+                <span>歌单</span>
+              </button>
+              <div class="online-search-kind" role="group" aria-label="搜索内容">
+                <button
+                  type="button"
+                  :class="{ active: onlineSearchType === 'music' }"
+                  :aria-pressed="onlineSearchType === 'music'"
+                  @click="onlineSearchType='music'"
+                >歌曲</button>
+                <button
+                  type="button"
+                  :class="{ active: onlineSearchType === 'songlist' }"
+                  :aria-pressed="onlineSearchType === 'songlist'"
+                  @click="onlineSearchType='songlist'"
+                >歌单</button>
+              </div>
+              <input class="search-input" v-model="onlineKeyword" :placeholder="onlineSearchType==='music' ? '搜索在线歌曲' : '搜索在线歌单'" @keyup.enter="searchOnline(1)" aria-label="在线搜索" />
+              <select v-if="onlineSearchType==='music'" v-model="onlineMusicSource" aria-label="歌曲来源">
+                <option v-for="it in getOnlineSourceOptions(true)" :key="`m-${it.value}`" :value="it.value">{{ it.label }}</option>
+              </select>
+              <select v-else v-model="onlineSonglistSource" aria-label="歌单来源">
+                <option v-for="it in getOnlineSourceOptions(true)" :key="`s-${it.value}`" :value="it.value">{{ it.label }}</option>
+              </select>
+              <button @click="searchOnline(1)" :disabled="onlineLoading">搜索</button>
+              <button class="mini online-selection-clear" v-if="onlineSelectedTokens.length" @click="clearOnlineSelection" title="取消选择">
+                取消选择 · {{ onlineSelectedTokens.length }}
+              </button>
+            </div>
+            <div class="online-songlist-detail" v-if="onlineSearchType==='songlist' && onlineSonglistExpanded && currentOnlineSonglist">
+              <img v-if="currentOnlineSonglist.img" :src="onlineCoverUrl(currentOnlineSonglist.img)" alt="" class="online-songlist-detail-cover" loading="lazy" decoding="async">
+              <div class="online-songlist-detail-main">
+                <div class="online-songlist-detail-title">{{ currentOnlineSonglist.name || '未知歌单' }}</div>
+                <div class="online-songlist-detail-meta">{{ currentOnlineSonglist.author || '未知作者' }} · {{ currentOnlineSonglist.total || onlineTracks.length || 0 }} 首</div>
+                <div class="online-songlist-detail-desc">{{ currentOnlineSonglist.desc || '暂无简介' }}</div>
+              </div>
+              <div class="online-songlist-detail-actions">
+                <button @click="playCurrentOnlineSonglist" :disabled="!onlineTracks.length">播放</button>
+                <button class="mini" @click="collectCurrentOnlineSonglist" :disabled="!onlineTracks.length">收藏</button>
+              </div>
+            </div>
+            <div class="table-head" v-if="onlineSearchType==='music' || (onlineSearchType==='songlist' && onlineSonglistExpanded)">
+              <div class="col-idx">#</div>
+              <div class="col-title">歌曲</div>
+              <div class="col-artist">艺术家</div>
+              <div class="col-album">专辑</div>
+              <div class="col-duration">时长</div>
+            </div>
+            <div class="table-body">
+              <div v-if="onlineLoading" class="empty">加载中…</div>
+              <template v-else>
+                <div
+                  v-if="onlineMessage"
+                  :class="['online-inline-message', onlineMessageTone]"
+                  :role="onlineMessageTone === 'error' ? 'alert' : 'status'"
+                >{{ onlineMessage }}</div>
+              <template v-if="onlineMessageTone !== 'error' && (onlineSearchType==='music' || (onlineSearchType==='songlist' && onlineSonglistExpanded))">
+                <div v-for="(t,idx) in onlineTracks" :key="t.token"
+                     role="button"
+                     :class="['row', isOnlineTokenSelected(t.token)?'selected online-selected':'', currentPath===t.token?'active':'']"
+                     @click="onOnlineTrackClick($event, t, idx)"
+                     @dblclick="playOnlineTrack(t)"
+                     @keydown.enter.prevent="playOnlineTrack(t)"
+                     @keydown.space.prevent="onOnlineTrackClick($event, t, idx)"
+                     @contextmenu.prevent.stop="onOnlineTrackContextMenu($event, t, idx)"
+                     tabindex="0"
+                     :data-path="t.token">
+                  <div class="col-idx">
+                    <svg v-if="isOnlineTokenSelected(t.token)" class="selection-check" viewBox="0 0 24 24" aria-label="已选择"><path d="m5 12.5 4.2 4.2L19 7"/></svg>
+                    <span v-else>{{ idx + 1 }}</span>
+                  </div>
+                  <div class="col-title track-primary">
+                    <span class="track-cover-slot" aria-hidden="true">
+                      <img v-if="t.cover" :src="onlineCoverUrl(t.cover)" alt="" class="cover-thumb" loading="lazy" decoding="async">
+                    </span>
+                    <span class="track-title-text">{{ t.title || t.name || '未知' }}</span>
+                  </div>
+                  <div class="col-artist">{{ t.artist || '—' }}</div>
+                  <div class="col-album online-album-cell">
+                    <span class="online-album-name">{{ t.album || '—' }}</span>
+                    <span v-if="onlineTrackQualityLabels[t.token]" class="online-quality-badge">{{ onlineTrackQualityLabels[t.token] }}</span>
+                  </div>
+                  <div class="col-duration">{{ t.durationText || '00:00' }}</div>
+                </div>
+                <div v-if="!onlineTracks.length" class="empty">{{ onlineHasSearched ? '暂无结果' : (onlineKeyword.trim() ? '按 Enter 搜索' : '输入关键词搜索') }}</div>
+              </template>
+              <template v-else-if="onlineMessageTone !== 'error'">
+                <div class="online-songlist-grid">
+                  <div v-for="s in onlineSonglists" :key="`${s.source}-${s.id}`" class="online-songlist-card" role="button" tabindex="0" @click="loadOnlineSonglistTracks(s)" @keydown.enter.prevent="loadOnlineSonglistTracks(s)" @keydown.space.prevent="loadOnlineSonglistTracks(s)">
+                    <div class="online-songlist-card-cover-wrap">
+                      <img v-if="s.img" :src="onlineCoverUrl(s.img)" alt="" class="online-songlist-card-cover" loading="lazy" decoding="async">
+                      <div v-else class="online-songlist-card-cover online-songlist-card-cover-empty" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>
+                      </div>
+                    </div>
+                    <div class="online-songlist-card-title">{{ s.name || '未知歌单' }}</div>
+                    <div class="online-songlist-card-author">{{ s.author || '—' }}</div>
+                    <div class="online-songlist-card-meta">{{ s.total || 0 }} 首 · {{ getOnlineSourceLabel(s.source) }}</div>
+                  </div>
+                </div>
+                <div v-if="!onlineSonglists.length" class="empty">{{ onlineHasSearched ? '暂无结果' : (onlineKeyword.trim() ? '按 Enter 搜索' : '输入关键词搜索') }}</div>
+              </template>
+              </template>
+            </div>
+          </section>
+        </view-boundary>
+
+        <view-boundary class="content seeds" v-if="shouldRenderView('seeds')" :active="view==='seeds'">
+          <section class="seeds-pane seed-library">
+            <aside class="seed-collections" aria-label="复合种子组合">
+              <header><h1>复合种子</h1><button class="seed-add" @click="promptNewSeed" title="新建组合" aria-label="新建组合">＋</button></header>
+              <input class="search-input" v-model="seedSearch" placeholder="搜索组合" aria-label="查找复合种子组合" />
+              <nav class="seed-collection-list" aria-label="选择组合">
+                <button v-for="s in filteredSeeds" :key="s.id" :class="['seed-collection', {selected:currentSeedId===s.id}]" :aria-current="currentSeedId===s.id ? 'true' : null" @click="selectSeed(s.id)">
+                  <span class="seed-collection-art" aria-hidden="true">♫</span><span><strong>{{ s.name }}</strong><small>{{ (s.seed_track_paths || s.pos_track_paths || []).length }} 首方向 · {{ (s.rec_cache || []).length }} 首推荐</small></span>
+                </button>
+                <p v-if="!filteredSeeds.length" class="seed-list-empty">{{ seeds.length ? '没有匹配的组合' : '还没有组合' }}</p>
+              </nav>
+            </aside>
+            <main class="seed-detail" :aria-busy="seedLoading">
+              <div v-if="!currentSeedId" class="seed-empty-state"><div class="seed-empty-art" aria-hidden="true">♫</div><h2>从几首喜欢的歌开始</h2><p>将歌曲加入组合，留住你想听的方向。</p><button class="primary" @click="promptNewSeed">新建组合</button></div>
+              <template v-else>
+                <header class="seed-hero">
+                  <div class="seed-mosaic" aria-hidden="true"><span v-for="i in 4" :key="i"><img v-if="seedTrackCover(seedPos[i-1])" :src="seedTrackCover(seedPos[i-1])" alt="" loading="lazy" /><span v-else>♫</span></span></div>
+                  <div class="seed-hero-copy"><span class="seed-eyebrow">复合种子组合</span><h1>{{ currentSeed?.name || '正在读取组合' }}</h1><p>{{ seedPos.length }} 首喜欢 · {{ seedNeg.length }} 首排除 · {{ seedRecs.length }} 首推荐</p>
+                    <div class="seed-primary-actions"><button class="primary" @click="playSeedList()" :disabled="seedLoading || !seedRecs.length || seedRecs[0]?.admission_version !== 2 || seedRecs[0]?.verification_version !== 1" title="从第一组开始；双击歌曲可播放其所在组"><span aria-hidden="true">▶</span> 播放第一组</button><button class="seed-refresh" @click="refreshCurrentSeed" :disabled="seedLoading">{{ seedLoading ? '更新中…' : '刷新推荐' }}</button>
+                      <details class="seed-options"><summary aria-label="组合设置" title="组合设置">···</summary><div><button @click="renameSeed(currentSeed); $event.currentTarget.closest('details').open=false">重命名…</button><button @click="promptSetK(); $event.currentTarget.closest('details').open=false">推荐数量 · {{ currentSeed?.k || 50 }} 首…</button><hr><button class="danger-menu" @click="deleteCurrentSeed(); $event.currentTarget.closest('details').open=false">删除组合…</button></div></details>
+                    </div>
+                  </div>
+                </header>
+                <div class="seed-detail-grid">
+                  <section class="seed-results" aria-label="推荐结果">
+                    <div class="seed-section-heading"><div><h2>为这个组合推荐</h2><span>{{ seedRecs.length }} 首 / 最多 {{ currentSeed?.k || 50 }} 首</span></div><span>{{ seedRecs.length ? (seedRecs[0]?.admission_version === 2 && seedRecs[0]?.verification_version === 1 ? ((seedRecs[seedRecs.length - 1].segment + 1) + ' 组，组间不自动接歌') : '旧结果，请刷新听感复核') : '' }}</span></div>
+                    <small v-if="currentSeed?.rec_diagnostics?.semantic_pending">{{ currentSeed.rec_diagnostics.semantic_pending }} 首缺少有效分析，暂未加入；请先完成这些歌曲的音乐分析。</small>
+                    <details v-if="currentSeed?.rec_diagnostics?.semantic_pending_tracks?.length"><summary>查看待分析歌曲</summary><div v-for="p in currentSeed.rec_diagnostics.semantic_pending_tracks" :key="p">{{ seedTrackInfo(p).title }}</div><small v-if="currentSeed.rec_diagnostics.semantic_pending > 20">仅列出前 20 首</small></details>
+                    <div class="seed-result-columns" aria-hidden="true"><span>#</span><span>歌曲</span><span>关联</span><span></span></div>
+                    <div class="seed-track-list seed-result-list">
+                      <div v-for="(r,i) in seedRecs" :key="r.path" :class="['seed-track-row seed-result-row',{playing:currentPath===r.path}]" @dblclick="playSeedTrack(r.path)" @contextmenu.prevent="openTrackContextMenu($event,r.path)">
+                        <button class="seed-row-play" @click="playSeedTrack(r.path)" :aria-label="'播放 '+seedTrackInfo(r.path).title"><span class="seed-row-number">{{ i+1 }}</span><span class="seed-row-play-icon" aria-hidden="true">▶</span></button>
+                        <div class="seed-song"><strong>{{ seedTrackInfo(r.path).title }}</strong><small>{{ seedTrackInfo(r.path).artist || '未知歌手' }}</small></div>
+                        <span class="seed-match" :title="r.support_seed ? '最近的喜欢方向：' + seedTrackInfo(r.support_seed).title : ''">{{ r.sequence_version === 2 ? '第 ' + (r.segment + 1) + ' 组' : '待刷新' }}</span>
+                        <button class="seed-row-more" @click="openTrackContextMenu($event,r.path)" :aria-label="'更多操作 '+seedTrackInfo(r.path).title">···</button>
+                      </div>
+                      <div v-if="!seedRecs.length" class="seed-list-empty">{{ seedLoading ? '正在读取推荐…' : currentSeed?.rec_diagnostics?.policy_version === 2 ? '没有足够关联且未被排除的歌曲。可调整喜欢或排除的方向后刷新。' : '添加喜欢的方向后，刷新推荐。' }}</div>
+                    </div>
+                  </section>
+                  <aside class="seed-direction-panel" aria-label="推荐方向">
+                    <section v-for="(paths,group) in [seedPos,seedNeg]" :key="group" class="seed-direction-group"><div class="seed-section-heading"><div><h2>{{ group===0 ? '喜欢的方向' : '排除的方向' }}</h2><span>{{ paths.length }}</span></div></div>
+                      <div class="seed-track-list"><div v-for="p in paths" :key="p" class="seed-track-row seed-direction-row" @dblclick="playSeedDirection(p)" @contextmenu.prevent="openTrackContextMenu($event,p)"><button class="seed-song" @keydown.enter.prevent="playSeedDirection(p)" @keydown.space.prevent="playSeedDirection(p)" :aria-label="'播放 '+seedTrackInfo(p).title" title="双击播放"><strong>{{ seedTrackInfo(p).title }}</strong><small>{{ seedTrackInfo(p).artist || '未知歌手' }}</small></button><button class="seed-remove" @dblclick.stop @click.stop="removeTrackFromSeed(p)" :aria-label="'移除 '+seedTrackInfo(p).title" title="移除方向">×</button></div><p v-if="!paths.length" class="seed-list-empty">{{ group===0 ? '从歌曲右键菜单添加' : '暂无排除方向' }}</p></div>
+                    </section>
+                  </aside>
+                </div>
+              </template>
+            </main>
+          </section>
+        </view-boundary>
+
+        <view-boundary class="content ranking" v-if="shouldRenderView('ranking')" :active="view==='ranking'">
+          <aside class="playlist-pane">
+            <div class="pane-header">
+              <span>歌曲</span>
+            </div>
+            <div class="ranking-search-row">
+              <input
+                class="search-input ranking-search-input ranking-search-left"
+                v-model="rankingLeftKeywordDraft"
+                placeholder="选择一首歌曲查看相似排行"
+              />
+            </div>
+            <div class="playlists">
+              <div v-for="t in filteredRankingTracks"
+                   :key="t.path"
+                   :class="['playlist-item', rankingFor===t.path?'active':'']"
+                   @click="loadRanking(t.path)">
+                <div class="pl-name">{{ t.title || t.name || extractName(t.path) }}</div>
+              </div>
+            </div>
+          </aside>
+
+          <section class="tracks-pane">
+            <div class="ranking-search-row ranking-search-right-row">
+              <input
+                class="search-input ranking-search-input"
+                v-model="rankingRightKeywordDraft"
+                placeholder="搜索排行结果"
+              />
+            </div>
+            <div class="table-head">
+              <div class="col-idx">#</div>
+              <div class="col-title">歌曲名</div>
+              <div class="col-artist">相似度</div>
+            </div>
+            <div class="table-body" ref="rankingTableBody" @scroll.passive="onRankingScroll">
+              <div v-if="rankingLoading" class="empty">加载中…</div>
+              <div v-else>
+                <div v-if="rankingVirtualEnabled" :style="{height: rankingTopSpacer + 'px'}"></div>
+                <div v-for="(r,idx) in rankingRenderTracks" :key="r.path" class="row" @dblclick="playByPath(r.path)">
+                  <div class="col-idx">{{ rankingVirtualEnabled ? (rankingStart + idx + 1) : r.rank }}</div>
+                  <div class="col-title">{{ r.name || extractName(r.path) }}</div>
+                  <div class="col-artist">{{ r.sim.toFixed(4) }}</div>
+                </div>
+                <div v-if="rankingVirtualEnabled" :style="{height: rankingBottomSpacer + 'px'}"></div>
+                <div v-if="!rankingList.length" class="empty">暂无数据</div>
+              </div>
+            </div>
+          </section>
+        </view-boundary>
+
+        <view-boundary class="content settings" v-if="shouldRenderView('settings')" :active="view==='settings'">
+          <aside class="settings-navigation" aria-label="设置分类">
+            <header><h1>设置</h1></header>
+            <div class="settings-finder" role="search"><library-search-input class="search-input" :model-value="settingsOverviewQuery" @commit="settingsOverviewQuery=$event" placeholder="搜索设置" aria-label="搜索具体设置"></library-search-input></div>
+            <nav aria-label="偏好设置"><div v-for="category in settingsCategories" :key="category.id" class="settings-nav-group">
+              <button :class="['settings-category',{active:!settingsOverviewQuery.trim() && currentSettingsCategory?.id===category.id}]" :aria-current="!settingsOverviewQuery.trim() && currentSettingsCategory?.id===category.id ? 'page' : null" @click="openSettingsCategory(category.id)"><svg class="settings-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path :d="category.icon" /></svg><span class="settings-nav-copy"><strong>{{category.title}}</strong><small>{{category.hint}}</small></span></button>
+              <div v-if="currentSettingsCategory?.id===category.id && category.pages.length>1" class="settings-subnavigation" :aria-label="category.title+'分组'"><button v-for="page in currentSettingsPages" :key="page.id" :class="{active:settingsTab===page.id}" :aria-current="settingsTab===page.id ? 'page' : null" @click="openSettingsSection(page.id)">{{page.title}}</button></div>
+            </div></nav>
+            <h2>曲库工具</h2><nav aria-label="曲库工具"><button v-for="tool in settingsTools" :key="tool.id" :class="['settings-category',{active:settingsTab===tool.id}]" @click="openSettingsSection(tool.id)">{{tool.title}}<span aria-hidden="true">›</span></button></nav>
+          </aside>
+          <section class="settings-body" ref="settingsBody" :class="{'settings-searching':settingsOverviewQuery.trim()}">
+            <div v-if="settingsOverviewQuery.trim()" class="settings-search-results"><header class="settings-panel-header"><div><h2>搜索设置</h2><p>{{settingsSearchResults.length}} 个结果</p></div><button class="mini" @click="settingsOverviewQuery=''">清除</button></header><button v-for="item in settingsSearchResults" :key="item.id" class="settings-search-result" @click="openSettingsResult(item)"><strong>{{item.title}}</strong><small>{{item.path}}</small></button><p v-if="!settingsSearchResults.length" class="settings-no-match">未找到设置。试试“歌词字号”或“下载目录”。</p></div>
+            <div v-show="!settingsOverviewQuery.trim()" class="settings-page-content">
+            <section v-if="settingsTab==='features'" class="settings-panel feature-selection-panel" aria-labelledby="feature-selection-title">
+              <header class="settings-panel-header"><div><h2 id="feature-selection-title">功能选装</h2><p>选择需要的功能，下次启动生效。已有歌曲和处理结果保留。</p></div></header>
+              <p v-if="featureSelection.error || featureMessage" class="error" role="alert">{{featureSelection.error || featureMessage}}</p>
+              <p v-if="featureSelection.restartRequired" class="feature-restart-notice" role="status">选择已保存，完全退出并重新打开软件后生效。</p>
+              <div class="feature-selection-row" v-for="item in featureCatalog" :key="item.id">
+                <div><h3>{{item.name}}</h3><p>{{item.description}}</p><small>当前{{featureEnabled(item.id) ? '已启用' : '已停用'}}<template v-if="featureSelection.selected.enabled[item.id] !== featureEnabled(item.id)"> · 下次启动{{featureSelection.selected.enabled[item.id] ? '启用' : '停用'}}</template></small></div>
+                <label class="quiet-switch"><input class="ui-toggle" type="checkbox" :checked="featureSelection.selected.enabled[item.id]" :disabled="featureSaving || !!featureSelection.error" @change="selectFeature(item.id,$event.target.checked,$event)" :aria-label="'下次启动启用'+item.name" /></label>
+              </div>
+              <p class="feature-data-note">基础播放、搜索、歌单、歌词与音效始终保留。推荐可继续读取已有分析；停用听歌记录后停止累计长期时长与次数。</p>
+            </section>
+            <div v-if="settingsTab==='library-settings'" class="settings-panel"><header class="settings-panel-header"><div><h2>本地音乐</h2></div><button class="mini" @click="refreshSongList" :disabled="loading || audioDirectoryChanged">刷新音乐库</button></header><section class="settings-card" data-setting-id="setting-library-settings-17de1ed2d9">
+                <div class="settings-card-title"><div><h3>音乐文件夹</h3></div><span class="status-pill" :class="{pending: audioDirectoryChanged}">{{ libraryDirectoryStatusLabel }}</span></div>
+                <div class="music-directory-list" data-setting-id="setting-library-settings-audiodirectorydraft"><div v-for="(directory,index) in audioDirectoriesDraft" :key="directory" class="music-directory-item"><svg class="settings-folder-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7V5h6l2 2h10v12H3Z" /></svg><span class="settings-directory-copy" :title="directory"><strong>{{ directory.split(/[\\/]/).filter(Boolean).pop() || directory }}</strong><small>{{directory}}</small></span><button class="mini" :disabled="loading" @click="removeAudioDirectory(index)" :aria-label="'从音乐库移除 '+directory" title="从音乐库移除">移除</button></div><p v-if="!audioDirectoriesDraft.length" class="hint">请添加至少一个音乐文件夹。</p></div>
+                <div class="btns library-folder-actions"><button class="mini" @click="pickAudioDir" :disabled="loading">添加文件夹</button><button class="primary" v-if="audioDirectoryChanged" @click="saveAudioDirectory" :disabled="loading || !audioDirectoryChanged || !audioDirectoriesDraft.length">应用更改</button></div><p class="settings-section-note">包含子文件夹。移除文件夹不会删除音乐。</p>
+                <small class="hint library-refresh-message" v-if="libraryRefreshMessage">{{ libraryRefreshMessage }}</small>
+              </section></div>
+<div v-if="settingsTab==='general'" class="settings-panel playback-settings"><header class="settings-panel-header"><div><h2>播放与声音</h2></div></header>
+<section class="settings-card" data-setting-id="setting-general-98454ca754">
+                <div class="settings-card-title"><div><h3>交叉淡化</h3><p>两首歌曲交叠播放，平滑接歌。</p></div><label class="quiet-switch" title="开启交叉淡化"><input class="ui-toggle" type="checkbox" v-model="audioEffects.crossfade" @change="updateAudioEffects()" aria-label="开启交叉淡化" /></label></div>
+                <label class="form-row" data-setting-id="setting-general-audioeffects-seconds"><span>重叠时长</span><div class="settings-control-cluster duration-control"><input type="range" min="1" max="8" step="0.5" v-model.number="audioEffects.seconds" :disabled="!audioEffects.crossfade" @input="updateAudioEffects()" aria-label="交叉淡化时长" /><output>{{ audioEffects.seconds }} 秒</output></div></label>
+
+                <p v-if="audioEffectsMessage" class="small" role="status">{{ audioEffectsMessage }}</p>
+              </section>
+<section class="settings-card settings-action-card" data-setting-id="setting-general-d2440fa637"><div><h3>均衡器</h3><p>调整低音、人声和高音。</p></div><button type="button" class="mini" @click="openEqualizer">调整…</button></section>
+<details class="settings-card settings-disclosure" data-setting-id="setting-general-fa64d60993" :open="settingsCalibrationOpen" @toggle="settingsCalibrationOpen=view==='settings' && settingsTab==='general' && $event.target.open"><summary><span><strong>蓝牙耳机校准</strong><small>调整歌词与演奏画面的延迟</small></span><span class="settings-disclosure-arrow" aria-hidden="true">›</span></summary><bluetooth-calibration :active="view==='settings' && settingsTab==='general' && !settingsOverviewQuery.trim() && settingsCalibrationOpen" :create-output="createPracticeCalibrationOutput"></bluetooth-calibration></details>
+<section v-if="featureEnabled('practice')" class="settings-card" data-setting-id="setting-general-bca467da0d"><div class="settings-card-title"><div><h3>演奏入口</h3><p>在底栏显示谱面与伴奏入口。</p></div><label class="quiet-switch"><input class="ui-toggle" type="checkbox" v-model="showPracticeEntry" @change="savePracticeVisibility" aria-label="在底栏显示演奏入口" /></label></div><div class="btns"><button type="button" class="mini" @click="openPractice">打开演奏</button></div></section></div>
+
+            <div v-if="settingsTab==='song-info'" class="settings-panel song-info-settings">
+              <header class="settings-panel-header">
+                <h2>歌曲信息与歌词补全</h2>
+              </header>
+
+              <section class="settings-card" data-setting-id="setting-song-info-22b15a534b">
+                <div class="settings-card-title">
+                  <div><h3>补充内容</h3></div>
+                </div>
+                <label class="form-row" data-setting-id="setting-song-info-songinfobatchsettings-scope">
+                  <span>范围</span>
+                  <select v-model="songInfoBatchSettings.scope">
+                    <option
+                      v-for="option in songInfoBatchScopeOptions"
+                      :key="option.value"
+                      :value="option.value"
+                      :disabled="option.value === 'selected' && !songInfoBatchSelectedLocalAvailable"
+                    >{{ option.label }}</option>
+                  </select>
+                  <span class="unit">{{ songInfoBatchTrackCount }} 首</span>
+                </label>
+                <div class="song-info-field-grid" role="group" aria-label="补充内容">
+                  <button
+                    v-for="option in songInfoBatchFieldOptions"
+                    :key="option.key"
+                    type="button"
+                    :class="['song-info-field-option', { selected: songInfoBatchSettings.fields[option.key] }]"
+                    :aria-pressed="songInfoBatchSettings.fields[option.key] ? 'true' : 'false'"
+                    @click="toggleSongInfoBatchField(option.key)"
+                  >
+                    <span>{{ option.label }}</span>
+                    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5.5 10.2 2.8 2.8 6.2-6.4"/></svg>
+                  </button>
+                </div>
+                <div class="settings-task-actions" data-setting-id="setting-song-info-f9e4f28179">
+
+                <div class="song-info-start-actions">
+                  <button @click="startSongInfoBatch" :disabled="songInfoBatchBusy || songInfoBatchStoreBlocked || hasUnfinishedSongInfoBatchTask() || !songInfoBatchTrackCount">
+                    {{ songInfoBatchBusy ? '正在准备' : '查找歌曲信息' }}
+                  </button>
+                  <button v-if="songInfoLyricBatchAvailable" class="mini" @click="startLyricSidecarBatch" :disabled="songInfoBatchBusy || songInfoBatchStoreBlocked || hasUnfinishedSongInfoBatchTask() || !songInfoBatchTrackCount">
+                    {{ songInfoBatchBusy ? '正在准备' : '查找缺失歌词' }}
+                  </button>
+                </div>
+                <small class="hint">歌曲信息只补空白；歌词按下方选项保存。</small>
+                </div></section><details class="settings-card settings-disclosure" data-setting-id="setting-song-info-315d810f5e"><summary><span><strong>歌词选项</strong><small>来源、格式与保存内容</small></span><span class="settings-disclosure-arrow" aria-hidden="true">›</span></summary>
+                <div class="song-info-field-grid" role="group" aria-label="歌词来源">
+                  <button type="button" :class="['song-info-field-option', { selected: songInfoBatchSettings.lyricSources.lddc }]" @click="songInfoBatchSettings.lyricSources.lddc = !songInfoBatchSettings.lyricSources.lddc">
+                    <span>在线歌词（LDDC 优先）</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5.5 10.2 2.8 2.8 6.2-6.4"/></svg>
+                  </button>
+                  <button type="button" :class="['song-info-field-option', { selected: songInfoBatchSettings.lyricSources.external }]" @click="songInfoBatchSettings.lyricSources.external = !songInfoBatchSettings.lyricSources.external">
+                    <span>KTV 歌词</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5.5 10.2 2.8 2.8 6.2-6.4"/></svg>
+                  </button>
+                  <button type="button" :class="['song-info-field-option', { selected: songInfoBatchSettings.lyricSources.embedded }]" @click="songInfoBatchSettings.lyricSources.embedded = !songInfoBatchSettings.lyricSources.embedded">
+                    <span>歌曲内嵌歌词</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5.5 10.2 2.8 2.8 6.2-6.4"/></svg>
+                  </button>
+                </div>
+                <label class="form-row" data-setting-id="setting-song-info-songinfobatchsettings-lyricsavetarget">
+                  <span>保存位置</span>
+                  <select v-model="songInfoBatchSettings.lyricSaveTarget">
+                    <option value="sidecar">对应的 KTV 歌词目录</option>
+                    <option value="tag" disabled>写入歌曲（暂不可用）</option>
+                    <option value="both" disabled>两者同时（暂不可用）</option>
+                  </select>
+                </label>
+                <label class="form-row" data-setting-id="setting-song-info-songinfobatchsettings-lyricformat">
+                  <span>歌词格式</span>
+                  <select v-model="songInfoBatchSettings.lyricFormat">
+                    <option value="enhanced-lrc">逐字 LRC</option>
+                    <option value="lrc">标准 LRC</option>
+                  </select>
+                </label>
+                <label class="form-row checkbox-row" data-setting-id="setting-song-info-songinfobatchsettings-skipexistinglyrics">
+                  <span>跳过已有歌词</span>
+                  <input class="ui-toggle" type="checkbox" v-model="songInfoBatchSettings.skipExistingLyrics" />
+                </label>
+                <label class="form-row checkbox-row" data-setting-id="setting-song-info-4d69dbdf62">
+                  <span>原文</span>
+                  <input class="ui-toggle" type="checkbox" checked disabled />
+                </label>
+                <label class="form-row checkbox-row" data-setting-id="setting-song-info-lyricsaveincludetranslation">
+                  <span>翻译</span>
+                  <input class="ui-toggle" type="checkbox" v-model="lyricSaveIncludeTranslation" @change="saveLyricSettings" />
+                </label>
+                <label class="form-row checkbox-row" data-setting-id="setting-song-info-lyricsaveincluderomanization">
+                  <span>罗马音</span>
+                  <input class="ui-toggle" type="checkbox" v-model="lyricSaveIncludeRomanization" @change="saveLyricSettings" />
+                </label>
+                <small class="hint">罗马音仅保存来源提供的内容。</small>
+                </details><details class="settings-card settings-disclosure" data-setting-id="setting-song-info-c7127bb6ee"><summary><span><strong>匹配选项</strong><small>匹配阈值与并行数量</small></span><span class="settings-disclosure-arrow" aria-hidden="true">›</span></summary>
+                <label class="form-row" data-setting-id="setting-song-info-songinfobatchsettings-autothreshold">
+                  <span>自动匹配</span>
+                  <input type="number" min="90" max="99" step="1" v-model.number="songInfoBatchSettings.autoThreshold" />
+                  <span class="unit">分以上</span>
+                </label>
+                <label class="form-row" data-setting-id="setting-song-info-songinfobatchsettings-manualthreshold">
+                  <span>人工确认</span>
+                  <input type="number" min="60" max="94" step="1" v-model.number="songInfoBatchSettings.manualThreshold" />
+                  <span class="unit">分以上</span>
+                </label>
+                <label class="form-row" data-setting-id="setting-song-info-songinfobatchsettings-concurrency">
+                  <span>并行查找</span>
+                  <input type="number" min="1" max="12" step="1" v-model.number="songInfoBatchSettings.concurrency" />
+                  <span class="unit">首</span>
+                </label>
+                </details>
+
+              <small class="hint error song-info-batch-message" v-if="songInfoBatchMessage">{{ songInfoBatchMessage }}</small>
+
+              <section class="settings-card song-info-task" v-if="currentSongInfoBatchTask()" data-setting-id="setting-song-info-abc5c37d80">
+                <div class="settings-card-title">
+                  <div>
+                    <h3>最近任务</h3>
+                    <p>{{ songInfoBatchSummary(currentSongInfoBatchTask()) }}</p>
+                  </div>
+                  <span class="status-pill">{{ songInfoBatchStatusLabel(currentSongInfoBatchTask()) }}</span>
+                </div>
+                <div class="song-info-task-progress" role="progressbar" :aria-valuenow="Math.round(songInfoBatchProgress(currentSongInfoBatchTask()))" aria-valuemin="0" aria-valuemax="100">
+                  <i :style="{ width: songInfoBatchProgress(currentSongInfoBatchTask()) + '%' }"></i>
+                </div>
+                <p class="song-info-task-current" v-if="songInfoBatchActiveTrackText(currentSongInfoBatchTask())">
+                  正在处理 {{ songInfoBatchActiveTrackText(currentSongInfoBatchTask()) }}
+                </p>
+                <div class="btns song-info-task-actions">
+                  <button class="mini" v-if="isSongInfoBatchRunning(currentSongInfoBatchTask())" @click="cancelSongInfoBatch(currentSongInfoBatchTask())">取消</button>
+                  <button class="mini" v-else-if="['draft','paused','paused-rate-limit'].includes(currentSongInfoBatchTask().state)" @click="continueSongInfoBatch(currentSongInfoBatchTask())">继续</button>
+                  <button class="mini" v-if="currentSongInfoBatchTask().counts.failed" @click="retrySongInfoBatch(currentSongInfoBatchTask(), ['failed'])">重试失败项</button>
+                  <button class="mini" v-if="currentSongInfoBatchTask().counts.cancelled" @click="retrySongInfoBatch(currentSongInfoBatchTask(), ['cancelled'])">继续未完成</button>
+                </div>
+
+                <details class="song-info-failures" v-if="currentSongInfoBatchTask().counts.failed">
+                  <summary>失败项 {{ currentSongInfoBatchTask().counts.failed }}</summary>
+                  <div class="song-info-failure-row" v-for="item in songInfoBatchFailureItems(currentSongInfoBatchTask())" :key="item.id">
+                    <strong>{{ songInfoBatchItemText(item) }}</strong>
+                    <span>{{ songInfoBatchErrorText(item) }}</span>
+                  </div>
+                  <button
+                    class="mini ghost song-info-review-more"
+                    v-if="currentSongInfoBatchTask().counts.failed > songInfoBatchFailureLimit"
+                    @click.prevent="songInfoBatchFailureLimit += 20"
+                  >显示更多</button>
+                </details>
+
+                <div class="song-info-review" v-if="songInfoBatchReviewItems(currentSongInfoBatchTask()).length">
+                  <div class="song-info-review-head">
+                    <strong>需要确认</strong>
+                    <span>核对后选择结果。</span>
+                  </div>
+                  <div class="song-info-review-row" v-for="item in songInfoBatchReviewItems(currentSongInfoBatchTask())" :key="item.id">
+                    <div class="song-info-review-track">
+                      <strong>{{ pathBasename(item.track.path) }}</strong>
+                      <span>当前：{{ songInfoBatchCurrentText(item) }}</span>
+                      <span>候选：{{ songInfoBatchCandidateText(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item)) }}</span>
+                      <small class="song-info-review-reason">来源：{{ songInfoBatchCandidateSource(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item)) }} · 匹配：{{ songInfoBatchCandidateScore(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item)) }} 分</small>
+                      <small class="song-info-review-reason" v-if="songInfoBatchCandidateEvidence(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item))">依据：{{ songInfoBatchCandidateEvidence(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item)) }}</small>
+                      <small class="song-info-review-reason" v-if="songInfoBatchCandidateDoubts(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item))">疑点：{{ songInfoBatchCandidateDoubts(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item)) }}</small>
+                      <div class="song-info-review-differences" v-if="visibleSongInfoDifferences(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item)).length">
+                        <div class="song-info-review-diff-head"><span>字段</span><span>当前</span><span>查找结果</span></div>
+                        <div class="song-info-review-diff" v-for="difference in visibleSongInfoDifferences(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item))" :key="difference.field">
+                          <span>{{ songInfoFieldLabel(difference.field) }}</span>
+                          <span>{{ formatSongInfoValue(difference.field, difference.current) }}</span>
+                          <strong>{{ formatSongInfoValue(difference.field, difference.proposed) }}</strong>
+                        </div>
+                      </div>
+                    </div>
+                    <select
+                      v-if="item.candidates.length > 1"
+                      :value="songInfoBatchCandidateChoice(currentSongInfoBatchTask(), item)"
+                      @change="setSongInfoBatchCandidateChoice(currentSongInfoBatchTask(), item, $event.target.value)"
+                      aria-label="选择匹配结果"
+                    >
+                      <option v-for="(candidate, index) in item.candidates" :key="candidate.candidate.candidateId || index" :value="index">
+                        {{ songInfoBatchCandidateText(candidate) }}
+                      </option>
+                    </select>
+                    <div class="song-info-review-actions">
+                      <button class="mini ghost" @click="skipSongInfoBatchItem(currentSongInfoBatchTask(), item)">跳过</button>
+                      <button class="mini primary" @click="confirmSongInfoBatchItem(currentSongInfoBatchTask(), item)">确认</button>
+                    </div>
+                  </div>
+                  <button
+                    class="mini ghost song-info-review-more"
+                    v-if="currentSongInfoBatchTask().counts.awaitingConfirmation > songInfoBatchReviewLimit"
+                    @click="songInfoBatchReviewLimit += 30"
+                  >显示更多</button>
+                </div>
+
+                <details class="song-info-reviewed" v-if="songInfoBatchAutomaticItems(currentSongInfoBatchTask()).length">
+                  <summary>高匹配 {{ currentSongInfoBatchTask().counts.matchedAuto }}</summary>
+                  <div class="song-info-reviewed-row" v-for="item in songInfoBatchAutomaticItems(currentSongInfoBatchTask())" :key="item.id">
+                    <strong>{{ pathBasename(item.track.path) }}</strong>
+                    <span>{{ songInfoBatchCandidateText(item.candidates[0]) }}</span>
+                    <small>{{ songInfoBatchCandidateReason(item.candidates[0]) }}</small>
+                  </div>
+                </details>
+
+                <details class="song-info-reviewed" v-if="songInfoBatchUncertainItems(currentSongInfoBatchTask()).length">
+                  <summary>低匹配 {{ songInfoBatchUncertainCount(currentSongInfoBatchTask()) }}</summary>
+                  <div class="song-info-review-row" v-for="item in songInfoBatchUncertainItems(currentSongInfoBatchTask())" :key="item.id">
+                    <div class="song-info-review-track">
+                      <strong>{{ pathBasename(item.track.path) }}</strong>
+                      <span>当前：{{ songInfoBatchCurrentText(item) }}</span>
+                      <span>候选：{{ songInfoBatchCandidateText(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item)) }}</span>
+                      <small class="song-info-review-reason">来源：{{ songInfoBatchCandidateSource(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item)) }} · 匹配：{{ songInfoBatchCandidateScore(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item)) }} 分</small>
+                      <small class="song-info-review-reason" v-if="songInfoBatchCandidateEvidence(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item))">依据：{{ songInfoBatchCandidateEvidence(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item)) }}</small>
+                      <small class="song-info-review-reason" v-if="songInfoBatchCandidateDoubts(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item))">疑点：{{ songInfoBatchCandidateDoubts(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item)) }}</small>
+                      <div class="song-info-review-differences" v-if="visibleSongInfoDifferences(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item)).length">
+                        <div class="song-info-review-diff-head"><span>字段</span><span>当前</span><span>查找结果</span></div>
+                        <div class="song-info-review-diff" v-for="difference in visibleSongInfoDifferences(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item))" :key="difference.field">
+                          <span>{{ songInfoFieldLabel(difference.field) }}</span>
+                          <span>{{ formatSongInfoValue(difference.field, difference.current) }}</span>
+                          <strong>{{ formatSongInfoValue(difference.field, difference.proposed) }}</strong>
+                        </div>
+                      </div>
+                    </div>
+                    <select
+                      v-if="item.candidates.length > 1"
+                      :value="songInfoBatchCandidateChoice(currentSongInfoBatchTask(), item)"
+                      @change="setSongInfoBatchCandidateChoice(currentSongInfoBatchTask(), item, $event.target.value)"
+                      aria-label="查看低匹配结果"
+                    >
+                      <option v-for="(candidate, index) in item.candidates" :key="candidate.candidate.candidateId || index" :value="index">
+                        {{ songInfoBatchCandidateText(candidate) }}
+                      </option>
+                    </select>
+                  </div>
+                  <button
+                    class="mini ghost song-info-review-more"
+                    v-if="songInfoBatchUncertainCount(currentSongInfoBatchTask()) > songInfoBatchUncertainLimit"
+                    @click.prevent="songInfoBatchUncertainLimit += 30"
+                  >显示更多</button>
+                </details>
+
+                <details class="song-info-failures" v-if="songInfoBatchEmptyCount(currentSongInfoBatchTask())">
+                  <summary>无结果 {{ songInfoBatchEmptyCount(currentSongInfoBatchTask()) }}</summary>
+                  <div class="song-info-failure-row" v-for="item in songInfoBatchEmptyItems(currentSongInfoBatchTask())" :key="item.id">
+                    <strong>{{ songInfoBatchItemText(item) }}</strong>
+                    <span>{{ songInfoBatchSourceResultText(item) }}</span>
+                  </div>
+                  <button
+                    class="mini ghost song-info-review-more"
+                    v-if="songInfoBatchEmptyCount(currentSongInfoBatchTask()) > songInfoBatchEmptyLimit"
+                    @click.prevent="songInfoBatchEmptyLimit += 20"
+                  >显示更多</button>
+                </details>
+              </section>
+
+              <section class="settings-card" data-setting-id="setting-song-info-c6386d7265">
+                <div class="settings-card-title">
+                  <div>
+                    <h3>查找缓存</h3>
+                    <p>任务和已保存歌词会保留。</p>
+                  </div>
+                </div>
+                <div class="btns">
+                  <button class="mini" @click="clearSongInfoLookupCache" :disabled="songInfoCacheBusy || hasUnfinishedSongInfoBatchTask()">
+                    {{ songInfoCacheBusy ? '正在清理' : '清理缓存' }}
+                  </button>
+                  <small class="hint" :class="{ error: songInfoCacheMessageTone === 'error' }" v-if="songInfoCacheMessage">{{ songInfoCacheMessage }}</small>
+                </div>
+              </section>
+            </div>
+
+            <div v-if="['advanced', 'downloads', 'recommendation'].includes(settingsTab)" class="settings-panel">
+              <header class="settings-panel-header">
+                <h2>{{ currentSettingsSectionTitle }}</h2>
+                <span v-if="settingsTab!=='advanced' && ['saving','pending','error'].includes(configSaveState)" class="settings-save-state" :class="configSaveState">{{ configSaveLabel }}</span>
+              </header>
+              <section v-if="settingsTab==='advanced'" class="settings-card" data-setting-id="setting-advanced-405be21f38">
+                <div class="settings-card-title">
+                  <div>
+                    <h3>推荐模型</h3>
+                    <p>推荐功能所需的组件与模型。</p>
+                  </div>
+                </div>
+                <div class="setup-steps">
+                  <div class="installer-step">
+                    <div><strong>推荐组件</strong><small>下载约 188 MB，安装后约 500 MB。</small></div>
+                    <button class="mini" @click="launchRecommendationInstaller" :disabled="installerTasks.recommendation.running">{{ installerTasks.recommendation.running ? '安装中' : '安装' }}</button>
+                    <div class="installer-detail" v-if="installerTasks.recommendation.phase !== 'idle'">
+                      <div class="installer-progress" :class="{indeterminate: installerTasks.recommendation.percent === null, error: installerTasks.recommendation.phase === 'error'}" :style="installerProgressStyle(installerTasks.recommendation)"><i></i></div>
+                      <div class="installer-status"><span>{{ installerTasks.recommendation.message }}</span><span v-if="installerTasks.recommendation.percent !== null">{{ Math.round(installerTasks.recommendation.percent) }}%</span></div>
+                      <small>位置：{{ installerTasks.recommendation.target }}</small>
+                    </div>
+                  </div>
+                  <div class="installer-step">
+                    <div><strong>推荐模型</strong><small>约 1.18 GB，下载后自动校验。</small></div>
+                    <button class="mini" @click="launchModelInstaller" :disabled="installerTasks.model.running">{{ installerTasks.model.running ? '下载中' : '下载模型' }}</button>
+                    <div class="installer-detail" v-if="installerTasks.model.phase !== 'idle'">
+                      <div class="installer-progress" :class="{indeterminate: installerTasks.model.percent === null, error: installerTasks.model.phase === 'error'}" :style="installerProgressStyle(installerTasks.model)"><i></i></div>
+                      <div class="installer-status"><span>{{ installerTasks.model.message }}</span><span v-if="installerTasks.model.percent !== null">{{ Math.round(installerTasks.model.percent) }}%</span></div>
+                      <small>位置：{{ installerTasks.model.target }}</small>
+                    </div>
+                  </div>
+                </div>
+                <label class="form-row" data-setting-id="setting-advanced-params-model-local-dir">
+                  <span>模型目录</span>
+                  <input v-model="params.model.local_dir" placeholder="选择推荐模型文件夹" />
+                  <button class="mini" @click="pickModelDir">选择</button>
+                </label>
+                <details class="settings-inline-disclosure">
+                  <summary>自定义模型来源</summary>
+                  <label class="form-row" data-setting-id="setting-advanced-params-model-source">
+                    <span>模型来源</span>
+                    <input v-model="params.model.source" placeholder="m-a-p/MERT-v1-330M" />
+                  </label>
+                </details>
+              </section>
+              <section v-if="settingsTab==='downloads'" class="settings-card" data-setting-id="setting-downloads-c60e1b1007">
+                <div class="settings-card-title">
+                  <div>
+                    <h3>在线歌曲</h3>
+                    <p>在线歌曲听满指定时长后加入推荐。</p>
+                  </div>
+                </div>
+              <label class="form-row" data-setting-id="setting-downloads-params-download-dir">
+                <span>下载目录</span>
+                <input v-model="params.download_dir" placeholder="在线歌曲下载保存位置" />
+                <button class="mini" @click="pickDownloadDir">选择</button>
+              </label>
+              <label class="form-row checkbox-row" data-setting-id="setting-downloads-params-online-auto-index-enabled">
+                <span>自动加入推荐索引</span>
+                <input class="ui-toggle" type="checkbox" v-model="params.online.auto_index_enabled" />
+              </label>
+              <label class="form-row" data-setting-id="setting-downloads-params-online-auto-index-after-seconds">
+                <span>播放时长</span>
+                <input type="number" min="5" max="600" step="1" v-model.number="params.online.auto_index_after_seconds" :disabled="!params.online.auto_index_enabled" />
+                <span class="unit">秒</span>
+              </label>
+              <label class="form-row checkbox-row" v-if="isCurrentOnlineTrack" data-setting-id="setting-downloads-currenttrackexcluded">
+                <span>排除当前在线歌曲</span>
+                <input class="ui-toggle" type="checkbox" v-model="currentTrackExcluded" @change="toggleCurrentTrackExcluded" />
+              </label>
+              </section>
+              <section v-if="settingsTab==='recommendation'" class="settings-card" data-setting-id="setting-recommendation-8c707b6c21">
+                <div class="settings-card-title"><div><h3>连续推荐</h3><p>根据当前音乐，继续播放相近氛围的歌曲。</p></div><label class="quiet-switch" :title="useRecommend ? '关闭连续推荐' : '开启连续推荐'"><input class="ui-toggle" type="checkbox" v-model="useRecommend" aria-label="连续推荐" /></label></div>
+
+                <label class="form-row checkbox-row" data-setting-id="setting-recommendation-recommendfullmode"><span>包含已入库的在线歌曲</span><input class="ui-toggle" type="checkbox" v-model="recommendFullMode" /><small class="hint">{{ recommendFullMode ? '推荐范围：本地与已入库在线歌曲' : '推荐范围：本地音乐' }}</small></label>
+
+<label class="form-row" data-setting-id="setting-recommendation-params-recommendation-recent-exclusion"><span>避免立即重播最近几首</span><input type="number" min="1" max="20" v-model.number="params.recommendation.recent_exclusion"></label><label class="form-row" data-setting-id="setting-recommendation-params-recommendation-allow-older-repeats"><span>允许偶尔重听合适的歌曲</span><input type="checkbox" class="ui-toggle" v-model="params.recommendation.allow_older_repeats"></label></section>
+<details v-if="settingsTab==='recommendation'" class="maintenance-card" data-setting-id="setting-recommendation-236a36b269">
+                <summary class="maintenance-head">
+                  <div>
+                    <strong>高级推荐参数</strong>
+                  </div>
+                </summary>
+                <div class="maintenance-fields"><h4>单模型推荐的防重复</h4><div class="form-row" data-setting-id="setting-recommendation-params-history-no-repeat-within"><span>防止连续重复</span><div class="settings-control-cluster"><input type="number" min="0" max="1000" step="1" v-model.number="params.history.no_repeat_within" aria-label="最近播放防重复歌曲数" /><span class="unit">首内</span><select v-model="params.history.repeat_policy" aria-label="最近播放重复策略"><option value="disallow">不重复</option><option value="allow">允许重复</option></select></div></div><h4>关联与候选参数</h4>
+                  <label class="form-row" data-setting-id="setting-recommendation-params-recommendation-semantic-floor"><span>整体听感优先下限</span><input type="number" step="0.01" min="0" max="1" v-model.number="params.recommendation.semantic_floor"></label>
+                  <label class="form-row" data-setting-id="setting-recommendation-adjacent-mert-floor"><span>自然续播相邻 MERT 起始下限</span><input type="number" step="0.005" min="0" max="1" v-model.number="params.recommendation.adjacent_mert_floor"></label>
+                  <label class="form-row" data-setting-id="setting-recommendation-params-recommendation-context-floor"><span>本段感觉优先下限</span><input type="number" step="0.01" min="0" :max="params.recommendation.semantic_floor" v-model.number="params.recommendation.context_floor"></label>
+                  <label class="form-row" data-setting-id="setting-recommendation-params-recommendation-candidate-limit"><span>候选数量上限</span><input type="number" step="1" min="10" max="200" v-model.number="params.recommendation.candidate_limit"></label>
+
+
+                  <p class="section-desc">调整推荐门槛与候选范围。关联分数不代表听感准确率。</p>
+                  <p v-if="log?.stats?.model==='mert_only'" class="section-desc">{{ log.stats.semantic_status==='building' ? '歌曲关联数据正在后台准备，完成后切换。' : '当前参考缺少可用于本次评分的 MuQ，使用完整 MERT 策略。' }}</p>
+                  <label class="form-row" data-setting-id="setting-recommendation-params-similarity-like-min"><span>单模型／组合关联下限</span><input type="number" step="0.01" v-model.number="params.similarity.like_min"></label>
+                  <label class="form-row" data-setting-id="setting-recommendation-params-dislike-min-sim"><span>单模型换感觉下限</span><input type="number" step="0.01" v-model.number="params.dislike.min_sim"></label>
+                  <label class="form-row" data-setting-id="setting-recommendation-params-dislike-max-sim"><span>单模型换感觉上限</span><input type="number" step="0.01" v-model.number="params.dislike.max_sim"></label>
+                </div>
+              </details>
+              <details v-if="settingsTab==='recommendation'" class="maintenance-card" data-setting-id="setting-recommendation-790000a827">
+                <summary class="maintenance-head">
+                  <div>
+                    <strong>换歌推荐纠偏</strong>
+                  </div>
+                  <span class="maintenance-state">{{ recommendationRateStatus.running ? '重建中' : formatRecommendationRateStatus(recommendationRateStatus.status) }}</span>
+                </summary>
+                <div class="maintenance-section">
+                  <h4>使用状态</h4>
+                  <div class="maintenance-fields">
+                    <label class="form-row checkbox-row" data-setting-id="setting-recommendation-params-dislike-correction-enabled"><span>启用纠偏</span><input class="ui-toggle" type="checkbox" v-model="params.dislike_correction.enabled"></label>
+                    <label class="form-row checkbox-row" data-setting-id="setting-recommendation-params-dislike-correction-auto-rebuild-recommend-rate"><span>自动重建推荐率</span><input class="ui-toggle" type="checkbox" v-model="params.dislike_correction.auto_rebuild_recommend_rate"></label>
+                  </div>
+                </div>
+                <details class="maintenance-subgroup">
+                  <summary>算法参数</summary>
+                  <div class="maintenance-section">
+                    <h4>推荐率</h4>
+                    <div class="maintenance-fields">
+                      <label class="form-row checkbox-row" data-setting-id="setting-recommendation-params-dislike-correction-enable-recommend-rate-fix"><span>启用修正</span><input class="ui-toggle" type="checkbox" v-model="params.dislike_correction.enable_recommend_rate_fix"></label>
+                      <label class="form-row" data-setting-id="setting-recommendation-params-dislike-correction-rec-strength"><span>强度</span><input type="number" step="0.1" min="0" max="5" v-model.number="params.dislike_correction.rec_strength"></label>
+                      <label class="form-row" data-setting-id="setting-recommendation-params-dislike-correction-rec-fix-min"><span>最小修正</span><input type="number" step="0.01" min="0.01" v-model.number="params.dislike_correction.rec_fix_min"></label>
+                      <label class="form-row" data-setting-id="setting-recommendation-params-dislike-correction-rec-fix-max"><span>最大修正</span><input type="number" step="0.1" min="0.01" v-model.number="params.dislike_correction.rec_fix_max"></label>
+                    </div>
+                  </div>
+                  <div class="maintenance-section">
+                    <h4>跳过率</h4>
+                    <div class="maintenance-fields">
+                      <label class="form-row checkbox-row" data-setting-id="setting-recommendation-params-dislike-correction-enable-skip-rate-fix"><span>启用修正</span><input class="ui-toggle" type="checkbox" v-model="params.dislike_correction.enable_skip_rate_fix"></label>
+                      <label class="form-row" data-setting-id="setting-recommendation-params-dislike-correction-skip-strength"><span>强度</span><input type="number" step="0.1" min="0" max="5" v-model.number="params.dislike_correction.skip_strength"></label>
+                      <label class="form-row" data-setting-id="setting-recommendation-params-dislike-correction-skip-fix-min"><span>最小修正</span><input type="number" step="0.01" min="0.01" v-model.number="params.dislike_correction.skip_fix_min"></label>
+                      <label class="form-row" data-setting-id="setting-recommendation-params-dislike-correction-skip-fix-max"><span>最大修正</span><input type="number" step="0.1" min="0.01" v-model.number="params.dislike_correction.skip_fix_max"></label>
+                      <label class="form-row" data-setting-id="setting-recommendation-params-dislike-correction-skip-smooth-k"><span>平滑</span><input type="number" step="1" min="0" v-model.number="params.dislike_correction.skip_smooth_k"></label>
+                    </div>
+                  </div>
+                  <div class="maintenance-section">
+                    <h4>行为</h4>
+                    <div class="maintenance-fields">
+                      <label class="form-row" data-setting-id="setting-recommendation-params-dislike-correction-daily-decay"><span>每日衰减</span><input type="number" step="0.01" min="0" max="1" v-model.number="params.dislike_correction.daily_decay"></label>
+                        <label class="form-row" data-setting-id="setting-recommendation-params-dislike-correction-consecutive-dislike-threshold"><span>记录前忽略</span><input type="number" step="1" min="0" max="20" v-model.number="params.dislike_correction.consecutive_dislike_threshold"><span class="unit">次</span></label>
+                      <label class="form-row" data-setting-id="setting-recommendation-params-dislike-correction-long-pause-reset-minutes"><span>暂停后重置</span><input type="number" step="1" min="0" max="1440" v-model.number="params.dislike_correction.long_pause_reset_minutes"><span class="unit">分钟</span></label>
+                    </div>
+                  </div>
+                </details>
+                <div class="maintenance-section">
+                  <h4>当前状态</h4>
+                  <dl class="recommendation-stats">
+                    <div>
+                      <dt>推荐率</dt>
+                      <dd>{{ formatRecommendationRateStatus(recommendationRateStatus.status) }}</dd>
+                    </div>
+                    <div>
+                      <dt>重建进度</dt>
+                      <dd>{{ recommendationRateStatus.progress?.done || 0 }} / {{ recommendationRateStatus.progress?.total || 0 }}</dd>
+                    </div>
+                    <div>
+                      <dt>已统计</dt>
+                      <dd>{{ recommendationRateStatus.track_count || 0 }} 首</dd>
+                    </div>
+                    <div>
+                      <dt>零推荐率</dt>
+                      <dd>{{ recommendationRateStatus.summary?.zeroRateCount || 0 }} 首</dd>
+                    </div>
+                    <div>
+                      <dt>总体跳过率</dt>
+                      <dd>{{ ((listeningHistory.recommendationBehaviorSummary?.globalSkipRate || 0) * 100).toFixed(2) }}%</dd>
+                    </div>
+                  </dl>
+                </div>
+                <div class="btns">
+                  <button class="mini" @click="rebuildRecommendationRate">重建</button>
+                  <button class="mini" @click="loadRecommendationRateStatus">刷新状态</button>
+                  <button class="mini" @click="refreshSkipRateStats">刷新统计</button>
+                </div>
+                <small class="hint" v-if="recommendationRateMessage">{{ recommendationRateMessage }}</small>
+                <small class="hint">记录前忽略为 0 时，从第一次换歌开始统计。</small>
+              </details>
+              <section v-if="settingsTab==='advanced'" class="settings-card" data-setting-id="setting-advanced-72ce9b8c3f">
+                <div class="settings-card-title">
+                  <div>
+                    <h3>曲库与索引</h3>
+                    <p>任务失败时保留现有数据。</p>
+                  </div>
+                </div>
+                <div class="btns">
+                  <button class="mini" @click="refreshSongList" :disabled="loading || audioDirectoryChanged">刷新音乐库</button>
+                  <button class="mini" @click="updateIndex" :disabled="loading || indexTaskRunning">更新推荐索引</button>
+                  <button class="danger-button" @click="scanIndex(true)" :disabled="loading || indexTaskRunning">重建推荐索引</button>
+                  <button class="mini" v-if="indexTaskRunning" @click="cancelIndexTask">取消任务</button>
+                </div>
+                <small class="hint library-refresh-message" v-if="libraryRefreshMessage">{{ libraryRefreshMessage }}</small>
+                <p class="hint" role="status" v-if="indexTaskStatus.last_started_at">{{ indexTaskProgressText() }}</p>
+                <progress class="index-task-progress" v-if="indexTaskRunning" aria-label="当前阶段索引进度" :max="indexTaskStatus.progress?.total || 1" :value="indexTaskStatus.progress?.total > 0 ? indexTaskStatus.progress.done : null"></progress>
+              </section>
+            </div>
+
+            <div v-if="settingsTab==='source'" class="settings-panel">
+              <header class="settings-panel-header">
+                <h2>在线音源与音质</h2>
+              </header><section class="settings-card" data-setting-id="setting-source-d76af2ccdf">
+                <div class="settings-card-title"><div><h3>播放音质</h3></div></div>
+                <label class="form-row" data-setting-id="setting-source-params-online-default-quality"><span>默认音质</span><select v-model="params.online.default_quality"><option v-for="option in onlineQualityOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
+              </section>
+              <section class="settings-card" data-setting-id="setting-source-8149b7c3f4">
+                <div class="settings-card-title">
+                  <div>
+                    <h3>音源脚本</h3>
+                  </div>
+                  <span class="status-pill">{{ onlineSourceScriptExists ? '已启用' : '未配置' }}</span>
+                </div>
+                <label class="form-row" data-setting-id="setting-source-704cc67428">
+                  <span>脚本文件</span>
+                  <input :value="onlineSourceScriptLabel" readonly placeholder="选择一个 .js 音源脚本" />
+                </label>
+                <div class="form-row settings-value-row" data-setting-id="setting-source-d2790c92be">
+                  <span>已加载来源</span>
+                  <output class="settings-value">{{ onlineSourceSummaryLabel }}</output>
+                </div>
+                <label class="form-row" v-if="onlineSourceScriptExists" data-setting-id="setting-source-onlinefilesource">
+                  <span>默认播放来源</span>
+                  <select v-model="onlineFileSource">
+                    <option v-for="it in getOnlineSourceOptions(false)" :key="`f-${it.value}`" :value="it.value">{{ it.label }}</option>
+                  </select>
+                </label>
+                <div class="btns">
+                  <button class="mini" @click="pickOnlineSourceScript" :disabled="onlineSourceSaving">选择脚本</button>
+                  <button class="mini" @click="reloadOnlineSourceScript" :disabled="onlineSourceSaving">重新载入</button>
+                  <button class="danger-button" @click="resetOnlineSourceScript" :disabled="onlineSourceSaving">移除</button>
+                </div>
+                <small class="hint" v-if="onlineSourceMessage">{{ onlineSourceMessage }}</small>
+              </section>
+            </div>
+
+            <div v-if="settingsTab==='theme'" class="settings-panel">
+              <header class="settings-panel-header">
+                <h2>外观</h2>
+              </header>
+              <section class="settings-card" data-setting-id="setting-theme-31472ea4de">
+                <div class="settings-card-title">
+                  <div>
+                    <h3>界面主题</h3>
+                  </div>
+                </div>
+                <div class="theme-options" role="radiogroup" aria-label="界面主题">
+                  <label :class="['theme-option', themeName==='lx-light' ? 'active' : '']">
+                    <input type="radio" value="lx-light" v-model="themeName" @change="applyTheme(themeName)" />
+                    <span class="theme-preview theme-preview-light" aria-hidden="true"><i></i><b></b></span>
+                    <span>浅色</span>
+                  </label>
+                  <label :class="['theme-option', themeName==='dark' ? 'active' : '']">
+                    <input type="radio" value="dark" v-model="themeName" @change="applyTheme(themeName)" />
+                    <span class="theme-preview theme-preview-dark" aria-hidden="true"><i></i><b></b></span>
+                    <span>深色</span>
+                  </label>
+                  <label :class="['theme-option', themeName==='deep-blue' ? 'active' : '']">
+                    <input type="radio" value="deep-blue" v-model="themeName" @change="applyTheme(themeName)" />
+                    <span class="theme-preview theme-preview-blue" aria-hidden="true"><i></i><b></b></span>
+                    <span>深蓝</span>
+                  </label>
+                </div>
+                <label class="form-row" data-setting-id="setting-theme-customcolor">
+                  <span>强调色</span>
+                  <input type="color" v-model="customColor" @input="applyCustomColor" />
+                  <span class="color-value">{{ customColor.toUpperCase() }}</span>
+                </label>
+              </section>
+              <section class="settings-card" data-setting-id="setting-theme-startup-background">
+                <div class="settings-card-title"><div><h3>启动背景图片</h3><p>只用于启动画面，保留原有模糊和文字动画。</p></div></div>
+                <div class="startup-background-settings">
+                  <div class="startup-background-preview" :class="{ 'custom-background': startupBackground.custom }"><img :src="resolveStartupSplashImage()" alt="启动背景预览" @error="startupBackgroundPreviewError" /><span aria-hidden="true">Flowave</span></div>
+                  <div class="startup-background-controls"><p>{{ startupBackground.custom ? startupBackground.name : '默认背景' }}</p><div class="btn-row"><button class="mini" :disabled="startupBackgroundSaving" @click="changeStartupBackground(false)">{{ startupBackgroundSaving ? '正在保存…' : startupBackground.custom ? '更换图片' : '选择图片' }}</button><button class="mini" :disabled="startupBackgroundSaving || !startupBackground.custom" @click="changeStartupBackground(true)">恢复默认</button></div><small class="hint">图片副本保存在软件数据中，移动原图不影响显示。</small></div>
+                </div>
+                <p v-if="startupBackgroundMessage" class="small" role="status">{{ startupBackgroundMessage }}</p>
+              </section>
+            </div>
+
+            <div v-if="['lyric', 'desktop-lyric'].includes(settingsTab)" class="settings-panel">
+              <header class="settings-panel-header">
+                <h2>{{ settingsTab==='desktop-lyric' ? '桌面歌词' : '软件内歌词' }}</h2>
+              </header>
+<section v-if="settingsTab==='lyric'" class="settings-card" data-setting-id="setting-lyric-ddff81bbc8"><div class="settings-card-title"><h3>字体与显示</h3></div><label class="form-row" data-setting-id="setting-lyric-lyricfontfamily">
+                <span>歌词字体</span>
+                <select v-model="lyricFontFamily" @change="saveLyricSettings">
+                  <option v-for="it in lyricFontOptions" :key="it.value" :value="it.value">{{ it.label }}</option>
+                </select>
+              </label>
+<label class="form-row" data-setting-id="setting-lyric-lyricmainfontsize">
+                <span>原文字号</span>
+                <input type="range" min="14" max="72" v-model.number="lyricMainFontSize" @input="saveLyricSettings" />
+                <span>{{ lyricMainFontSize }}px</span>
+              </label>
+<label class="form-row" data-setting-id="setting-lyric-lyricsubfontsize">
+                <span>译文字号</span>
+                <input type="range" min="12" max="56" v-model.number="lyricSubFontSize" @input="saveLyricSettings" />
+                <span>{{ lyricSubFontSize }}px</span>
+              </label>
+<label class="form-row" data-setting-id="setting-lyric-lyricdisplaymode">
+                <span>多语言显示</span>
+                <select v-model="lyricDisplayMode" @change="saveLyricSettings">
+                  <option value="original">只显示原文</option>
+                  <option value="translation">只显示译文</option>
+                  <option value="both">原文+译文</option>
+                </select>
+              </label>
+<label class="form-row checkbox-row" data-setting-id="setting-lyric-lyrickaraoke">
+                <span>逐字高亮</span>
+                <input class="ui-toggle" type="checkbox" v-model="lyricKaraoke" @change="saveLyricSettings" />
+              </label></section>
+<section v-if="settingsTab==='lyric'" class="settings-card" data-setting-id="setting-lyric-background"><div class="settings-card-title"><h3>背景与配色</h3></div><div class="form-row" data-setting-id="setting-lyric-lyricstageautocolor"><label>封面沉浸配色<small>从封面取色，用于歌词背景与文字。</small></label><input class="ui-toggle" type="checkbox" v-model="lyricStageAutoColor" @change="saveLyricSettings" aria-label="封面沉浸配色"></div>
+<div class="form-row" data-setting-id="setting-lyric-lyricstagescale"><label>沉浸界面文字比例<small>仅调整歌曲界面的文字。</small></label><div class="stage-scale-control"><input type="range" min="1" max="2.4" step="0.1" v-model.number="lyricStageScale" @input="saveLyricSettings" aria-label="沉浸界面文字比例"><span>{{ lyricStageScale.toFixed(1) }}×</span></div></div>
+<label class="form-row checkbox-row" data-setting-id="setting-lyric-lyricglowenabled">
+                <span>动态流光背景</span>
+                <input class="ui-toggle" type="checkbox" v-model="lyricGlowEnabled" :disabled="!lyricStageAutoColor" @change="saveLyricSettings" />
+              </label>
+<label class="form-row" data-setting-id="setting-lyric-lyricglowspeed">
+                <span>流光速度</span>
+                <input type="range" min="0.4" max="2.4" step="0.1" v-model.number="lyricGlowSpeed" :disabled="!lyricGlowEnabled || !lyricStageAutoColor" @input="saveLyricSettings" />
+                 <span>{{ lyricGlowSpeed.toFixed(1) }}x</span>
+               </label><details class="settings-inline-disclosure"><summary>自定义颜色与高亮</summary><label class="form-row" data-setting-id="setting-lyric-lyricactivecolor">
+                <span>高亮颜色<small>关闭封面配色后可用。</small></span>
+                <input type="color" v-model="lyricActiveColor" :disabled="lyricStageAutoColor" @input="saveLyricSettings" />
+                <span>{{ lyricActiveColor }}</span>
+              </label>
+<label class="form-row" data-setting-id="setting-lyric-lyricinactivecolor">
+                <span>普通颜色</span>
+                <input type="color" v-model="lyricInactiveColor" :disabled="lyricStageAutoColor" @input="saveLyricSettings" />
+                <span>{{ lyricInactiveColor }}</span>
+              </label>
+<label class="form-row" data-setting-id="setting-lyric-lyricmetacolor">
+                <span>歌曲信息颜色</span>
+                <input type="color" v-model="lyricMetaColor" :disabled="lyricStageAutoColor" @input="saveLyricSettings" />
+                <span>{{ lyricMetaColor }}</span>
+              </label>
+<label class="form-row" data-setting-id="setting-lyric-lyricbgcolor">
+                <span>背景颜色</span>
+                <input type="color" v-model="lyricBgColor" :disabled="lyricStageAutoColor" @input="saveLyricSettings" />
+                <span>{{ lyricBgColor }}</span>
+              </label>
+<label class="form-row" data-setting-id="setting-lyric-lyricactivescale">
+                <span>自定义高亮放大<small>关闭封面配色后可用。</small></span>
+                <input type="range" min="1.10" max="1.35" step="0.01" v-model.number="lyricActiveScale" :disabled="lyricStageAutoColor" @input="saveLyricSettings" />
+                <span>{{ lyricActiveScale.toFixed(2) }}x</span>
+              </label></details></section><section v-if="settingsTab==='lyric'" class="settings-card" data-setting-id="setting-lyric-14844bd3b8">
+                <div class="settings-card-title">
+                  <div>
+                    <h3>歌词来源</h3>
+
+                  </div>
+                </div>
+                <label class="form-row" data-setting-id="setting-lyric-externallyricdir">
+                  <span>KTV 歌词目录</span>
+                  <input v-model="externalLyricDir" @change="saveExternalLyricDir" placeholder="选择 KTV 歌词文件夹" />
+                  <button class="mini" @click.prevent="pickExternalLyricDir" :disabled="externalLyricSaving">选择</button>
+                </label>
+                <small class="hint" v-if="externalLyricMessage">{{ externalLyricMessage }}</small>
+                </section><section v-if="settingsTab==='lyric'" class="settings-card" data-setting-id="setting-lyric-6630c004ce">
+                <div class="settings-card-title">
+                  <div>
+                    <h3>歌词保存</h3>
+                  </div>
+                </div>
+              <div class="form-row settings-value-row" data-setting-id="setting-lyric-88c34452cc">
+                  <span>位置</span>
+                  <output class="settings-value">对应的 KTV 歌词目录</output>
+                </div>
+                <label class="form-row checkbox-row" data-setting-id="setting-lyric-lyricsaveincludetranslation">
+                  <span>包含翻译</span>
+                  <input class="ui-toggle" type="checkbox" v-model="lyricSaveIncludeTranslation" @change="saveLyricSettings" />
+                </label>
+                <label class="form-row checkbox-row" data-setting-id="setting-lyric-lyricsaveincluderomanization">
+                  <span>包含罗马音</span>
+                  <input class="ui-toggle" type="checkbox" v-model="lyricSaveIncludeRomanization" @change="saveLyricSettings" />
+                </label>
+                <div class="btns" v-if="lastLyricSaveTransactionId">
+                  <button class="mini" :disabled="lyricUndoBusy" @click="undoLastLyricSave">
+                    {{ lyricUndoBusy ? '撤销中…' : '撤销上次保存' }}
+                  </button>
+                </div>
+                </section><details v-if="settingsTab==='lyric'" class="settings-card settings-disclosure" data-setting-id="setting-lyric-4319e8cb25"><summary><span><strong>歌词同步</strong><small>时间偏移与滚动速度</small></span><span class="settings-disclosure-arrow" aria-hidden="true">›</span></summary><label class="form-row" data-setting-id="setting-lyric-lyricrenderdelayms">
+                <span>时间偏移</span>
+                <input type="range" min="-1000" max="1000" step="10" v-model.number="lyricRenderDelayMs" @input="saveLyricSettings" />
+                <span v-if="lyricRenderDelayMs < 0">前移 {{ Math.abs(lyricRenderDelayMs) }}ms</span>
+                <span v-else-if="lyricRenderDelayMs > 0">后移 {{ lyricRenderDelayMs }}ms</span>
+                <span v-else>不偏移</span>
+              </label>
+              <label class="form-row" data-setting-id="setting-lyric-lyricfocusleadms">
+                <span>换句提前量</span>
+                <input type="range" min="0" max="500" step="10" v-model.number="lyricFocusLeadMs" @input="saveLyricSettings" />
+                <span>{{ lyricFocusLeadMs }}ms</span>
+              </label>
+              <label class="form-row" data-setting-id="setting-lyric-lyricswitchscrollms">
+                <span>滚动时长</span>
+                <input type="range" min="120" max="800" step="10" v-model.number="lyricSwitchScrollMs" @input="saveLyricSettings" />
+                 <span>{{ lyricSwitchScrollMs }}ms</span>
+               </label>
+                </details><section v-if="settingsTab==='desktop-lyric'" class="settings-card" data-setting-id="setting-desktop-lyric-5095667048">
+              <div class="settings-card-title">
+                <div>
+                  <h3>桌面歌词</h3>
+                  <p>锁定后可点击穿透。</p>
+                </div>
+              </div>
+              <label class="form-row checkbox-row" data-setting-id="setting-desktop-lyric-desktoplyricenabled">
+                <span>启用桌面歌词</span>
+                <input class="ui-toggle" type="checkbox" v-model="desktopLyricEnabled" @change="saveDesktopLyricSettings" />
+              </label>
+              <label class="form-row checkbox-row" data-setting-id="setting-desktop-lyric-desktoplyriclocked">
+                <span>锁定并点击穿透</span>
+                <input class="ui-toggle" type="checkbox" v-model="desktopLyricLocked" :disabled="!desktopLyricEnabled" @change="saveDesktopLyricSettings" />
+              </label>
+              <label class="form-row checkbox-row" data-setting-id="setting-desktop-lyric-desktoplyriccovercolor">
+                <span>颜色跟随封面</span>
+                <input class="ui-toggle" type="checkbox" v-model="desktopLyricCoverColor" :disabled="!desktopLyricEnabled" @change="saveDesktopLyricSettings" />
+              </label>
+              <label class="form-row" data-setting-id="setting-desktop-lyric-desktoplyricmainfontsize">
+                <span>原文字号</span>
+                <input type="range" min="20" max="72" v-model.number="desktopLyricMainFontSize" :disabled="!desktopLyricEnabled" @input="saveDesktopLyricSettings" />
+                <span>{{ desktopLyricMainFontSize }}px</span>
+              </label>
+              <label class="form-row" data-setting-id="setting-desktop-lyric-desktoplyricsubfontsize">
+                <span>译文字号</span>
+                <input type="range" min="12" max="56" v-model.number="desktopLyricSubFontSize" :disabled="!desktopLyricEnabled" @input="saveDesktopLyricSettings" />
+                <span>{{ desktopLyricSubFontSize }}px</span>
+              </label>
+              <label class="form-row" data-setting-id="setting-desktop-lyric-desktoplyricstroke">
+                <span>描边强度</span>
+                <input type="range" min="0" max="1.5" step="0.05" v-model.number="desktopLyricStroke" :disabled="!desktopLyricEnabled" @input="saveDesktopLyricSettings" />
+                <span v-if="desktopLyricStroke <= 0">关闭</span>
+                <span v-else>{{ desktopLyricStroke.toFixed(2) }}px</span>
+              </label>
+              <label class="form-row" data-setting-id="setting-desktop-lyric-desktoplyriclinemode">
+                <span>显示模式</span>
+                <select v-model="desktopLyricLineMode" :disabled="!desktopLyricEnabled" @change="saveDesktopLyricSettings">
+                  <option value="single">单句</option>
+                  <option value="double">两句</option>
+                </select>
+               </label>
+
+                </section>
+            </div>
+
+            <div v-if="settingsTab==='shortcuts'" class="settings-panel">
+              <header class="settings-panel-header">
+                <h2>快捷键</h2>
+              </header>
+              <section class="settings-card" data-setting-id="setting-shortcuts-314c9abdb6">
+              <div class="settings-card-title">
+                <div>
+                  <h3>播放控制</h3>
+                  <p>留空禁用；格式如 Control+Space。</p>
+                </div>
+              </div>
+              <div class="shortcut-list">
+                <div class="shortcut-head">
+                  <div>动作</div>
+                  <div>范围</div>
+                  <div>快捷键</div>
+                  <div>状态</div>
+                </div>
+                <div class="shortcut-row" v-for="it in shortcutItems" :key="it.action">
+                  <div>{{ it.label }}</div>
+                  <div class="shortcut-scope">{{ shortcutScopeLabel(it.scope) }}</div>
+                  <input v-model.trim="it.accelerator" @input="scheduleShortcutAutoSave" :aria-label="`${it.label}快捷键`" />
+                  <div :class="['shortcut-status', shortcutStatusTone(it)]">
+                    {{ shortcutStatusLabel(it) }}
+                  </div>
+                </div>
+              </div>
+              <div class="btns">
+                <button class="mini" @click="resetShortcutSettings" :disabled="shortcutSaving">恢复默认</button>
+              </div>
+              <small class="hint" v-if="shortcutMessage">{{ shortcutMessage }}</small>
+              </section>
+            </div>
+
+            <div v-if="settingsTab==='history'" class="settings-panel listening-history-panel">
+              <header class="settings-panel-header">
+                <h2>听歌记录</h2>
+              </header>
+              <small
+                v-if="listeningHistoryMessage"
+                class="history-action-message"
+                :class="{ warning: listeningHistoryRecoveryStatus.state === 'unrecoverable' }"
+              >{{ listeningHistoryMessage }}</small>
+              <div class="history-summary">
+                <div class="history-metric">
+                  <span>总听歌时长</span>
+                  <strong>{{ formatDurationLong(listeningHistory.totalSeconds) }}</strong>
+                </div>
+                <div class="history-metric">
+                  <span>今日时长</span>
+                  <strong>{{ formatDurationLong(listeningHistoryTodaySeconds) }}</strong>
+                </div>
+                <div class="history-metric">
+                  <span>听过歌曲</span>
+                  <strong>{{ listeningHistoryTrackCount }}</strong>
+                </div>
+                <div class="history-metric">
+                  <span>播放次数</span>
+                  <strong>{{ listeningHistory.totalPlays || 0 }}</strong>
+                </div>
+              </div>
+              <section class="history-section">
+                <div class="history-section-title">
+                  <h4>每日听歌时长</h4>
+                  <small>最近 {{ listeningHistoryDayBars.length }} 天</small>
+                </div>
+                <div class="history-days">
+                  <div class="history-day" v-for="day in listeningHistoryDayBars" :key="day.key" :title="`${day.key} ${day.timeText}`">
+                    <div class="history-day-bar">
+                      <span :style="{height: day.percent + '%'}"></span>
+                    </div>
+                    <em>{{ day.label }}</em>
+                  </div>
+                </div>
+              </section>
+              <section class="history-section history-table-section">
+                <div class="history-toolbar">
+                  <library-search-input :model-value="listeningHistoryKeyword" @commit="setListeningHistoryQuery" placeholder="搜索歌曲、艺人、专辑" aria-label="搜索听歌历史"></library-search-input>
+                  <select v-model="listeningHistorySort" @change="changeListeningHistoryPage(1)" aria-label="听歌历史排序">
+                    <option value="playCount">播放次数从多到少</option>
+                    <option value="listenedSeconds">累计时长从多到少</option>
+                    <option value="lastPlayedAt">最近播放</option>
+                    <option value="title">歌曲名</option>
+                  </select>
+                </div>
+                <div class="history-table">
+                  <div class="history-table-head">
+                    <div>歌曲</div>
+                    <div>艺人</div>
+                    <div>次数</div>
+                    <div>累计时长</div>
+                    <div>最后播放</div>
+                  </div>
+                  <div class="history-table-body" ref="historyTableBody">
+                    <div class="history-row" v-for="item in listeningHistoryVisibleRows" :key="item.path" v-memo="[item.path,item.title,item.album,item.artist,item.playCount,item.listenedSeconds,item.lastPlayedAt]" @dblclick="playByPath(item.path)" @keydown.enter.prevent="playByPath(item.path)" @keydown.space.prevent="playByPath(item.path)" role="button" tabindex="0">
+                      <div class="history-title">
+                        <strong>{{ item.title || extractName(item.path) }}</strong>
+                        <small>{{ item.album || '未知专辑' }}</small>
+                      </div>
+                      <div>{{ item.artist || '未知艺术家' }}</div>
+                      <div>{{ item.playCount || 0 }}</div>
+                      <div>{{ formatDurationLong(item.listenedSeconds) }}</div>
+                      <div>{{ formatHistoryDate(item.lastPlayedAt) }}</div>
+                    </div>
+                    <div v-if="!listeningHistoryRows.length" class="empty">{{ listeningHistoryKeyword ? '没有匹配的听歌记录' : '暂无听歌历史' }}</div>
+                  </div>
+                </div>
+                <div class="history-pagination" v-if="listeningHistoryRows.length" aria-label="听歌记录分页">
+                  <span aria-live="polite">共 {{ listeningHistoryRows.length }} 首 · 第 {{ listeningHistoryCurrentPage }} / {{ listeningHistoryPageCount }} 页</span>
+                  <button type="button" :disabled="listeningHistoryCurrentPage<=1" @click="changeListeningHistoryPage(listeningHistoryCurrentPage-1)">上一页</button>
+                  <button type="button" :disabled="listeningHistoryCurrentPage>=listeningHistoryPageCount" @click="changeListeningHistoryPage(listeningHistoryCurrentPage+1)">下一页</button>
+                </div>
+              </section>
+              <section class="settings-card history-management-card" data-setting-id="setting-history-d97701c357">
+                <div class="settings-card-title">
+                  <div>
+                    <h3>数据管理</h3>
+                    <p>听歌统计与推荐学习分别保存。</p>
+                  </div>
+                </div>
+                <div class="btns">
+                  <button class="mini ghost danger-quiet" @click="clearListeningStats" :disabled="listeningHistoryActionBusy">清空统计</button>
+                  <button class="mini ghost danger-quiet" @click="resetRecommendationBehavior" :disabled="listeningHistoryActionBusy">重置推荐学习</button>
+                </div>
+              </section>
+            </div>
+
+            <div v-if="settingsTab==='manual'" class="settings-panel manual-panel">
+              <header class="settings-panel-header">
+                <h2>帮助与恢复</h2>
+              </header>
+
+              <main class="manual-doc-content">
+              <section id="manual-playback" class="manual-section">
+                <h4>播放本地音乐</h4>
+                <ul>
+                  <li>在“曲库与在线 / 本地音乐”添加文件夹并应用。</li>
+                  <li>双击歌曲开始播放。</li>
+                  <li>点击底部封面打开歌词。</li>
+                </ul>
+              </section>
+
+              <section id="manual-library" class="manual-section">
+                <h4>搜索与歌单</h4>
+                <ul>
+                  <li>支持歌曲、艺人、专辑、拼音和假名搜索。</li>
+                  <li>右键歌曲可加入或移出歌单。</li>
+                </ul>
+              </section>
+
+              <section id="manual-index" class="manual-section">
+                <h4>启用推荐</h4>
+                <ul>
+                  <li>在“维护与帮助 / 模型与索引”安装组件和模型。</li>
+                  <li>新增歌曲后使用“更新推荐索引”。</li>
+                  <li>“刷新音乐库”只重新读取音乐目录。</li>
+                </ul>
+              </section>
+
+              <section id="manual-online" class="manual-section">
+                <h4>在线音乐</h4>
+                <ul>
+                  <li>Flowave 不附带音源脚本。</li>
+                  <li>只导入你信任的脚本。</li>
+                </ul>
+              </section>
+
+              <section id="manual-lyrics" class="manual-section">
+                <h4>歌词与快捷键</h4>
+                <ul>
+                  <li>在“外观与歌词”调整歌词显示。</li>
+                  <li>锁定桌面歌词后会点击穿透。</li>
+                  <li>快捷键留空时禁用。</li>
+                </ul>
+              </section>
+
+              <section id="manual-history" class="manual-section">
+                <h4>数据与恢复</h4>
+                <ul>
+                  <li>备份或迁移时复制整个程序文件夹。</li>
+                  <li>“清空统计”和“重置推荐学习”互不影响。</li>
+                  <li>媒体键与推荐记录可在“诊断日志”查看。</li>
+                </ul>
+              </section>
+              </main>
+            </div>
+
+              <div v-if="settingsTab==='logs'" class="settings-panel">
+                <header class="settings-panel-header">
+                  <h2>诊断日志</h2>
+                </header>
+                <div class="log-block scrollable recommendation-decision-log">
+                  <h4>实际选曲与播放记录</h4>
+                  <p class="small">仅成功开始播放才计入机会，保留最近 80 次本机记录。</p>
+                  <div class="log-row" v-for="item in recommendationDiagnostics.slice(-20).reverse()" :key="item.id">
+                    <span class="log-name">{{ item.title }}</span>
+                    <span class="log-sim">{{ formatRecommendationDecision(item) }}</span>
+                  </div>
+                  <div v-if="!recommendationDiagnostics.length" class="empty">实际切歌后开始记录</div>
+                </div>
+                <div class="log-block">
+                  <div class="log-block-title">
+                    <h4>媒体控制</h4>
+                    <button class="mini" @click="refreshMediaDiag">刷新</button>
+                  </div>
+                  <div class="log-row">
+                    <span class="log-name">媒体键</span>
+                    <span class="log-sim">{{ getMediaHotkeyStatusText() }}</span>
+                  </div>
+                  <div class="log-row">
+                    <span class="log-name">音频中断检测</span>
+                    <span class="log-sim">{{ audioFocusWatcherAvailable ? '可用' : '不可用' }}</span>
+                  </div>
+                  <div class="media-diag-list">
+                    <div class="log-row" v-for="event in recentMediaDiagEvents" :key="event.id || `${event.ts}-${event.type}`">
+                      <span class="log-name">{{ formatMediaDiagTs(event.ts) }}　{{ formatMediaDiagType(event.type) }}</span>
+                      <span class="log-sim">{{ formatMediaDiagDetail(event) }}</span>
+                    </div>
+                    <div v-if="!mediaDiagEvents.length" class="empty">暂无媒体控制记录</div>
+                  </div>
+                </div>
+                <div class="log-block">
+                  <h4>换个感觉摘要</h4>
+                  <div class="log-row">
+                    <span class="log-name">状态 {{ formatRecommendationRateStatus(log.dislike_debug?.recommendRateStatus) }} · {{ formatRecommendationFallback(log.dislike_debug?.fallbackLevel) }}</span>
+                    <span class="log-sim">权重 {{ Number(log.dislike_debug?.totalWeight || 0).toFixed(4) }}</span>
+                  </div>
+                  <div class="log-row">
+                    <span class="log-name">选中 {{ extractName(log.dislike_debug?.selectedPath || '') || '-' }}</span>
+                    <span class="log-sim">{{ log.dislike_debug?.enabled === false ? '未启用' : '已启用' }}</span>
+                  </div>
+                </div>
+                <div class="log-block scrollable">
+                  <h4>相似下一首候选</h4>
+                  <div class="log-row">
+                    <span class="log-name">候选范围 {{ formatRecommendationFallback(log.stats?.like_fallback_level) }}</span>
+                    <span class="log-sim">候选 {{ log.stats?.like_pool || 0 }}</span>
+                    <span class="log-sim" v-if="log.stats?.like_next_out_of_range">超出设定范围</span>
+                  </div>
+                  <div class="log-row" v-for="item in log.like_list" :key="item.path">
+                    <span class="log-name">{{ extractName(item.path) }}</span>
+                    <span class="log-sim">当前曲 {{ item.sim.toFixed(4) }}</span>
+                    <span v-if="item.intent_similarity!=null" class="log-sim">参考 {{ item.intent_similarity.toFixed(4) }}</span>
+                  </div>
+                  <div v-if="!log.like_list.length" class="empty">暂无相似候选</div>
+                </div>
+                <div class="log-block scrollable dislike-candidate-log">
+                  <h4>换个感觉候选</h4>
+                  <div class="log-row" v-for="item in log.dislike_list" :key="item.path">
+                    <span class="log-name">{{ extractName(item.path) }}</span>
+                    <span class="log-sim">{{ item.sim.toFixed(4) }}</span>
+                    <span class="log-sim">概率 {{ Number(item.probability || 0).toFixed(4) }}</span>
+                    <span class="log-sim">权重 {{ Number(item.weight || 0).toFixed(3) }}</span>
+                    <span v-if="item.correction_fix!=null" class="log-sim">纠偏倍率 {{ item.correction_fix.toFixed(2) }} · 方向 {{ Number(item.direction)+1 }}</span>
+                    <template v-else><span class="log-sim">推荐率 {{ Number(item.rec_fix || 1).toFixed(2) }}</span>
+                    <span class="log-sim">跳过率 {{ Number(item.skip_fix || 1).toFixed(2) }}</span></template>
+                    <span class="log-sim" v-if="item.selected">选中</span>
+                  </div>
+                  <div v-if="!log.dislike_list.length" class="empty">暂无换歌候选</div>
+                </div>
+                <div class="log-block scrollable">
+                  <h4>全部候选排名 <small v-if="allRankedTotal>rankDisplayLimit">(前{{ rankDisplayLimit }} / 共 {{ allRankedTotal }})</small></h4>
+                  <div class="log-row" v-for="item in allRankedLogs" :key="item.path">
+                    <span class="log-rank">#{{ item.rank }}</span>
+                    <span class="log-name">{{ item.name }}</span>
+                    <span class="log-sim">{{ item.sim.toFixed(4) }}</span>
+                  </div>
+                  <div v-if="!allRankedLogs.length" class="empty">暂无候选</div>
+                </div>
+              </div>
+            </div>
+          </section>
+</view-boundary>
+
+      </section>
+    </div>
+
+    <footer class="player">
+      <div class="player-now-playing">
+      <div class="cover" @click="openLyricPanel" @keydown.enter.prevent="openLyricPanel" @keydown.space.prevent="openLyricPanel" title="查看封面与歌词" role="button" tabindex="0">
+        <img v-if="currentCover" :src="currentCover" alt="">
+        <span v-else class="player-cover-placeholder" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>
+        </span>
+      </div>
+      <div class="track-info" @click="openLyricPanel" @keydown.enter.prevent="openLyricPanel" @keydown.space.prevent="openLyricPanel" title="查看封面与歌词" role="button" tabindex="0">
+        <div class="title">{{ currentMeta.title || extractName(currentPath) || '未播放' }}</div>
+        <div class="artist">{{ currentMeta.artist || '' }}</div>
+        <div class="player-status" v-if="pendingPlaybackTransition">正在切换歌曲…</div>
+        <div class="player-status error" v-else-if="lastPlaybackError">播放失败</div>
+      </div>
+      </div>
+      <div class="player-center">
+      <div class="controls">
+        <div class="control-buttons" role="group" aria-label="播放控制">
+          <button class="mini icon-btn" @click="prevTrack" title="上一首" aria-label="上一首" :disabled="!canGoPrevious">
+            <svg viewBox="0 0 24 24" class="icon"><path d="M6 5h2v14H6zM18 5 8 12l10 7V5z"/></svg>
+          </button>
+          <button class="mini icon-btn play-control" @click="togglePlay" :title="isPlaying ? '暂停' : '播放'" :aria-label="isPlaying ? '暂停' : '播放'" :disabled="!currentPath">
+            <svg viewBox="0 0 24 24" class="icon" v-if="!isPlaying"><path d="M8 5v14l11-7z"/></svg>
+            <svg viewBox="0 0 24 24" class="icon" v-else><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
+          </button>
+          <template v-if="useRecommend">
+            <button class="mini icon-btn recommend-control like" @click="playLike" title="接回之前的感觉" aria-label="相似下一首">
+              <svg viewBox="0 0 24 24" class="icon"><path d="M7 5v14l10-7L7 5zm10 0h2v14h-2z"/></svg>
+            </button>
+            <button class="mini icon-btn recommend-control shift" @click="playDislike" title="换个感觉" aria-label="换个感觉">
+              <svg viewBox="0 0 24 24" class="icon"><path d="M4 7h3c4 0 5 10 9 10h4M17 14l3 3-3 3M4 17h3c1.7 0 2.8-1.8 3.8-3.9M14.2 8.9C15.2 7.8 16 7 17 7h3M17 4l3 3-3 3"/></svg>
+            </button>
+          </template>
+          <template v-else>
+            <button class="mini icon-btn" @click="nextTrack" title="下一首" aria-label="下一首">
+              <svg viewBox="0 0 24 24" class="icon"><path d="M16 5h2v14h-2zM7.5 5 16 12l-8.5 7z"/></svg>
+            </button>
+            <button class="mini icon-btn" @click="cycleMode" :title="playMode==='loop' ? '列表循环' : '随机'" :aria-label="playMode==='loop' ? '列表循环' : '随机播放'">
+              <svg v-if="playMode==='loop'" viewBox="0 0 24 24" class="icon"><path d="M7 7h11v4l4-4-4-4v3H7a5 5 0 0 0-5 5v3h2v-3a3 3 0 0 1 3-3zm10 10H6v-4l-4 4 4 4v-3h11a5 5 0 0 0 5-5v-3h-2v3a3 3 0 0 1-3 3z"/></svg>
+              <svg v-else viewBox="0 0 24 24" class="icon"><path d="M6 4l2.29 2.29L4.41 10H14a4 4 0 0 1 0 8H5v-2h9a2 2 0 0 0 0-4H4.41l3.88 3.71L6 18l-6-6 6-6zm12 0l2.29 2.29L16.41 10H20v2h-6.59l3.88 3.71L18 18l-6-6 6-6z"/></svg>
+            </button>
+          </template>
+        </div>
+        </div>
+      <div class="timeline" @dblclick.stop="openLyricPanel">
+        <span class="time">{{ formatTime(currentTime) }}</span>
+        <input
+          class="timeline-range"
+          type="range"
+          min="0"
+          :max="progressDuration"
+          step="0.01"
+          :value="progressValue"
+          :style="{'--seek-progress': progressPercent + '%'}"
+          :disabled="!progressDuration"
+          @input="seekByRangeInput"
+          @keydown="seekByKeyboard"
+          @dblclick.stop
+          aria-label="播放进度"
+        />
+        <span class="time">{{ formatTime(duration) }}</span>
+      </div>
+      </div>
+      <div class="player-right">
+        <button v-if="showPracticeEntry && featureEnabled('practice')" class="mini icon-btn practice-entry" :class="{active:practiceEnabled || view==='practice'}" type="button" :disabled="!currentPath" @click="openPractice" title="演奏 · 谱面与伴奏控制" aria-label="演奏" :aria-pressed="view==='practice'"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M5 4v16M12 4v16M19 4v16M3 8h4M10 15h4M17 9h4"/><circle cx="5" cy="8" r="2"/><circle cx="12" cy="15" r="2"/><circle cx="19" cy="9" r="2"/></svg></button>
+        <button v-if="featureEnabled('analysis')" class="mini analysis-entry" type="button" :disabled="!currentPath" @click="openSongAnalysis()" title="查看当前歌曲的乐器、风格与能量发展">歌曲分析</button>
+        <button
+          type="button"
+          class="player-recommend-toggle"
+          :class="{active: useRecommend}"
+          :aria-pressed="useRecommend ? 'true' : 'false'"
+          :title="useRecommend ? '关闭推荐' : '开启推荐'"
+          @click="useRecommend = !useRecommend"
+        >推荐</button>
+        <div class="volume">
+          <button class="mini icon-btn volume-btn" @click="toggleMute" :title="muted ? '取消静音' : '静音'" :aria-label="muted ? '取消静音' : '静音'">
+            <svg v-if="!muted" viewBox="0 0 24 24" class="icon">
+              <path d="M3 10v4h4l5 4V6L7 10H3zm12.5 2a3.5 3.5 0 0 0-2-3.16v6.32A3.5 3.5 0 0 0 15.5 12zm0-7a1 1 0 1 0-.8 1.84A7.5 7.5 0 0 1 19 12a7.5 7.5 0 0 1-4.3 6.16A1 1 0 1 0 15.5 20 9.5 9.5 0 0 0 21 12a9.5 9.5 0 0 0-5.5-7z"/>
+            </svg>
+            <svg v-else viewBox="0 0 24 24" class="icon">
+              <path d="M3 10v4h4l5 4V6L7 10H3zm11.7.9 2-2a1 1 0 1 1 1.4 1.4l-2 2 2 2a1 1 0 1 1-1.4 1.4l-2-2-2 2a1 1 0 1 1-1.4-1.4l2-2-2-2a1 1 0 1 1 1.4-1.4l2 2z"/>
+            </svg>
+          </button>
+          <input type="range" min="0" max="100" v-model.number="volume" @input="setVolume" aria-label="音量" />
+        </div>
+        <button
+          class="mini favorite-btn"
+          :class="{active: isCurrentOnlineTrack && isCurrentTrackInFavorite()}"
+          :title="isCurrentOnlineTrack ? (isCurrentTrackInFavorite() ? '从我喜欢的歌移除' : '加入我喜欢的歌') : '仅支持在线歌曲'"
+          :aria-label="isCurrentOnlineTrack ? (isCurrentTrackInFavorite() ? '从我喜欢的歌移除' : '加入我喜欢的歌') : '仅支持在线歌曲'"
+          :disabled="!isCurrentOnlineTrack"
+          @click="toggleFavoriteCurrentTrack"
+        >
+          <svg viewBox="0 0 24 24" class="icon"><path d="M12 20.5 4.2 13A5.2 5.2 0 0 1 12 6.2 5.2 5.2 0 0 1 19.8 13L12 20.5z"/></svg>
+        </button>
+        <button class="mini icon-btn locate-btn" title="定位当前歌曲" aria-label="定位当前歌曲" :disabled="!currentPath" @click="locateTrack(currentPath)">
+          <svg viewBox="0 0 24 24" class="icon">
+            <path d="M12 2c-3.9 0-7 3.1-7 7 0 5.2 6.2 12.4 6.5 12.7a.7.7 0 0 0 1 0C12.8 21.4 19 14.2 19 9c0-3.9-3.1-7-7-7zm0 9.6a2.6 2.6 0 1 1 0-5.2 2.6 2.6 0 0 1 0 5.2z"/>
+          </svg>
+        </button>
+      </div>
+    </footer>
+
+    <div
+      v-if="notice.visible"
+      :class="['app-notice', notice.tone]"
+      :role="notice.tone === 'error' ? 'alert' : 'status'"
+      aria-live="polite"
+    >
+      <span>{{ notice.message }}</span>
+      <button class="notice-close" @click="closeNotice" aria-label="关闭提示">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg>
+      </button>
+    </div>
+
+    <div class="modal-mask" v-if="confirmDialog.visible" @click.self="resolveConfirmation(false)">
+      <form
+        class="modal confirm-modal"
+        ref="confirmDialog"
+        @submit.prevent="resolveConfirmation(true)"
+        @keydown.tab="trapDialogFocus"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirm-dialog-title"
+        aria-describedby="confirm-dialog-message"
+      >
+        <h3 id="confirm-dialog-title">{{ confirmDialog.title }}</h3>
+        <p id="confirm-dialog-message" class="confirm-message">{{ confirmDialog.message }}</p>
+        <p v-if="confirmDialog.detail" class="confirm-detail">{{ confirmDialog.detail }}</p>
+        <div class="btns">
+          <button
+            type="submit"
+            :class="['confirm-action', confirmDialog.tone === 'danger' ? 'danger-button' : 'primary']"
+          >{{ confirmDialog.confirmLabel }}</button>
+          <button type="button" class="mini" ref="confirmDialogCancel" @click="resolveConfirmation(false)">取消</button>
+        </div>
+      </form>
+    </div>
+
+    <div
+      class="online-context-menu" ref="onlineContextMenuRoot" @keydown="onContextMenuKey"
+      v-if="onlineContextMenu.show"
+      :style="{ left: onlineContextMenu.x + 'px', top: onlineContextMenu.y + 'px' }"
+      @pointerdown.stop
+      @click.stop
+      role="menu"
+    >
+      <button class="mini" @click="openOnlineDownloadModal" role="menuitem">下载歌曲</button>
+    </div>
+    <div
+      class="playlist-context-menu" ref="playlistContextMenuRoot" @keydown="onContextMenuKey"
+      v-if="playlistContextMenu.show"
+      :style="{ left: playlistContextMenu.x + 'px', top: playlistContextMenu.y + 'px' }"
+      @pointerdown.stop
+      @click.stop
+      role="menu"
+    >
+      <button class="mini" @click="openRenamePlaylistModal" role="menuitem">重命名</button>
+      <button class="mini danger-menu" @click="deletePlaylistFromContextMenu" role="menuitem">删除歌单</button>
+    </div>
+    <div class="track-context-menu" ref="trackContextMenuRoot" v-if="trackContextMenu.show" :style="{left:trackContextMenu.x+'px',top:trackContextMenu.y+'px'}" @pointerdown.stop @click.stop @keydown="onContextMenuKey" role="menu" aria-label="歌曲操作">
+      <div class="context-menu-heading"><strong>{{ seedTrackInfo(trackContextMenu.path).title }}</strong><small>{{ seedTrackInfo(trackContextMenu.path).artist || '歌曲操作' }}</small></div>
+      <button class="mini"  @click="playFromTrackContextMenu()" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg><span>播放</span></button>
+      <div class="context-menu-separator" role="separator"></div>
+      <button class="mini"  @click="addTrackContextSelectionToPlaylist" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M4 11h10M4 16h6M18 11v10M13 16h10"/></svg><span>加入歌单…</span></button>
+      <button class="mini"  @click="openSeedMenu(trackContextMenu.path); closeTrackContextMenu()" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8a3 3 0 1 0 0-.1M19 8a3 3 0 1 0 0-.1M12 20a3 3 0 1 0 0-.1M7 10l4 6M17 10l-4 6"/></svg><span>加入复合种子…</span></button>
+      <div class="context-menu-separator" role="separator"></div>
+      <button class="mini"  @click="openAudioDetail(trackContextMenu.path); closeTrackContextMenu()" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 11v6M12 7v.1M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0"/></svg><span>音频详情</span></button>
+      <button class="mini" v-if="!isOnlineToken(trackContextMenu.path)" @click="revealTrackInFolder" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v11H3zM3 7V4h7l2 3"/></svg><span>在文件夹中显示</span></button>
+      <button class="mini" v-if="!isOnlineToken(trackContextMenu.path)" @click="openSongInfoLookupFromContextMenu('metadata')" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16M16 16l6 6"/></svg><span>查找歌曲资料…</span></button>
+      <button class="mini" v-if="!isOnlineToken(trackContextMenu.path)" @click="openSongInfoLookupFromContextMenu('lyrics')" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM8 8h8M8 12h8M8 16h5"/></svg><span>查找或替换歌词…</span></button>
+      <template v-if="canRemoveTrackFromCurrentPlaylist(trackContextMenu.path)"><div class="context-menu-separator" role="separator"></div><button class="mini danger-menu" @click="removeTrackFromCurrentPlaylist(trackContextMenu.path)" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6"/></svg><span>移出当前歌单</span></button></template>
+    </div>
+
+    <div class="modal-mask song-info-mask" v-if="songInfoDialog.visible" @click.self="closeSongInfoDialog">
+      <section
+        class="modal song-info-modal"
+        @keydown.tab="trapDialogFocus"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="song-info-title"
+      >
+        <header class="song-info-header">
+          <div>
+            <h3 id="song-info-title">歌曲信息</h3>
+            <p>{{ extractName(songInfoDialog.path) }}</p>
+          </div>
+<nav class="song-info-task-tabs" aria-label="选择查找内容">
+          <button :class="{active: songInfoDialog.mode === 'metadata'}" :disabled="songInfoDialog.lyricSaveBusy" @click="switchSongInfoMode('metadata')">歌曲资料</button>
+          <button :class="{active: songInfoDialog.mode === 'lyrics'}" :disabled="songInfoDialog.lyricSaveBusy" @click="switchSongInfoMode('lyrics')">歌词</button>
+        </nav>
+          <button ref="songInfoClose" class="song-info-close" :disabled="songInfoDialog.lyricSaveBusy" @click="closeSongInfoDialog" aria-label="关闭">
+            <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg>
+          </button>
+        </header>
+
+        <form class="song-info-search" @submit.prevent="retrySongInfoLookup">
+          <label>歌名<input v-model="songInfoDialog.searchTitle" maxlength="240" placeholder="输入正确歌名" :disabled="songInfoDialog.lyricSaveBusy" /></label>
+          <label>歌手<input v-model="songInfoDialog.searchArtist" maxlength="240" placeholder="可选" :disabled="songInfoDialog.lyricSaveBusy" /></label>
+          <button class="primary" type="submit" :disabled="songInfoDialog.lyricSaveBusy">查找</button>
+        </form>
+        <div class="song-info-toolbar">
+          <button class="song-info-text-action" :disabled="songInfoDialog.lyricSaveBusy" @click="lookupSongInfoByFilename">用文件名查找</button>
+          <button v-if="songInfoRejectedCount()" class="song-info-text-action" :aria-pressed="songInfoDialog.showRejected" :disabled="songInfoDialog.lyricSaveBusy" @click="songInfoDialog.showRejected = !songInfoDialog.showRejected">{{ songInfoDialog.showRejected ? '收起' : '其他结果' }} · {{ songInfoRejectedCount() }}</button>
+          <button class="song-info-text-action song-info-file-action" :disabled="!songInfoDialog.lyricFileExists || songInfoDialog.lyricSaveBusy" :title="songInfoDialog.lyricFileExists ? '在资源管理器中选中歌词文件' : '尚无独立歌词文件'" @click="showSongInfoLyricFolder">打开歌词文件位置</button>
+        </div>
+
+        <div class="song-info-loading" v-if="songInfoDialog.loading" role="status">
+          <span class="song-info-spinner" aria-hidden="true"></span>
+          <span>正在查找…</span>
+        </div>
+
+        <div class="song-info-empty" v-else-if="songInfoDialog.error">
+          <strong>{{ songInfoDialog.error }}</strong>
+          <button class="mini" @click="retrySongInfoLookup">重试</button>
+        </div>
+
+        <div class="song-info-empty" v-else-if="!songInfoVisibleCandidates().length && songInfoDialog.mode !== 'metadata'">
+          <strong>{{ songInfoLookupEmptyTitle() }}</strong>
+          <span>试试修正歌名，或清空歌手后查找。</span>
+          <button class="mini" @click="retrySongInfoLookup">重新查找</button>
+        </div>
+
+        <div class="song-info-body" v-else>
+          <div class="song-info-candidates" role="listbox" aria-label="候选歌曲信息">
+            <div class="song-info-results-heading">查找结果 <span>{{ songInfoVisibleCandidates().length }}</span></div>
+            <p v-if="!songInfoVisibleCandidates().length" class="song-info-list-empty">暂无结果，可直接编辑右侧资料</p>
+            <button
+              v-for="{item, index} in songInfoVisibleCandidates()"
+              :key="item.candidate.candidateId || index"
+              :class="['song-info-candidate', { selected: songInfoDialog.selectedIndex === index }]"
+              @click="selectSongInfoCandidate(index)"
+              :disabled="songInfoDialog.lyricSaveBusy"
+              role="option"
+              :aria-selected="songInfoDialog.selectedIndex === index"
+            >
+              <img v-if="songInfoCoverUrl(item)" :src="songInfoCoverUrl(item)" alt="" />
+              <span v-else class="song-info-cover-empty"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l11-2v13M9 8l11-2"/><ellipse cx="6" cy="18" rx="3" ry="2"/><ellipse cx="17" cy="16" rx="3" ry="2"/></svg></span>
+              <span class="song-info-candidate-text">
+                <strong>{{ item.candidate.title }}</strong>
+                <span>{{ item.candidate.artists.join('、') || '未知歌手' }}</span>
+                <span>{{ item.candidate.album || '未知专辑' }}</span>
+                <span v-if="songInfoCandidateMeta(item)">{{ songInfoCandidateMeta(item) }}</span>
+              </span>
+              <span :class="['song-info-match', item.recommendation]">{{ songInfoCandidateStatus(item) }}</span>
+            </button>
+          </div>
+
+          <div class="song-info-detail" v-if="selectedSongInfoCandidate() || (songInfoDialog.mode === 'metadata' && songInfoDialog.metadataDraft)">
+            <template v-if="songInfoDialog.mode === 'metadata' && songInfoDialog.metadataDraft">
+              <div class="song-info-editor-head"><div><h4>歌曲资料</h4><p>保存到音频文件，可撤销</p></div></div>
+              <div class="song-info-suggestion" v-if="selectedSongInfoCandidate()">
+                <div><strong>{{ selectedSongInfoCandidate().candidate.title }}</strong><span>{{ selectedSongInfoCandidate().candidate.artists.join('、') }}</span></div>
+                <button class="mini" :disabled="songInfoDialog.lyricSaveBusy" @click="useSongInfoMetadataCandidate">填入资料</button>
+              </div>
+              <div class="song-info-editor-fields">
+                <label>歌名<input v-model="songInfoDialog.metadataDraft.title" maxlength="500" :disabled="songInfoDialog.lyricSaveBusy" /></label>
+                <label>歌手<input v-model="songInfoDialog.metadataDraft.artists" maxlength="500" :disabled="songInfoDialog.lyricSaveBusy" /></label>
+                <label>专辑<input v-model="songInfoDialog.metadataDraft.album" maxlength="500" :disabled="songInfoDialog.lyricSaveBusy" /></label>
+                <details><summary>更多资料</summary>
+                  <label>专辑艺人<input v-model="songInfoDialog.metadataDraft.albumArtists" maxlength="500" :disabled="songInfoDialog.lyricSaveBusy" /></label>
+                  <label>发行日期<input v-model="songInfoDialog.metadataDraft.releaseDate" maxlength="500" placeholder="YYYY-MM-DD" :disabled="songInfoDialog.lyricSaveBusy" /></label>
+                  <label>流派<input v-model="songInfoDialog.metadataDraft.genres" maxlength="500" :disabled="songInfoDialog.lyricSaveBusy" /></label>
+                </details>
+              </div>
+            </template>
+            <template v-else-if="selectedSongInfoCandidate()">
+            <div class="song-info-detail-title">
+              <div class="song-info-detail-art"><img v-if="songInfoCoverUrl(selectedSongInfoCandidate())" :src="songInfoCoverUrl(selectedSongInfoCandidate())" alt="" /><svg v-else viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l11-2v13M9 8l11-2"/><ellipse cx="6" cy="18" rx="3" ry="2"/><ellipse cx="17" cy="16" rx="3" ry="2"/></svg></div>
+              <div class="song-info-detail-copy">
+                <h4>{{ selectedSongInfoCandidate().candidate.title }}</h4>
+                <p>{{ selectedSongInfoCandidate().candidate.artists.join('、') || '未知歌手' }}</p>
+                <p v-if="songInfoCandidateMeta(selectedSongInfoCandidate())">{{ songInfoCandidateMeta(selectedSongInfoCandidate()) }}</p>
+              </div>
+              <span>{{ selectedSongInfoCandidate().candidate.sourceLabel }}</span>
+            </div>
+            <details class="song-info-match-details" v-if="selectedSongInfoCandidate().reasons.length || selectedSongInfoCandidate().blockers.length || selectedSongInfoCandidate().identityCorrection">
+              <summary>匹配详情</summary>
+              <p v-if="selectedSongInfoCandidate().identityCorrection">按修正后的歌名与歌手匹配，保存前需确认。</p>
+              <div class="song-info-reasons">
+              <span v-for="reason in selectedSongInfoCandidate().reasons" :key="'reason-' + reason">{{ reason }}</span>
+              <span v-for="blocker in selectedSongInfoCandidate().blockers" :key="'blocker-' + blocker.code" class="warning">{{ blocker.message }}</span>
+              </div>
+            </details>
+            <section class="song-info-lyric-preview" v-if="selectedSongInfoCandidate().candidate.lyrics?.available">
+              <h5>歌词预览</h5>
+              <div v-if="selectedSongInfoCandidate().candidate.lyrics.preview?.length">
+                <div v-for="(line, lineIndex) in selectedSongInfoCandidate().candidate.lyrics.preview" :key="lineIndex" class="song-info-preview-line">
+                  <time>{{ formatTime(line.startMs / 1000) }}</time><div>{{ line.text }}<small v-if="line.translation">{{ line.translation }}</small></div>
+                </div>
+              </div>
+              <p v-else class="song-info-plain-preview">{{ selectedSongInfoCandidate().candidate.lyrics.plainPreview || '此结果没有可显示的歌词片段' }}</p>
+              <small>预览开头片段</small>
+            </section>
+            <div class="song-info-no-diff" v-else-if="!visibleSongInfoDifferences(selectedSongInfoCandidate()).length">没有可补充的信息</div>
+            <details class="song-info-provenance" v-if="songInfoProvenanceFields(selectedSongInfoCandidate())">
+              <summary>来源</summary>
+              <p>{{ songInfoProvenanceFields(selectedSongInfoCandidate()) }} · {{ selectedSongInfoCandidate().candidate.sourceLabel }}</p>
+            </details>
+            <p class="song-info-readonly" v-if="selectedSongInfoCandidate().recommendation === 'none'">此结果不匹配。请修正上方信息后查找。</p>
+            </template>
+          </div>
+          <div class="song-info-empty" v-else>从左侧选择一项结果，查看差异和匹配依据。</div>
+        </div>
+
+        <details class="song-info-export-options" v-if="songInfoDialog.mode === 'lyrics' && songInfoCandidateHasLyrics() && !songInfoDialog.loading">
+          <summary>保存选项</summary>
+          <div class="song-info-save-options">
+            <label>格式 <select v-model="songInfoDialog.format" :disabled="songInfoDialog.lyricSaveBusy"><option value="enhanced-lrc">逐字 LRC</option><option value="lrc">逐行 LRC</option></select></label>
+            <label v-if="selectedSongInfoCandidate()?.candidate.lyrics?.channels?.includes('translation')"><input type="checkbox" v-model="lyricSaveIncludeTranslation" :disabled="songInfoDialog.lyricSaveBusy" />翻译</label>
+            <label v-if="selectedSongInfoCandidate()?.candidate.lyrics?.channels?.includes('romanization')"><input type="checkbox" v-model="lyricSaveIncludeRomanization" :disabled="songInfoDialog.lyricSaveBusy" />罗马音</label>
+          </div>
+        </details>
+        <footer class="song-info-footer" v-if="!songInfoDialog.loading">
+          <span role="status">{{ songInfoDialog.lyricSaveMessage || (songInfoDialog.mode === 'metadata' && !songInfoMetadataSupported() ? (songMetadataEditAvailable ? '此格式暂不支持保存资料' : '当前版本尚未开放资料写入') : '') }}</span>
+          <div class="song-info-footer-actions">
+            <button v-if="songInfoDialog.metadataQueued" class="mini song-info-secondary" @click="cancelQueuedSongInfoMetadata">取消待保存</button>
+            <button v-if="songInfoDialog.mode === 'metadata' && lastMetadataSave?.trackPath === songInfoDialog.path" class="mini song-info-secondary" :disabled="songInfoDialog.lyricSaveBusy || songInfoDialog.metadataQueued" @click="undoSongInfoMetadata">撤销资料修改</button>
+            <button v-if="songInfoDialog.mode === 'metadata'" class="primary song-info-save-lyrics" :disabled="songInfoDialog.lyricSaveBusy || songInfoDialog.metadataQueued || !songInfoMetadataSupported() || (!Object.keys(songInfoMetadataChanges()).length && !selectedSongInfoCandidate()) || !songInfoDialog.metadataDraft?.title?.trim()" @click="saveSongInfoMetadata">{{ songInfoDialog.lyricSaveBusy ? '保存中…' : '保存资料' }}</button>
+            <button
+              v-if="songInfoDialog.mode === 'lyrics'"
+              class="primary song-info-save-lyrics"
+              :disabled="songInfoDialog.lyricSaveBusy || !songInfoCandidateHasLyrics() || songInfoSearchPending()"
+              @click="saveSelectedSongInfoLyrics"
+            >{{ songInfoDialog.lyricSaveBusy ? '保存中…' : (songInfoDialog.targetExists ? '替换歌词' : '保存歌词') }}</button>
+            <button
+              v-if="songInfoDialog.mode === 'lyrics' && lastLyricSaveTransactionId"
+              class="mini"
+              :disabled="lyricUndoBusy || songInfoDialog.lyricSaveBusy"
+              @click="undoLastLyricSave"
+            >{{ lyricUndoBusy ? '撤销中…' : '撤销上次保存' }}</button>
+            <button class="mini" :disabled="songInfoDialog.lyricSaveBusy" @click="closeSongInfoDialog">完成</button>
+          </div>
+        </footer>
+        <details class="song-info-source-status" v-if="songInfoDialog.sources.length"><summary>查询来源</summary><p>{{ songInfoSourceSummary() }}</p></details>
+      </section>
+    </div>
+
+    <div class="modal-mask" v-if="playlistEditModalVisible" @click.self="cancelPlaylistEdit">
+      <form class="modal compact-modal" @submit.prevent="confirmPlaylistEdit" @keydown.tab="trapDialogFocus" role="dialog" aria-modal="true" aria-labelledby="playlist-edit-title">
+        <h3 id="playlist-edit-title">{{ playlistEditId ? '重命名歌单' : '新建歌单' }}</h3>
+        <label class="form-row">
+          <span>名称</span>
+          <input v-model="playlistEditName" maxlength="80" autofocus placeholder="歌单名称" />
+        </label>
+        <small class="form-error" v-if="playlistEditError">{{ playlistEditError }}</small>
+        <div class="btns">
+          <button type="submit">{{ playlistEditId ? '保存名称' : '创建歌单' }}</button>
+          <button type="button" class="mini" @click="cancelPlaylistEdit">取消</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="modal-mask" v-if="playlistAddModalVisible" @click.self="cancelAddToPlaylist">
+      <form class="modal compact-modal" @submit.prevent="confirmAddToPlaylist" @keydown.tab="trapDialogFocus" role="dialog" aria-modal="true" aria-labelledby="playlist-add-title">
+        <h3 id="playlist-add-title">加入歌单</h3>
+        <p class="small">{{ extractName(playlistAddTrack) }}</p>
+        <label class="form-row">
+          <span>已有歌单</span>
+          <select v-model="playlistAddTargetId" :disabled="!customPlaylists.length" :autofocus="customPlaylists.length > 0">
+            <option value="">{{ customPlaylists.length ? '请选择' : '暂无自建歌单' }}</option>
+            <option v-for="playlist in customPlaylists" :key="playlist.id" :value="playlist.id">{{ playlist.name }}</option>
+          </select>
+        </label>
+        <label class="form-row">
+          <span>或新建</span>
+          <input v-model="playlistAddNewName" maxlength="80" placeholder="输入新歌单名称" :autofocus="!customPlaylists.length" />
+        </label>
+          <small class="hint">同名歌单不会重复创建。</small>
+        <small class="form-error" v-if="playlistAddError">{{ playlistAddError }}</small>
+        <div class="btns">
+          <button type="submit">加入</button>
+          <button type="button" class="mini" @click="cancelAddToPlaylist">取消</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="modal-mask" v-if="onlineDownloadModalVisible" @click.self="!onlineDownloading && (onlineDownloadModalVisible=false)">
+      <div class="modal" @keydown.tab="trapDialogFocus" role="dialog" aria-modal="true" aria-labelledby="online-download-title">
+        <h3 id="online-download-title">下载在线歌曲</h3>
+        <p class="small">已选 {{ selectedOnlineTracks.length }} 首</p>
+        <label class="form-row">
+          <span>音质</span>
+          <select v-model="onlineDownloadQuality" autofocus>
+            <option v-for="option in onlineQualityOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+          </select>
+        </label>
+        <label class="form-row">
+          <span>下载目录</span>
+          <input v-model="params.download_dir" placeholder="留空则使用默认下载目录" />
+          <button class="mini" @click="pickDownloadDir">选择</button>
+        </label>
+        <div class="btns">
+          <button @click="confirmOnlineDownload" :disabled="onlineDownloading">开始下载</button>
+          <button class="mini" @click="onlineDownloadModalVisible=false" :disabled="onlineDownloading">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="lyric-panel" :class="{'show': showLyric, 'hide': !showLyric, 'glow-on': lyricGlowEnabled, 'ambient-playing': isPlaying, 'custom-stage': !lyricStageAutoColor}" :style="lyricPanelStyle">
+        <div class="lyric-ambient" aria-hidden="true">
+          <div class="lyric-ambient-fallback" :style="{backgroundImage: lyricGlowBackgroundImage}"></div>
+          <canvas ref="lyricAmbientCanvas" class="lyric-ambient-canvas"></canvas>
+        </div>
+        <button class="lyric-back" @click="closeLyricPanel" title="返回" aria-label="返回">
+          <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="m14.5 6-6 6 6 6"/></svg>
+        </button>
+      <div class="lyric-left">
+        <div class="lyric-artwork">
+          <img v-if="currentCoverFull || currentCover" class="lyric-cover" :src="currentCoverFull || currentCover" alt="当前歌曲封面">
+          <div v-else class="lyric-cover-placeholder" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg></div>
+          <div v-if="currentCoverFull || currentCover" class="lyric-reflection" aria-hidden="true" :style="{backgroundImage: lyricGlowBackgroundImage}"></div>
+        </div>
+      </div>
+      <footer class="lyric-stage-controls" aria-label="歌曲播放控制">
+        <div class="lyric-player">
+          <div class="lyric-progress-row">
+            <span class="time">{{ formatTime(currentTime) }}</span>
+            <input
+              class="lyric-progress-range"
+              type="range"
+              min="0"
+              :max="progressDuration"
+              step="0.01"
+              :value="progressValue"
+              :style="{'--seek-progress': progressPercent + '%'}"
+              :disabled="!progressDuration"
+              @input="seekByRangeInput"
+              @keydown="seekByKeyboard"
+              aria-label="播放进度"
+            />
+            <span class="time">{{ formatTime(duration) }}</span>
+          </div>
+          <div class="lyric-buttons">
+            <button class="mini icon-btn" @click="prevTrack" title="上一首" aria-label="上一首" :disabled="!canGoPrevious">
+              <svg viewBox="0 0 24 24" class="icon"><path d="M6 5h2v14H6zM18 5 8 12l10 7V5z"/></svg>
+            </button>
+            <button class="mini icon-btn play-control" @click="togglePlay" :title="isPlaying ? '暂停' : '播放'" :aria-label="isPlaying ? '暂停' : '播放'" :disabled="!currentPath">
+              <svg viewBox="0 0 24 24" class="icon" v-if="!isPlaying"><path d="M8 5v14l11-7z"/></svg>
+              <svg viewBox="0 0 24 24" class="icon" v-else><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
+            </button>
+            <template v-if="useRecommend">
+              <button class="mini icon-btn" @click="playLike" title="接回之前的感觉" aria-label="相似下一首">
+                <svg viewBox="0 0 24 24" class="icon"><path d="M7 5v14l10-7L7 5zm10 0h2v14h-2z"/></svg>
+              </button>
+              <button class="mini icon-btn shift-control" @click="playDislike" title="换个感觉" aria-label="换个感觉">
+                <svg viewBox="0 0 24 24" class="icon"><path d="M4 7h3c4 0 5 10 9 10h4M17 14l3 3-3 3M4 17h3c1.7 0 2.8-1.8 3.8-3.9M14.2 8.9C15.2 7.8 16 7 17 7h3M17 4l3 3-3 3"/></svg>
+              </button>
+            </template>
+            <template v-else>
+              <button class="mini icon-btn" @click="nextTrack" title="下一首" aria-label="下一首">
+                <svg viewBox="0 0 24 24" class="icon"><path d="M16 5h2v14h-2zM7.5 5 16 12l-8.5 7z"/></svg>
+              </button>
+              <button class="mini icon-btn shift-control" @click="cycleMode" :title="playMode==='loop' ? '列表循环' : '随机'" :aria-label="playMode==='loop' ? '列表循环' : '随机播放'">
+                <svg v-if="playMode==='loop'" viewBox="0 0 24 24" class="icon"><path d="M7 7h11v4l4-4-4-4v3H7a5 5 0 0 0-5 5v3h2v-3a3 3 0 0 1 3-3zm10 10H6v-4l-4 4 4 4v-3h11a5 5 0 0 0 5-5v-3h-2v3a3 3 0 0 1-3 3z"/></svg>
+                <svg v-else viewBox="0 0 24 24" class="icon"><path d="M6 4l2.29 2.29L4.41 10H14a4 4 0 0 1 0 8H5v-2h9a2 2 0 0 0 0-4H4.41l3.88 3.71L6 18l-6-6 6-6zm12 0l2.29 2.29L16.41 10H20v2h-6.59l3.88 3.71L18 18l-6-6 6-6z"/></svg>
+              </button>
+            </template>
+            <div class="lyric-volume-wrap">
+              <button class="mini icon-btn volume-btn" @click="toggleLyricVolumePanel" :title="lyricVolumeOpen ? '收起音量' : '展开音量'">
+                <svg viewBox="0 0 24 24" class="icon">
+                  <path d="M3 10v4h4l5 4V6L7 10H3zm12.5 2a3.5 3.5 0 0 0-2-3.16v6.32A3.5 3.5 0 0 0 15.5 12zm0-7a1 1 0 1 0-.8 1.84A7.5 7.5 0 0 1 19 12a7.5 7.5 0 0 1-4.3 6.16A1 1 0 1 0 15.5 20 9.5 9.5 0 0 0 21 12a9.5 9.5 0 0 0-5.5-7z"/>
+                </svg>
+              </button>
+              <div class="lyric-volume-panel" v-if="lyricVolumeOpen">
+                <input type="range" min="0" max="100" v-model.number="volume" @input="setVolume" aria-label="音量" />
+                <span>{{ volume }}%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </footer>
+      <details class="lyric-tools" @mouseenter="$event.currentTarget.open=true" @mouseleave="$event.currentTarget.open=false" @keydown.esc.stop.prevent="$event.currentTarget.open=false; $event.currentTarget.querySelector('summary').focus()">
+        <summary aria-label="更多歌曲功能" title="更多歌曲功能" @click.prevent="$event.currentTarget.parentElement.open=true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></summary>
+        <div class="lyric-tools-menu">
+          <button type="button" @click="openLyricTool('equalizer',$event)">均衡器 <span aria-hidden="true">›</span></button>
+          <button type="button" :disabled="!currentPath" @click="openLyricTool('info',$event)">音频详情 <span aria-hidden="true">›</span></button>
+          <button type="button" :disabled="!currentPath" @click="openLyricTool('similar',$event)">相似歌曲 <span aria-hidden="true">›</span></button>
+          <button type="button" :disabled="!currentPath" @click="openLyricTool('album',$event)">专辑 <span aria-hidden="true">›</span></button>
+          <button type="button" :disabled="!currentPath" @click="openLyricTool('artist',$event)">歌手 <span aria-hidden="true">›</span></button>
+        </div>
+      </details>
+      <div class="lyric-right">
+        <button v-if="!lyricAutoFollow" class="lyric-resume-follow" @click="resumeLyricAutoFollow(true)" aria-label="回到当前歌词" title="回到当前歌词">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/></svg>
+        </button>
+        <div class="lyrics" :class="{'karaoke-mode': lyricKaraoke, 'manual-reading': !lyricAutoFollow}" ref="lyricsScroll" @scroll.passive="onLyricsScroll" @wheel.passive="onLyricScrollIntent" @touchstart.passive="onLyricScrollIntent" @pointerdown="onLyricScrollIntent" @keydown="onLyricScrollIntent" :style="{fontFamily: lyricFontFamily}">
+          <div class="lyric-edge-spacer" :style="{height: lyricCenterSpacer + 'px'}"></div>
+          <div
+            v-for="(line,i) in lyricLines"
+            :key="i"
+            :data-distance="Math.min(4, Math.abs(i - (lyricFocusIndex >= 0 ? lyricFocusIndex : 0)))"
+            :class="['lyric-line', lyricFocusIndex===i?'active':'', lyricScrollIndex===i?'scroll-target':'', currentLyricIndex===i?'karaoke-playing':'', shouldUseKaraoke(line, i) ? 'karaoke-active' : '', lyricHasTimeline ? 'clickable' : '']"
+            :role="lyricHasTimeline ? 'button' : null"
+            :tabindex="lyricHasTimeline ? 0 : -1"
+            :aria-label="lyricHasTimeline ? '跳转到歌词：' + line.main : null"
+            @keydown.enter.prevent="seekToLyricLine(line)"
+            @keydown.space.prevent="seekToLyricLine(line)"
+            @click="seekToLyricLine(line)"
+          >
+            <div class="lyric-main" v-if="lyricCanShowMain && line.main">
+              <template v-if="shouldUseKaraoke(line, i)">
+                <span
+                  v-for="(word,wIdx) in line.words"
+                  :key="`${i}-${wIdx}`"
+                  :data-word-idx="wIdx"
+                  :class="['lyric-word', getKaraokeWordClass(i, wIdx)]"
+                >{{ word.text }}</span>
+              </template>
+              <template v-else>{{ line.main }}</template>
+            </div>
+            <div class="lyric-sub" v-if="lyricCanShowSub && line.sub">{{ line.sub }}</div>
+          </div>
+          <div class="empty" v-if="!lyricLines.length">暂无歌词</div>
+          <div class="lyric-edge-spacer" :style="{height: lyricCenterSpacer + 'px'}"></div>
+        </div>
+      </div>
+    </div>
+
+  <div class="modal-mask equalizer-mask" v-if="equalizerOpen" @click.self="closeEqualizer">
+    <section class="modal equalizer-dialog" role="dialog" aria-modal="true" aria-labelledby="equalizer-title" @keydown.tab="trapDialogFocus" @keydown.esc.stop="closeEqualizer">
+      <header class="equalizer-header"><div><h2 id="equalizer-title">均衡器</h2><p>调整低音、人声与高音，设置对所有歌曲生效。</p></div><button type="button" ref="equalizerClose" @click="closeEqualizer" aria-label="关闭均衡器">关闭</button></header>
+      <div class="equalizer-toolbar">
+        <label><input class="ui-toggle" type="checkbox" v-model="audioEffects.enabled" @change="updateAudioEffects()" /> 开启均衡器</label>
+        <label>预设 <select v-model="audioEffects.preset" @change="selectEqualizerPreset"><option v-for="(preset,key) in eqPresets" :key="key" :value="key">{{ preset.label }}</option><option value="custom">自定义</option></select></label>
+        <button type="button" @click="resetEqualizer">恢复平直</button>
+      </div>
+      <div class="equalizer-graph"><div class="equalizer-scale" aria-hidden="true"><span>+12</span><span>0</span><span>−12</span></div><div class="equalizer-bands" :class="{disabled:!audioEffects.enabled}">
+        <label v-for="(frequency,i) in eqFrequencies" :key="frequency" class="equalizer-band">
+          <output>{{ Number(audioEffects.gains[i])>0 ? '+' : '' }}{{ audioEffects.gains[i] }} dB</output>
+          <span class="equalizer-fader"><input type="range" min="-12" max="12" step="0.5" v-model.number="audioEffects.gains[i]" :disabled="!audioEffects.enabled" @input="updateAudioEffects(true)" :style="{'--eq-low': Math.min(50,(Number(audioEffects.gains[i])+12)/24*100)+'%', '--eq-high': Math.max(50,(Number(audioEffects.gains[i])+12)/24*100)+'%'}" :aria-label="frequency + '赫兹增益'" /></span>
+          <span>{{ frequency>=1000 ? (frequency/1000)+'k' : frequency }} Hz</span>
+        </label>
+      </div>
+      </div><p class="small equalizer-zero">中点为 0 dB · 下调减弱，上调增强</p>
+      <label class="form-row"><span>前置增益</span><div class="settings-control-cluster"><input type="range" min="-24" max="0" step="0.5" v-model.number="audioEffects.preamp" :disabled="!audioEffects.enabled" @input="updateAudioEffects()" aria-label="前置增益" /><span>{{ audioEffects.preamp }} dB</span></div></label>
+      <label class="form-row"><span>峰值保护</span><input class="ui-toggle" type="checkbox" v-model="audioEffects.autoHeadroom" :disabled="!audioEffects.enabled" @change="updateAudioEffects()" /></label>
+      <p class="small">不再预先降低整体音量，仅在输出过强时压缩峰值。音色调整仍会改变听感；前置增益小于 0 dB 时会降低音量。</p>
+      <p v-if="audioEffectsMessage" class="small" role="status">{{ audioEffectsMessage }}</p>
+    </section>
+  </div>
+
+  <div class="modal-mask audio-detail-mask" v-if="audioDetail.visible" @click.self="closeAudioDetail">
+    <section class="modal audio-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="audio-detail-heading" @keydown.tab="trapDialogFocus" @keydown.esc.stop.prevent="audioDetail.mode==='info' ? closeAudioDetail() : backToAudioDetail()">
+      <header class="audio-detail-header">
+        <button v-if="audioDetail.mode!=='info'" class="mini" @click="backToAudioDetail" aria-label="返回音频详情">‹ 返回</button>
+        <div><h2 id="audio-detail-heading">{{ audioDetail.mode==='info' ? '音频详情' : audioDetail.mode==='artist' ? '歌手 · '+audioDetail.label : audioDetail.mode==='album' ? '专辑 · '+audioDetail.label : '相似歌曲' }}</h2>
+          <p>{{ audioDetail.info.title || extractName(audioDetail.path) }}</p></div>
+        <button ref="audioDetailClose" class="mini" @click="closeAudioDetail" aria-label="关闭音频详情">关闭</button>
+      </header>
+      <div class="audio-detail-content">
+        <template v-if="audioDetail.mode==='info'">
+          <section class="audio-detail-hero" aria-label="歌曲资料">
+            <div class="audio-detail-cover" aria-hidden="true"><img v-if="audioDetailCover()" :src="audioDetailCover()" alt="" @error="$event.target.hidden=true" /><span v-else>♫</span></div>
+            <div><span class="audio-detail-eyebrow">歌曲</span><h3>{{ audioDetail.info.title || extractName(audioDetail.path) }}</h3><p>{{ detailArtistNames().join(' / ') || '未知歌手' }}</p><p v-if="audioDetail.info.album">{{ audioDetail.info.album }}</p></div>
+          </section>
+          <section class="audio-detail-links" aria-label="歌曲关联">
+            <div><span>歌手</span><div class="audio-detail-artists"><button v-for="name in detailArtistNames()" :key="name" :disabled="audioDetail.loading" @click="openAudioDetailCollection('artist',name)">{{ name }} <span aria-hidden="true">›</span></button><span v-if="!detailArtistNames().length">未提供</span></div></div>
+            <div><span>专辑</span><button v-if="audioDetail.info.album" :disabled="audioDetail.loading" @click="openAudioDetailCollection('album',audioDetail.info.album)">{{ audioDetail.info.album }} <span aria-hidden="true">›</span></button><span v-else>未提供</span></div>
+            <div><span>发现</span><div v-if="featureEnabled('recommendation')" class="audio-detail-discovery"><button :disabled="audioDetail.loading" @click="openAudioDetailCollection('similar')">相似歌曲 <span aria-hidden="true">›</span></button><button @click="openSoundMapFor(audioDetail.path)">声音地图 <span aria-hidden="true">›</span></button></div></div>
+          </section>
+          <h3>音频信息</h3>
+          <p v-if="audioDetail.loading" class="small" role="status">正在读取音频信息…</p>
+          <p v-if="isOnlineToken(audioDetail.path)" class="small">在线来源未提供的源音频参数显示为“未提供”。</p>
+          <dl class="audio-detail-format"><div v-for="field in audioDetailFields()" :key="field[0]"><dt>{{ field[0] }}</dt><dd>{{ field[1] }}</dd></div></dl>
+        </template>
+        <template v-else>
+          <div class="audio-detail-toolbar"><span>{{ audioDetail.rows.length }} 首</span>
+            <button v-if="audioDetail.mode==='similar'" class="primary" @click="appendSimilarTopTen" :disabled="audioDetail.loading || !audioDetail.rows.length">前十首加入接下来播放</button>
+            <button @click="playAudioDetailCollection(audioDetail.rows[0]?.path)" :disabled="audioDetail.loading || !audioDetail.rows.length">播放列表</button>
+          </div>
+          <p class="small">{{ audioDetail.mode==='similar' ? '按 MERT 音频相似度排序，最多显示100首。双击一首，从它开始播放此列表。' : '当前曲库中已识别的歌曲。双击一首，从它开始播放此列表。' }}</p>
+          <p v-if="audioDetail.loading" role="status">{{ audioDetail.mode==='similar' ? '正在查找相似歌曲…' : '正在核对曲库信息… '+audioDetail.scanned+' / '+audioDetail.total }}</p>
+          <p v-if="audioDetail.failures" class="small">{{ audioDetail.failures }} 首歌曲的信息暂时无法读取，以下为已识别结果。</p>
+          <div class="audio-detail-tracks" role="group" aria-label="歌曲列表" :aria-busy="audioDetail.loading">
+            <button v-for="(track,index) in audioDetailPageRows()" :key="track.path" type="button" class="audio-detail-track"
+              :class="{playing:currentPath===track.path}" @dblclick="playAudioDetailCollection(track.path)" @keydown.enter.prevent="playAudioDetailCollection(track.path)" @keydown.space.prevent="playAudioDetailCollection(track.path)"
+              :title="'双击播放：'+(track.title||track.name||extractName(track.path))">
+              <span class="audio-detail-rank">{{ (audioDetail.page-1)*60+index+1 }}</span>
+              <span class="audio-detail-track-title"><strong>{{ track.title||track.name||extractName(track.path) }}</strong><small>{{ track.artist || '未知艺术家' }}<template v-if="track.album"> · {{ track.album }}</template></small></span>
+              <span class="audio-detail-track-time">{{ track.duration ? formatTime(track.duration) : '—' }}</span>
+            </button>
+          </div>
+          <p v-if="!audioDetail.loading && !audioDetail.error && !audioDetail.rows.length" class="empty">{{ audioDetail.mode==='similar' ? '当前索引中没有其他可用的相似歌曲。' : '没有找到对应歌曲。' }}</p>
+          <div class="audio-detail-pagination" v-if="audioDetailPageCount()>1"><button @click="changeAudioDetailPage(-1)" :disabled="audioDetail.page<=1">上一页</button><span>{{ audioDetail.page }} / {{ audioDetailPageCount() }}</span><button @click="changeAudioDetailPage(1)" :disabled="audioDetail.page>=audioDetailPageCount()">下一页</button></div>
+        </template>
+        <p v-if="audioDetail.error" class="audio-detail-error" role="alert">{{ audioDetail.error }}</p>
+      </div>
+    </section>
+  </div>
+
+  <!-- 复合种子添加弹窗 -->
+  <div class="modal-mask" v-if="seedModalVisible" @click.self="cancelSeedModal">
+    <div class="modal" @keydown.tab="trapDialogFocus" role="dialog" aria-modal="true" aria-labelledby="seed-add-title">
+      <h3 id="seed-add-title">添加到复合种子</h3>
+      <p class="small">歌曲：{{ extractName(seedModalTrack) }}</p>
+      <label class="form-row">
+        <span>类型</span>
+        <select v-model="seedModalTarget" autofocus>
+          <option value="pos">喜欢的方向</option>
+          <option value="neg">排除的方向</option>
+        </select>
+      </label>
+      <label class="form-row">
+        <span>选择已有</span>
+        <select v-model="seedModalExistingId">
+          <option v-for="s in seeds" :key="s.id" :value="s.id">{{ s.name }}</option>
+          <option value="">（不选）</option>
+        </select>
+      </label>
+      <label class="form-row">
+        <span>新建名称</span>
+        <input v-model="seedModalNewName" placeholder="留空则不新建" />
+      </label>
+      <label class="form-row">
+        <span>推荐数量上限</span>
+        <input type="number" min="1" v-model.number="seedModalK" />
+      </label>
+      <div class="btns">
+        <button @click="confirmSeedModal">确定</button>
+        <button class="mini" @click="cancelSeedModal">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 复合种子创建/重命名弹窗 -->
+  <div class="modal-mask" v-if="seedEditModalVisible" @click.self="cancelSeedEdit">
+    <div class="modal" @keydown.tab="trapDialogFocus" role="dialog" aria-modal="true" aria-labelledby="seed-edit-title">
+      <h3 id="seed-edit-title">{{ seedEditId ? '重命名/修改种子' : '新建复合种子' }}</h3>
+      <label class="form-row">
+        <span>名称</span>
+        <input v-model="seedEditName" autofocus />
+      </label>
+      <label class="form-row">
+        <span>推荐数量上限</span>
+        <input type="number" min="1" v-model.number="seedEditK" />
+      </label>
+      <div class="btns">
+        <button @click="confirmSeedEdit">确定</button>
+        <button class="mini" @click="cancelSeedEdit">取消</button>
+      </div>
+    </div>
+  </div>
+
+  </div> <!-- end #app -->
+
+  <script src="lyric-timing.js"></script>
+  <script src="lyric-model-adapter.js"></script>
+  <script src="lyric-utils.js"></script>
+  <script src="vendor/fuse.min.js"></script>
+  <script src="vendor/wanakana.min.js"></script>
+  <script src="vendor/pinyin-pro.min.js"></script>
+  <script src="search-utils.js"></script>
+  <script src="search-controller.js"></script>
+  <script src="search-input.js"></script>
+  <script src="view-boundary.js"></script>
+  <script src="playback-transition.js"></script>
+  <script src="audio-effects.js"></script>
+  <script src="lyric-ambient.js"></script>
+  <script src="folder-browser.js"></script>
+  <script src="feature-modules.js"></script>
+  <script src="section-colors.js"></script>
+  <script src="practice-output.js"></script><script src="practice-timing.js"></script>
+  <script src="practice-metronome.js"></script>
+  <script src="recommendation-context.js"></script>
+  <script src="settings-navigation.js"></script>
+  <script src="scrollbar-visibility.js"></script>
+  <script src="module-bootstrap.js"></script>
+</body>
+</html>

@@ -1,0 +1,121 @@
+{
+  "name": "flowave",
+  "version": "0.1.0",
+  "private": true,
+  "description": "专注于本地音乐与连续推荐的 Windows 桌面播放器。",
+  "author": "Kumiko",
+  "license": "UNLICENSED",
+  "homepage": "https://github.com/nadeshikochan/Flowave",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nadeshikochan/Flowave.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nadeshikochan/Flowave/issues"
+  },
+  "main": "main.js",
+  "scripts": {
+    "start": "chcp 65001>nul && electron .",
+    "lint:syntax": "node --check main.js && node --check local-file-actions.js && node --check renderer/folder-browser.js && node --check renderer/sound-map-model.js && node --check renderer/sound-map-worker.js && node --check renderer/sound-map-scene.js && node --check renderer/sound-map.js && node --check preload.js && node --check overlay-preload.js && node --check listening-history-ops.js && node --check listening-history-store.js && node --check history-persistence.js && node --check secure-protocols.js && node --check metadata-service.js && node --check online/providers.js && node --check online/source-runtime.js && node --check lyrics/mirrored-lyric-paths.js && node --check lyrics/unified-lyric.js && node --check lyrics/candidate-model.js && node --check lyrics/provider-registry.js && node --check lyrics/lookup-service.js && node --check lyrics/local-source-resolver.js && node --check lyrics/local-library-provider.js && node --check lyrics/lddc-strategy-provider.js && node --check lyrics/music-tag-strategy-provider.js && node --check lyrics/online-payload-adapter.js && node --check song-info/candidate-model.js && node --check song-info/query-cache.js && node --check song-info/cache-maintenance.js && node --check song-info/provider-registry.js && node --check song-info/musicbrainz-provider.js && node --check song-info/itunes-provider.js && node --check song-info/song-info-service.js && node --check song-info/cover-art-asset-store.js && node --check song-info/lyric-sidecar-store.js && node --check song-info/lyric-save-service.js && node --check song-info/batch-task-manager.js && node --check song-info/tag-write-coordinator.js && node --check renderer/error-capture.js && node --check renderer/lyric-timing.js && node --check renderer/lyric-model-adapter.js && node --check renderer/playback-transition.js && node --check renderer/audio-effects.js && node --check renderer/lyric-ambient.js && node --check renderer/app.js && node --check renderer/overlay.js",
+    "lint:music-platform": "node --check song-info/music-platform-provider.js",
+    "test": "node --test test",
+    "check": "npm run lint:syntax && npm run lint:music-platform && npm test",
+    "pack": "electron-builder --dir --x64",
+    "dist:installer": "electron-builder --win nsis --x64"
+  },
+  "engines": {
+    "node": ">=20 <23"
+  },
+  "dependencies": {
+    "axios": "^1.6.7",
+    "music-metadata": "^11.11.1",
+    "sharp": "^0.33.2"
+  },
+  "devDependencies": {
+    "electron": "^29.3.0",
+    "electron-builder": "25.1.8"
+  },
+  "overrides": {
+    "@noble/hashes": "1.8.0"
+  },
+  "build": {
+    "appId": "app.flowave.desktop",
+    "productName": "Flowave",
+    "asar": true,
+    "asarUnpack": ["tools/audio-output/**/*"],
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "audio-output-monitor.js",
+      "tools/audio-output/**/*",
+      "preload.js",
+      "overlay-preload.js",
+      "listening-history-ops.js",
+      "listening-history-store.js",
+      "secure-protocols.js",
+      "backend-health.js",
+      "metadata-service.js",
+      "local-file-actions.js",
+      "async-json-writer.js",
+      "startup-background.js",
+      "feature-selection.js",
+      "history-feature-view.js",
+      "history-persistence.js",
+      "trace-persistence.js",
+      "lyrics/**/*",
+      "song-info/**/*",
+      "online/**/*",
+      "renderer/**/*",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "extraFiles": [
+      {
+        "from": "../build/backend/api",
+        "to": "backend"
+      },
+      {
+        "from": "../release-template/data",
+        "to": "data"
+      },
+      {
+        "from": "../scripts/install-model.ps1",
+        "to": "Install-Model.ps1"
+      },
+      {
+        "from": "../scripts/install-recommendation-engine.ps1",
+        "to": "Install-Recommendation-Engine.ps1"
+      },
+      {
+        "from": "../release-template/README-开始使用.txt",
+        "to": "README-开始使用.txt"
+      },
+      {
+        "from": "../release-template/THIRD_PARTY_NOTICES.txt",
+        "to": "THIRD_PARTY_NOTICES.txt"
+      }
+    ],
+    "win": {
+      "icon": "renderer/assets/app-icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "${productName}-${version}-${arch}-Setup.${ext}"
+    },
+    "nsis": {
+      "include": "build/installer.nsh",
+      "oneClick": true,
+      "perMachine": false,
+      "deleteAppDataOnUninstall": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}
