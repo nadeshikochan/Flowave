@@ -10,12 +10,14 @@ async function downloadOfficialRelease(release,{fetch,signal,onProgress=()=>{}})
  signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();
  try{
   let url=allowed(release.url),response;
+  if(control.signal.aborted)throw Error('安装已取消，原版本保留。');
   for(let step=0;step<6;step++){
-   response=await fetch(url,{signal:control.signal,redirect:'manual'});
+   try{response=await fetch(url,{signal:control.signal,redirect:'manual'});}
+   catch(error){throw Error('无法连接 GitHub 插件下载服务，请检查网络或代理后重试。原版本保留。',{cause:error});}
    if(response.status>=300&&response.status<400){const next=response.headers.get('location');await response.body?.cancel();if(!next)throw Error('下载跳转缺少地址。');url=allowed(new URL(next,url).href,true);continue;}
    break;
   }
-  if(!response?.ok){await response?.body?.cancel();throw Error('功能包尚未发布或下载失败，请稍后重试。');}
+  if(!response?.ok){await response?.body?.cancel();throw Error(`插件下载失败（HTTP ${response?.status||'未知'}），请稍后重试。原版本保留。`);}
   const total=Number(response.headers.get('content-length'))||release.bytes||0;
   if(total>LIMIT||release.bytes>LIMIT)throw Error('功能包超过大小限制。');
   const reader=response.body.getReader(),chunks=[];let done=0;
