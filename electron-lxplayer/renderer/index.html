@@ -500,10 +500,19 @@
               <header class="settings-panel-header"><div><h2 id="feature-selection-title">功能选装</h2><p>选择需要的功能，下次启动生效。已有歌曲和处理结果保留。</p></div></header>
               <p v-if="featureSelection.error || featureMessage" class="error" role="alert">{{featureSelection.error || featureMessage}}</p>
               <p v-if="featureSelection.restartRequired" class="feature-restart-notice" role="status">选择已保存，完全退出并重新打开软件后生效。</p>
-              <div class="feature-selection-row" v-for="item in featureCatalog" :key="item.id">
-                <div><h3>{{item.name}}</h3><p>{{item.description}}</p><small>当前{{featureEnabled(item.id) ? '已启用' : '已停用'}}<template v-if="featureSelection.selected.enabled[item.id] !== featureEnabled(item.id)"> · 下次启动{{featureSelection.selected.enabled[item.id] ? '启用' : '停用'}}</template></small></div>
-                <label class="quiet-switch"><input class="ui-toggle" type="checkbox" :checked="featureSelection.selected.enabled[item.id]" :disabled="featureSaving || !!featureSelection.error" @change="selectFeature(item.id,$event.target.checked,$event)" :aria-label="'下次启动启用'+item.name" /></label>
-              </div>
+              <section class="feature-install-item" v-for="item in featureCatalog" :key="item.id">
+                <div class="feature-install-header"><div><h3>{{item.name}}</h3><p>{{item.description}}</p><small v-if="packageState(item.id)">{{packageState(item.id).installed ? '已安装 '+packageState(item.id).installed.version : '未安装'}}<template v-if="!packageState(item.id).installed"> · {{packageSize(packageState(item.id).bytes)}}<template v-if="packageState(item.id).source==='github'"> · GitHub Releases</template></template><template v-if="packageState(item.id).active"> · 启动版本 {{packageState(item.id).active.version}}</template></small></div>
+                  <button class="mini" v-if="packageState(item.id) && !packageState(item.id).installed" :disabled="featureSaving || !!featureSelection.packages.error" @click="manageFeaturePackage(item.id,'install')">安装{{item.name}}</button>
+                  <label v-else class="quiet-switch"><input class="ui-toggle" type="checkbox" :checked="featureSelected(item.id)" :disabled="featureSaving || !!featureSelection.error" @change="selectFeature(item.id,$event.target.checked,$event)" :aria-label="'下次启动启用'+item.name" /></label>
+                </div>
+                <p v-if="moduleFailures[item.id] || packageState(item.id)?.error || packageState(item.id)?.warning" class="error" role="alert">{{moduleFailures[item.id] || packageState(item.id)?.error || packageState(item.id)?.warning}}</p>
+                <div v-if="packageState(item.id) && !packageState(item.id).installed" class="feature-installed-actions"><small>安装后下次启动启用</small><button class="mini ghost" :disabled="featureSaving || !!featureSelection.packages.error" @click="manageFeaturePackage(item.id,'import')">从文件安装…</button></div>
+                <div v-if="packageState(item.id)?.installed" class="feature-installed-actions"><small>当前{{featureEnabled(item.id)?'已启用':'已停用'}}<template v-if="featureSelected(item.id)!==featureEnabled(item.id)"> · 下次启动{{featureSelected(item.id)?'启用':'停用'}}</template></small><div class="btns"><button class="mini" v-if="packageState(item.id).installed.version!==packageState(item.id).latest" :disabled="featureSaving" @click="manageFeaturePackage(item.id,'install')">更新至 {{packageState(item.id).latest}}</button><button class="mini ghost" :disabled="featureSaving" @click="manageFeaturePackage(item.id,'import')">从文件安装…</button><button class="mini ghost" :disabled="featureSaving" @click="manageFeaturePackage(item.id,'remove')">移除{{item.name}}</button></div></div>
+                <div class="feature-progress" v-if="featureSaving && featurePackageProgress.id===item.id" role="status"><span>{{({prepare:'正在准备安装…',download:'正在下载…',verify:'正在校验并安装…',complete:'已完成',error:'未完成'})[featurePackageProgress.phase] || '正在处理…'}}</span><progress :value="featurePackageProgress.total ? featurePackageProgress.done : null" :max="featurePackageProgress.total || 1"></progress><button class="mini" v-if="featurePackageProgress.phase==='download'" @click="cancelModuleInstall(item.id)">取消</button></div>
+                <details class="feature-resources" v-if="item.id!=='history'"><summary>组件、模型与数据</summary><template v-if="item.id==='recommendation'"><p>已有声音索引可直接用于推荐。新增音乐的索引处理需要计算组件与 MERT 模型。</p><div class="btns"><button class="mini" @click="launchRecommendationInstaller()" :disabled="installerTasks.recommendation.running">安装推荐计算组件</button><button class="mini" @click="launchModelInstaller()" :disabled="installerTasks.model.running">下载 MERT 模型</button><button class="mini ghost" @click="openFeatureData('index')">打开索引目录</button></div><p v-for="task in [installerTasks.recommendation,installerTasks.model]" v-show="task.message" role="status">{{task.message}}<span v-if="task.running && task.percent!==null"> {{task.percent}}%</span></p></template><template v-else><p>{{item.id==='analysis'?'功能包提供标签、段落与曲库筛选界面。首次生成结果仍需准备分析模型与计算环境。':'功能包提供分轨播放和谱面界面。首次生成伴奏或谱面仍需对应模型与计算环境。'}} 现有结果继续保留。</p><div class="btns"><button class="mini ghost" @click="openFeatureData('models')">打开模型目录</button><button class="mini ghost" @click="openFeatureData(item.id==='analysis'?'analysis':'stems')">打开成果目录</button></div></template></details>
+              </section>
+              <details class="feature-storage" @toggle="$event.target.open && loadDataLocations()"><summary>数据与存储位置</summary><p>移除功能包保留以下数据。手动整理重要文件前，请完全退出软件及后台；数据库不能只复制正在写入的主文件。</p><div v-for="location in featureDataLocations" :key="location.id" class="feature-storage-row"><div><strong>{{location.name}}</strong><small>{{location.note}}</small><code>{{location.path}}</code></div><button class="mini" @click="openFeatureData(location.id)">打开目录</button></div></details>
+              <p class="feature-data-note">安装后自动选为下次启动启用；移除仅处理功能代码。大型模型与计算组件按需单独准备。</p>
               <p class="feature-data-note">基础播放、搜索、歌单、歌词与音效始终保留。推荐可继续读取已有分析；停用听歌记录后停止累计长期时长与次数。</p>
             </section>
             <div v-if="settingsTab==='library-settings'" class="settings-panel"><header class="settings-panel-header"><div><h2>本地音乐</h2></div><button class="mini" @click="refreshSongList" :disabled="loading || audioDirectoryChanged">刷新音乐库</button></header><section class="settings-card" data-setting-id="setting-library-settings-17de1ed2d9">
@@ -1258,98 +1267,7 @@
               </section>
             </div>
 
-            <div v-if="settingsTab==='history'" class="settings-panel listening-history-panel">
-              <header class="settings-panel-header">
-                <h2>听歌记录</h2>
-              </header>
-              <small
-                v-if="listeningHistoryMessage"
-                class="history-action-message"
-                :class="{ warning: listeningHistoryRecoveryStatus.state === 'unrecoverable' }"
-              >{{ listeningHistoryMessage }}</small>
-              <div class="history-summary">
-                <div class="history-metric">
-                  <span>总听歌时长</span>
-                  <strong>{{ formatDurationLong(listeningHistory.totalSeconds) }}</strong>
-                </div>
-                <div class="history-metric">
-                  <span>今日时长</span>
-                  <strong>{{ formatDurationLong(listeningHistoryTodaySeconds) }}</strong>
-                </div>
-                <div class="history-metric">
-                  <span>听过歌曲</span>
-                  <strong>{{ listeningHistoryTrackCount }}</strong>
-                </div>
-                <div class="history-metric">
-                  <span>播放次数</span>
-                  <strong>{{ listeningHistory.totalPlays || 0 }}</strong>
-                </div>
-              </div>
-              <section class="history-section">
-                <div class="history-section-title">
-                  <h4>每日听歌时长</h4>
-                  <small>最近 {{ listeningHistoryDayBars.length }} 天</small>
-                </div>
-                <div class="history-days">
-                  <div class="history-day" v-for="day in listeningHistoryDayBars" :key="day.key" :title="`${day.key} ${day.timeText}`">
-                    <div class="history-day-bar">
-                      <span :style="{height: day.percent + '%'}"></span>
-                    </div>
-                    <em>{{ day.label }}</em>
-                  </div>
-                </div>
-              </section>
-              <section class="history-section history-table-section">
-                <div class="history-toolbar">
-                  <library-search-input :model-value="listeningHistoryKeyword" @commit="setListeningHistoryQuery" placeholder="搜索歌曲、艺人、专辑" aria-label="搜索听歌历史"></library-search-input>
-                  <select v-model="listeningHistorySort" @change="changeListeningHistoryPage(1)" aria-label="听歌历史排序">
-                    <option value="playCount">播放次数从多到少</option>
-                    <option value="listenedSeconds">累计时长从多到少</option>
-                    <option value="lastPlayedAt">最近播放</option>
-                    <option value="title">歌曲名</option>
-                  </select>
-                </div>
-                <div class="history-table">
-                  <div class="history-table-head">
-                    <div>歌曲</div>
-                    <div>艺人</div>
-                    <div>次数</div>
-                    <div>累计时长</div>
-                    <div>最后播放</div>
-                  </div>
-                  <div class="history-table-body" ref="historyTableBody">
-                    <div class="history-row" v-for="item in listeningHistoryVisibleRows" :key="item.path" v-memo="[item.path,item.title,item.album,item.artist,item.playCount,item.listenedSeconds,item.lastPlayedAt]" @dblclick="playByPath(item.path)" @keydown.enter.prevent="playByPath(item.path)" @keydown.space.prevent="playByPath(item.path)" role="button" tabindex="0">
-                      <div class="history-title">
-                        <strong>{{ item.title || extractName(item.path) }}</strong>
-                        <small>{{ item.album || '未知专辑' }}</small>
-                      </div>
-                      <div>{{ item.artist || '未知艺术家' }}</div>
-                      <div>{{ item.playCount || 0 }}</div>
-                      <div>{{ formatDurationLong(item.listenedSeconds) }}</div>
-                      <div>{{ formatHistoryDate(item.lastPlayedAt) }}</div>
-                    </div>
-                    <div v-if="!listeningHistoryRows.length" class="empty">{{ listeningHistoryKeyword ? '没有匹配的听歌记录' : '暂无听歌历史' }}</div>
-                  </div>
-                </div>
-                <div class="history-pagination" v-if="listeningHistoryRows.length" aria-label="听歌记录分页">
-                  <span aria-live="polite">共 {{ listeningHistoryRows.length }} 首 · 第 {{ listeningHistoryCurrentPage }} / {{ listeningHistoryPageCount }} 页</span>
-                  <button type="button" :disabled="listeningHistoryCurrentPage<=1" @click="changeListeningHistoryPage(listeningHistoryCurrentPage-1)">上一页</button>
-                  <button type="button" :disabled="listeningHistoryCurrentPage>=listeningHistoryPageCount" @click="changeListeningHistoryPage(listeningHistoryCurrentPage+1)">下一页</button>
-                </div>
-              </section>
-              <section class="settings-card history-management-card" data-setting-id="setting-history-d97701c357">
-                <div class="settings-card-title">
-                  <div>
-                    <h3>数据管理</h3>
-                    <p>听歌统计与推荐学习分别保存。</p>
-                  </div>
-                </div>
-                <div class="btns">
-                  <button class="mini ghost danger-quiet" @click="clearListeningStats" :disabled="listeningHistoryActionBusy">清空统计</button>
-                  <button class="mini ghost danger-quiet" @click="resetRecommendationBehavior" :disabled="listeningHistoryActionBusy">重置推荐学习</button>
-                </div>
-              </section>
-            </div>
+            <template id="flowave-history-slot"></template>
 
             <div v-if="settingsTab==='manual'" class="settings-panel manual-panel">
               <header class="settings-panel-header">

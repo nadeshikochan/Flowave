@@ -86,7 +86,27 @@ const APP_HOME = path.resolve(process.env.KUMIKO_APP_HOME || (isDev ? path.join(
 const DATA_DIR = resolvePortableDataDir(process.env.KUMIKO_DATA_DIR);
 const tracePersistence = require("./trace-persistence").createTracePersistence(path.join(DATA_DIR, "library", "listening-traces"));
 const CONFIG_DIR = path.join(DATA_DIR, "config");
-const featureSelection = require('./feature-selection').createFeatureSelection(path.join(CONFIG_DIR, 'features.json'));
+const officialCatalog = require('./official-modules/catalog.json');
+const dataLayout = require('./data-layout').dataLayout(DATA_DIR);
+const LISTENING_CONFIG_DIR = dataLayout.history;
+const existingFeatureProfile = require('./feature-profile').isExistingProfile(DATA_DIR);
+const officialPackages = require('./official-package-store').createOfficialPackageStore({
+  directory:dataLayout.packages,catalog:officialCatalog,adoptLegacy:existingFeatureProfile,
+  bundleSource:(id,version)=>{
+    const release=officialCatalog.packages[id]?.releases.find(row=>row.version===version);
+    if(!release)throw Error('缺少官方功能包版本。');
+    return fs.readFileSync(path.join(__dirname,'official-modules','packages',release.bundle));
+  },
+});
+const featureSelection = require('./feature-selection').createFeatureSelection(path.join(CONFIG_DIR, 'features.json'),{
+  initialEnabled:existingFeatureProfile,
+  available:id=>officialPackages.hasActive(id),
+});
+function featureSnapshot(){
+  const selection=featureSelection.snapshot(),packages=officialPackages.snapshot();
+  return {...selection,packages,restartRequired:selection.restartRequired||Object.values(packages).some(value=>value?.restartRequired)};
+}
+let officialModuleOperation = null;
 const startupBackground = new (require('./startup-background').StartupBackgroundStore)(path.join(CONFIG_DIR, 'appearance'));
 let startupBackgroundBusy = false;
 const CACHE_DIR = path.join(DATA_DIR, "cache");
@@ -1329,12 +1349,16 @@ app.on("second-instance", () => {
 
 app.whenReady().then(async () => {
   if (!hasSingleInstanceLock) return;
+  try{await featureSelection.initialize();}catch(error){console.warn('[features] initial selection save deferred',error.code||'unavailable');}
+  try{officialPackages.bootstrapLegacy();}catch(error){console.warn('[modules] registry initialization deferred',error.code||'unavailable');}
+  try{officialPackages.collectUnused();}catch(error){console.warn('[modules] old package cleanup deferred',error.code||'unavailable');}
   writePackagedSmokeStage("when-ready");
   Menu.setApplicationMenu(null);
   secureProtocols.registerSecureProtocols({
     protocol,
     electronNet,
     rendererDir: path.join(__dirname, "renderer"),
+    moduleAsset:url=>officialPackages.readAsset(url),
   });
   lyricSidecarRecovery.start({
     store: lyricSidecarStore,
@@ -1390,6 +1414,7 @@ app.on("before-quit", (event) => {
   event.preventDefault();
   appIsQuitting = true;
   if (quitCleanupPromise) return;
+  officialModuleOperation?.control.abort();
   tagEditor.close();
   batchSongInfoTasks.close();
   songInfoService.cancelAll();
@@ -1411,7 +1436,7 @@ app.on("before-quit", (event) => {
       } catch (error) { console.warn("[history] final renderer snapshot unavailable", { code: String(error?.code || "") }); }
       finally { clearTimeout(timeout); }
     }
-    return Promise.allSettled([traceArchive.flush(), metadata.flushMetadataCache(), listeningHistoryPersistence.flush(), startupBackground.pending, featureSelection.flush()]);
+    return Promise.allSettled([traceArchive.flush(), metadata.flushMetadataCache(), listeningHistoryPersistence.flush(), startupBackground.pending, featureSelection.flush(),officialPackages.flush()]);
   })().then((results) => {
     for (const result of results) {
       if (result.status === "rejected") console.warn("[state] shutdown save failed", { code: String(result.reason?.code || "") });
@@ -1530,12 +1555,56 @@ function registerIpc() {
   ipcRegistered = true;
   ipcMain.on('lx-features-get-sync', event => {
     event.returnValue = secureProtocols.isTrustedRendererUrl(event.senderFrame?.url)
-      ? featureSelection.snapshot() : null;
+      ? featureSnapshot() : null;
+  });
+  ipcMain.on('lx-module-template-sync',(event,id)=>{
+    try{event.returnValue=secureProtocols.isTrustedRendererUrl(event.senderFrame?.url)&&id==='history'?officialPackages.template(id):'';}
+    catch{event.returnValue='';}
+  });
+  ipcMain.handle('lx-data-locations',event=>secureProtocols.isTrustedRendererUrl(event.senderFrame?.url)&&event.sender===mainWindow?.webContents?require('./data-layout').locations(DATA_DIR,APP_HOME,dataLayout):[]);
+  ipcMain.handle('lx-data-location-open',async(event,id)=>{
+    if(!secureProtocols.isTrustedRendererUrl(event.senderFrame?.url)||event.sender!==mainWindow?.webContents)return {ok:false};
+    const location=require('./data-layout').locations(DATA_DIR,APP_HOME,dataLayout).find(row=>row.id===id);
+    if(!location)return {ok:false,error:'未知数据目录。'};
+    try{await fs.promises.mkdir(location.path,{recursive:true});const error=await shell.openPath(location.path);return error?{ok:false,error:'目录无法打开。'}:{ok:true};}catch{return {ok:false,error:'目录无法打开。'};}
+  });
+  ipcMain.handle('lx-module-manage',async(event,value)=>{
+    if(!secureProtocols.isTrustedRendererUrl(event.senderFrame?.url)||event.sender!==mainWindow?.webContents)return {ok:false,error:'当前页面无权管理功能包。'};
+    if(appIsQuitting)return {ok:false,error:'软件正在退出，原版本保留。'};
+    const id=value?.id||'history';
+    if(!Object.hasOwn(officialCatalog.packages,id))return {ok:false,error:'未知功能包。'};
+    if(value?.action==='cancel'){if(officialModuleOperation?.id===id&&officialModuleOperation.phase==='download')officialModuleOperation.control.abort();return {ok:true,selection:featureSnapshot()};}
+    if(officialModuleOperation)return {ok:false,error:'另一个功能包操作正在进行。'};
+    const operation={id,control:new AbortController(),phase:'prepare'};officialModuleOperation=operation;
+    const progress=payload=>{operation.phase=payload.phase;if(!event.sender.isDestroyed())event.sender.send('lx-module-progress',{id,...payload});};
+    try{
+      if(value?.action==='remove')await officialPackages.remove(value.revision,id);
+      else{
+        let bytes;
+        if(value?.action==='import'){
+          const picked=await dialog.showOpenDialog(mainWindow,{title:'安装官方功能包',properties:['openFile'],filters:[{name:'Flowave 官方功能包',extensions:['fwm']} ]});
+          if(picked.canceled)return {ok:true,canceled:true,selection:featureSnapshot()};
+          const handle=await fs.promises.open(picked.filePaths[0],'r');
+          try{const limit=require('./official-package-store').LIMIT;if((await handle.stat()).size>limit)throw Error('功能包超过大小限制。');const data=Buffer.alloc(limit+1);let length=0;while(length<data.length){const result=await handle.read(data,length,data.length-length,null);if(!result.bytesRead)break;length+=result.bytesRead;}bytes=data.subarray(0,length);}finally{await handle.close();}
+        }else if(value?.action==='install'){
+          const entry=officialCatalog.packages[id],release=entry.releases.find(row=>row.version===entry.latest);progress({phase:'prepare',done:0,total:release.bytes});
+          if(release.url){progress({phase:'download',done:0,total:release.bytes});bytes=await require('./module-download').downloadOfficialRelease(release,{fetch:(...args)=>electronNet.fetch(...args),signal:operation.control.signal,onProgress:progress});}
+          else bytes=await fs.promises.readFile(path.join(__dirname,'official-modules','packages',release.bundle));
+        }else throw Error('未知功能包操作。');
+        if(appIsQuitting||operation.control.signal.aborted)throw Error('安装已取消，原版本保留。');
+        progress({phase:'verify',done:bytes.length,total:bytes.length});await officialPackages.install(bytes,value.revision,id);
+      }
+      // Installation and preference are separate atomic files. On partial failure
+      // return the actual installation state so the UI cannot claim rollback.
+      await featureSelection.select(id,value.action!=='remove',featureSelection.snapshot().selected.revision);
+      progress({phase:'complete'});return {ok:true,selection:featureSnapshot()};
+    }catch(error){progress({phase:'error'});return {ok:false,error:operation.control.signal.aborted?'安装已取消，原版本保留。':String(error.message||error),selection:featureSnapshot()};}
+    finally{if(officialModuleOperation===operation)officialModuleOperation=null;}
   });
   ipcMain.handle('lx-features-select', async (event, value) => {
     if (!secureProtocols.isTrustedRendererUrl(event.senderFrame?.url) || event.sender !== mainWindow?.webContents)
       return {ok:false,error:'当前页面无权更改功能。'};
-    try { return {ok:true,selection:await featureSelection.select(value?.id, value?.enabled, value?.revision)}; }
+    try { await featureSelection.select(value?.id, value?.enabled, value?.revision);return {ok:true,selection:featureSnapshot()}; }
     catch (error) { return {ok:false,error:String(error.message || error)}; }
   });
   ipcMain.handle('lx-audio-output-get',async event=>secureProtocols.isTrustedRendererUrl(event.senderFrame?.url)?audioOutputMonitor.get():{id:'',transport:'unknown',confirmed:false,reason:'untrusted-page'});
@@ -2404,21 +2473,21 @@ async function saveRendererStateConfig() {
 }
 
 function getListeningHistoryConfigPath() {
-  return path.join(CONFIG_DIR, "listening_history.json");
+  return path.join(LISTENING_CONFIG_DIR, "listening_history.json");
 }
 
 function getListeningHistoryBackupDir() {
-  return path.join(CONFIG_DIR, "listening-history-backups");
+  return path.join(LISTENING_CONFIG_DIR, "listening-history-backups");
 }
 
 function getListeningHistorySnapshotDir() {
-  return path.join(CONFIG_DIR, "listening-history-snapshots");
+  return path.join(LISTENING_CONFIG_DIR, "listening-history-snapshots");
 }
 
 function loadListeningHistoryConfig() {
   try {
     const result = listeningHistoryStore.loadListeningHistoryWithRecovery({
-      configDir: CONFIG_DIR,
+      configDir: LISTENING_CONFIG_DIR,
     });
     listeningHistoryRecoveryState = cloneSerializableJson(result.status || {});
     return cloneSerializableJson(result.history || {});

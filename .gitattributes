@@ -15,3 +15,5 @@
 *.ico binary
 *.gif binary
 *.mp4 binary
+
+*.fwm binary

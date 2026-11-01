@@ -1,0 +1,92 @@
+<div v-if="settingsTab==='history'" class="settings-panel listening-history-panel">
+              <header class="settings-panel-header">
+                <h2>听歌记录</h2>
+              </header>
+              <small
+                v-if="listeningHistoryMessage"
+                class="history-action-message"
+                :class="{ warning: listeningHistoryRecoveryStatus.state === 'unrecoverable' }"
+              >{{ listeningHistoryMessage }}</small>
+              <div class="history-summary">
+                <div class="history-metric">
+                  <span>总听歌时长</span>
+                  <strong>{{ formatDurationLong(listeningHistory.totalSeconds) }}</strong>
+                </div>
+                <div class="history-metric">
+                  <span>今日时长</span>
+                  <strong>{{ formatDurationLong(listeningHistoryTodaySeconds) }}</strong>
+                </div>
+                <div class="history-metric">
+                  <span>听过歌曲</span>
+                  <strong>{{ listeningHistoryTrackCount }}</strong>
+                </div>
+                <div class="history-metric">
+                  <span>播放次数</span>
+                  <strong>{{ listeningHistory.totalPlays || 0 }}</strong>
+                </div>
+              </div>
+              <section class="history-section">
+                <div class="history-section-title">
+                  <h4>每日听歌时长</h4>
+                  <small>最近 {{ listeningHistoryDayBars.length }} 天</small>
+                </div>
+                <div class="history-days">
+                  <div class="history-day" v-for="day in listeningHistoryDayBars" :key="day.key" :title="`${day.key} ${day.timeText}`">
+                    <div class="history-day-bar">
+                      <span :style="{height: day.percent + '%'}"></span>
+                    </div>
+                    <em>{{ day.label }}</em>
+                  </div>
+                </div>
+              </section>
+              <section class="history-section history-table-section">
+                <div class="history-toolbar">
+                  <library-search-input :model-value="listeningHistoryKeyword" @commit="setListeningHistoryQuery" placeholder="搜索歌曲、艺人、专辑" aria-label="搜索听歌历史"></library-search-input>
+                  <select v-model="listeningHistorySort" @change="changeListeningHistoryPage(1)" aria-label="听歌历史排序">
+                    <option value="playCount">播放次数从多到少</option>
+                    <option value="listenedSeconds">累计时长从多到少</option>
+                    <option value="lastPlayedAt">最近播放</option>
+                    <option value="title">歌曲名</option>
+                  </select>
+                </div>
+                <div class="history-table">
+                  <div class="history-table-head">
+                    <div>歌曲</div>
+                    <div>艺人</div>
+                    <div>次数</div>
+                    <div>累计时长</div>
+                    <div>最后播放</div>
+                  </div>
+                  <div class="history-table-body" ref="historyTableBody">
+                    <div class="history-row" v-for="item in listeningHistoryVisibleRows" :key="item.path" v-memo="[item.path,item.title,item.album,item.artist,item.playCount,item.listenedSeconds,item.lastPlayedAt]" @dblclick="playByPath(item.path)" @keydown.enter.prevent="playByPath(item.path)" @keydown.space.prevent="playByPath(item.path)" role="button" tabindex="0">
+                      <div class="history-title">
+                        <strong>{{ item.title || extractName(item.path) }}</strong>
+                        <small>{{ item.album || '未知专辑' }}</small>
+                      </div>
+                      <div>{{ item.artist || '未知艺术家' }}</div>
+                      <div>{{ item.playCount || 0 }}</div>
+                      <div>{{ formatDurationLong(item.listenedSeconds) }}</div>
+                      <div>{{ formatHistoryDate(item.lastPlayedAt) }}</div>
+                    </div>
+                    <div v-if="!listeningHistoryRows.length" class="empty">{{ listeningHistoryKeyword ? '没有匹配的听歌记录' : '暂无听歌历史' }}</div>
+                  </div>
+                </div>
+                <div class="history-pagination" v-if="listeningHistoryRows.length" aria-label="听歌记录分页">
+                  <span aria-live="polite">共 {{ listeningHistoryRows.length }} 首 · 第 {{ listeningHistoryCurrentPage }} / {{ listeningHistoryPageCount }} 页</span>
+                  <button type="button" :disabled="listeningHistoryCurrentPage<=1" @click="changeListeningHistoryPage(listeningHistoryCurrentPage-1)">上一页</button>
+                  <button type="button" :disabled="listeningHistoryCurrentPage>=listeningHistoryPageCount" @click="changeListeningHistoryPage(listeningHistoryCurrentPage+1)">下一页</button>
+                </div>
+              </section>
+              <section class="settings-card history-management-card" data-setting-id="setting-history-d97701c357">
+                <div class="settings-card-title">
+                  <div>
+                    <h3>数据管理</h3>
+                    <p>听歌统计与推荐学习分别保存。</p>
+                  </div>
+                </div>
+                <div class="btns">
+                  <button class="mini ghost danger-quiet" @click="clearListeningStats" :disabled="listeningHistoryActionBusy">清空统计</button>
+                  <button class="mini ghost danger-quiet" @click="resetRecommendationBehavior" :disabled="listeningHistoryActionBusy">重置推荐学习</button>
+                </div>
+              </section>
+            </div>

@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer } = require("electron");
 const SUBSCRIPTION_CHANNELS = new Set([
   'lx-audio-output-changed',
+  'lx-module-progress',
   "hotkey",
   "lx-media-diag",
   "lx-lyric-overlay-action",
@@ -48,6 +49,11 @@ function subscribe(channel, callback) {
 contextBridge.exposeInMainWorld("lxEnv", {
   getFeatureSelectionSync: () => ipcRenderer.sendSync('lx-features-get-sync'),
   selectFeature: value => ipcRenderer.invoke('lx-features-select', value),
+  getModuleTemplateSync: id => ipcRenderer.sendSync('lx-module-template-sync', id),
+  manageOfficialModule: value => ipcRenderer.invoke('lx-module-manage', value),
+  getDataLocations: () => ipcRenderer.invoke('lx-data-locations'),
+  openDataLocation: id => ipcRenderer.invoke('lx-data-location-open', id),
+  onOfficialModuleProgress: callback => subscribe('lx-module-progress', callback),
   getAudioOutput:()=>ipcRenderer.invoke('lx-audio-output-get'),
   acquireAudioOutput:id=>ipcRenderer.invoke('lx-audio-output-acquire',id),
   releaseAudioOutput:id=>ipcRenderer.invoke('lx-audio-output-release',id),

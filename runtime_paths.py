@@ -31,6 +31,10 @@ LIBRARY_DIR = DATA_DIR / "library"
 CACHE_DIR = DATA_DIR / "cache"
 LOG_DIR = DATA_DIR / "logs"
 DOWNLOAD_DIR = DATA_DIR / "downloads"
+_HISTORY_ROOT = LIBRARY_DIR / "listening"
+LISTENING_HISTORY_DIR = (CONFIG_DIR if any(
+    (CONFIG_DIR / name).exists() for name in ("listening_history.json", "listening-history-backups", "listening-history-snapshots")
+) else _HISTORY_ROOT)
 MODEL_DIR = APP_HOME / "models" / "MERT-v1-330M"
 MIGRATION_STATE_PATH = CONFIG_DIR / "migration.json"
 

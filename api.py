@@ -42,18 +42,13 @@ import numpy as np
 
 import vector_store
 from music_library_roots import configured_roots, normalize_roots, roots_key, scan_roots, contains as root_contains
-from sound_map import SoundMapService
+from lazy_service import DeferredService
 from listening_trace_service import ListeningTraceService
 from listening_trace_store import TraceConflict
 import sqlite3
-from music_analysis_service import MusicAnalysisService
 from seed_semantic import SeedSemanticVerifier, SeedSemanticError
-from semantic_library import SemanticLibrary
 import recommendation_engine
 import similar_tracks
-from stem_service import StemService
-from practice_analysis import PracticeAnalysisStore
-from practice_service import PracticeService
 from music_analysis_store import source_version as analysis_source_version
 from audio_payload_fingerprint import is_audio_payload_identity
 from tag_commit_reconciler import TagCommitIdentityReconciler, TagCommitIdentityRequest
@@ -78,6 +73,7 @@ from runtime_paths import (
     LOCAL_EMBEDDINGS_PATH,
     LOCAL_TRACKS_PATH,
     MODEL_DIR,
+    LISTENING_HISTORY_DIR,
     ONLINE_EMBEDDINGS_PATH,
     ONLINE_EMBEDDINGS_META_PATH,
     PROJECT_ROOT,
@@ -122,8 +118,13 @@ async def official_module_admission(request, call_next):
             return JSONResponse(status_code=403, content={'detail':{'code':'FEATURE_DISABLED','module':module,'message':'此功能已停用，可在设置的功能选装中启用，下次启动生效。'}})
     return await call_next(request)
 
-LISTENING_HISTORY_PATH = CONFIG_DIR / "listening_history.json"
-SOUND_MAP_SERVICE = SoundMapService(DATA_DIR / "cache" / "sound-map")
+LISTENING_HISTORY_PATH = LISTENING_HISTORY_DIR / "listening_history.json"
+def _create_sound_map_service():
+    from sound_map import SoundMapService
+    return SoundMapService(DATA_DIR / 'cache' / 'sound-map')
+
+
+SOUND_MAP_SERVICE = DeferredService(_create_sound_map_service)
 LISTENING_TRACE_SERVICE = ListeningTraceService(LIBRARY_DIR / "listening-traces")
 STARTUP_SYNC_STATE_PATH = CONFIG_DIR / "startup_sync_state.json"
 
@@ -933,7 +934,8 @@ def _rebuild_local_index_cache_locked():
         song_key = str(state["path_key_cache"].get(path_str) or record.song_key or "")
         keys.append(resource_id)
         paths.append(path_str)
-        embs.append(_normalize_vec(record.embedding))
+        if FEATURE_SELECTION['enabled']['recommendation']:
+            embs.append(_normalize_vec(record.embedding))
         index_view[resource_id] = (path_str, record.embedding)
         resource_map[resource_id] = path_str
         path_to_resource[path_str] = resource_id
@@ -2648,13 +2650,38 @@ def _analysis_snapshot(resource_id=None, only_path=None):
     return rows
 
 
-MUSIC_ANALYSIS_SERVICE = MusicAnalysisService(PROJECT_ROOT, DATA_DIR, _analysis_snapshot)
+def _create_music_analysis_service():
+    from music_analysis_service import MusicAnalysisService
+    return MusicAnalysisService(PROJECT_ROOT, DATA_DIR, _analysis_snapshot)
+
+
+def _create_semantic_library():
+    from semantic_library import SemanticLibrary
+    return SemanticLibrary(PROJECT_ROOT, DATA_DIR / 'library/track-analysis/results.sqlite3')
+
+
+def _create_stem_service():
+    from stem_service import StemService
+    return StemService(PROJECT_ROOT, DATA_DIR, _analysis_snapshot)
+
+
+def _create_practice_store():
+    from practice_analysis import PracticeAnalysisStore
+    return PracticeAnalysisStore(DATA_DIR / 'library/practice-analysis')
+
+
+def _create_practice_service():
+    from practice_service import PracticeService
+    return PracticeService(PROJECT_ROOT, DATA_DIR, _analysis_snapshot, STEM_SERVICE, PRACTICE_ANALYSIS_STORE)
+
+
+MUSIC_ANALYSIS_SERVICE = DeferredService(_create_music_analysis_service)
 SEED_SEMANTIC_VERIFIER = SeedSemanticVerifier(PROJECT_ROOT, DATA_DIR / 'library/track-analysis/results.sqlite3')
-RECOMMEND_SEMANTIC_LIBRARY = SemanticLibrary(PROJECT_ROOT, DATA_DIR / 'library/track-analysis/results.sqlite3')
+RECOMMEND_SEMANTIC_LIBRARY = DeferredService(_create_semantic_library)
 RECOMMEND_VECTOR_CACHE = recommendation_engine.VectorCache()
-STEM_SERVICE = StemService(PROJECT_ROOT, DATA_DIR, _analysis_snapshot)
-PRACTICE_ANALYSIS_STORE = PracticeAnalysisStore(DATA_DIR / 'library/practice-analysis')
-PRACTICE_SERVICE = PracticeService(PROJECT_ROOT, DATA_DIR, _analysis_snapshot, STEM_SERVICE, PRACTICE_ANALYSIS_STORE)
+STEM_SERVICE = DeferredService(_create_stem_service)
+PRACTICE_ANALYSIS_STORE = DeferredService(_create_practice_store)
+PRACTICE_SERVICE = DeferredService(_create_practice_service)
 
 
 @app.get('/practice/analysis')

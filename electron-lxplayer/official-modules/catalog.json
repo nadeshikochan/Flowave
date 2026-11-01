@@ -1,0 +1,77 @@
+{
+  "hostApi": 1,
+  "packages": {
+    "history": {
+      "name": "听歌记录",
+      "latest": "1.0.0",
+      "releases": [
+        {
+          "version": "1.0.0",
+          "sha256": "e269ec0f8df2e3636dc15973d2d95e9be3a7d61d03c122820ce34e0850d6f418",
+          "bundle": "history-1.0.0.fwm",
+          "bytes": 14993,
+          "url": "https://github.com/nadeshikochan/Flowave/releases/download/plugins-v1.0.0/history-1.0.0.fwm"
+        }
+      ]
+    },
+    "recommendation": {
+      "name": "歌曲推荐",
+      "latest": "1.0.0",
+      "releases": [
+        {
+          "version": "1.0.0",
+          "sha256": "afe008898639b9bb73349dfcff06b147b84454a9068424f9f4a76c4ab9c7f526",
+          "bundle": "recommendation-1.0.0.fwm",
+          "bytes": 134610,
+          "url": "https://github.com/nadeshikochan/Flowave/releases/download/plugins-v1.0.0/recommendation-1.0.0.fwm"
+        }
+      ]
+    },
+    "analysis": {
+      "name": "歌曲分析",
+      "latest": "1.0.0",
+      "releases": [
+        {
+          "version": "1.0.0",
+          "sha256": "bf7b5313e8bce438a37106fdf15770e445fe2c0e86e4076057bfe235f6d54233",
+          "bundle": "analysis-1.0.0.fwm",
+          "bytes": 35659,
+          "url": "https://github.com/nadeshikochan/Flowave/releases/download/plugins-v1.0.0/analysis-1.0.0.fwm"
+        }
+      ]
+    },
+    "practice": {
+      "name": "演奏练习",
+      "latest": "1.0.3",
+      "releases": [
+        {
+          "version": "1.0.0",
+          "sha256": "0683e6b8319932fba441f2481b554864284ba9ee91a36481c4445728621cb348",
+          "bundle": "practice-1.0.0.fwm",
+          "bytes": 1438050
+        },
+        {
+          "version": "1.0.1",
+          "sha256": "e36e902b0f3423b90c5b73d840bb6041db3b86a9ef1080dbdc9bdfbff2a42b8d",
+          "bundle": "practice-1.0.1.fwm",
+          "bytes": 1439590,
+          "url": "https://github.com/nadeshikochan/Flowave/releases/download/plugins-v1.0.0/practice-1.0.1.fwm"
+        },
+        {
+          "version": "1.0.2",
+          "sha256": "8234568c6c9f0b10a435ae1dc75a696a20ca018a0f7b957c571517a0e8920d54",
+          "bundle": "practice-1.0.2.fwm",
+          "bytes": 1439574,
+          "url": "https://github.com/nadeshikochan/Flowave/releases/download/plugins-v1.0.0/practice-1.0.2.fwm"
+        },
+        {
+          "version": "1.0.3",
+          "sha256": "4f57370445b32d59682854633cf83b16816ce1e457802fc081e5f7041eacc53e",
+          "bundle": "practice-1.0.3.fwm",
+          "bytes": 1439574,
+          "url": "https://github.com/nadeshikochan/Flowave/releases/download/plugins-v1.0.0/practice-1.0.3.fwm"
+        }
+      ]
+    }
+  }
+}

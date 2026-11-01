@@ -1,13 +1,18 @@
-Flowave
+Flowave 公开测试版
 
-Windows 10/11 x64 本地音乐播放器。
-安装包和便携版以 GitHub Releases 实际发布的文件为准：
-https://github.com/nadeshikochan/Flowave/releases
+1. 安装版：运行 Setup.exe，安装后从桌面或开始菜单打开。
+2. 绿色版：完整解压 ZIP，再运行 Flowave.exe。不要在压缩包内直接双击。
+3. 首次进入“设置 > 常用”，选择本地音乐目录并保存。
+4. 已有索引时可以立即使用连续推荐；建立新索引时进入“设置 > 高级维护”。
+5. 先点“安装推荐组件”（下载约 188 MB），再点“下载模型”（约 1.18 GiB）。
+6. 也可手动运行 Install-Recommendation-Engine.ps1 与 Install-Model.ps1。
+7. 公开版不内置在线音源；需要时在“设置 > 在线音源”自行导入脚本。
 
-首次运行请在设置中添加音乐目录并确认载入。
-推荐、分析和演奏需要对应模型与运行组件，基础播放可独立使用。
-用户配置和分析结果默认保存在程序目录的 data/；备份前先退出程序。
-在线音源脚本由用户自行导入，本项目不提供脚本或音乐内容。
+用户配置、索引、缓存和日志都保存在程序目录的 data 文件夹。
+迁移时复制整个程序目录；备份前先关闭软件。
+GitHub Releases 同时提供安装版、绿色 ZIP、推荐组件与 SHA256SUMS.txt。
 
-项目与第三方许可见 LICENSE 及 THIRD_PARTY_NOTICES.txt。
-MERT-v1-330M 使用 CC BY-NC 4.0，限制商业用途。
+许可提醒：
+推荐模型 MERT-v1-330M 由 m-a-p 发布，许可为 CC BY-NC 4.0。
+当前公开测试版按非商业用途准备；商业使用前需要取得模型作者授权或更换模型。
+详见 THIRD_PARTY_NOTICES.txt。

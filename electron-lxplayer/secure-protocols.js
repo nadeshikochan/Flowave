@@ -246,8 +246,15 @@ async function createLocalMediaResponse(request, target) {
   return new Response(createMediaBody(stream, request?.signal), { status, headers });
 }
 
-function registerSecureProtocols({ protocol, electronNet, rendererDir }) {
+function registerSecureProtocols({ protocol, electronNet, rendererDir, moduleAsset }) {
   protocol.handle(APP_SCHEME, (request) => {
+    let requestedPath;try{requestedPath=new URL(request.url).pathname;}catch{return plainResponse(404,'Not found');}
+    if(requestedPath.startsWith('/_modules/')){
+      if(!['GET','HEAD'].includes(request.method||'GET'))return plainResponse(405,'Method not allowed');
+      try{const asset=moduleAsset?.(request.url);if(!asset)return plainResponse(404,'Not found');
+        return new Response(request.method==='HEAD'?null:asset.data,{headers:{'content-type':asset.contentType,'cache-control':'no-store'}});
+      }catch{return plainResponse(409,'Official module needs repair');}
+    }
     const target = resolveRendererAsset(rendererDir, request.url);
     if (!target) return plainResponse(404, "Not found");
     try {

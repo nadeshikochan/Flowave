@@ -35,9 +35,6 @@ const DEFAULT_DESKTOP_LYRIC_STROKE = 0.5;
 const DEFAULT_DESKTOP_LYRIC_LOCKED = true;
 const DEFAULT_DESKTOP_LYRIC_CURRENT_ONLY = true;
 const LISTENING_HISTORY_VERSION = 2;
-const LISTENING_HISTORY_DAYS = 30;
-const historySearchFields = new WeakMap();
-const historyTitleCollator = new Intl.Collator("zh-Hans-CN");
 const LISTENING_HISTORY_MAX_SAVE_DELAY_MS = 60000;
 const ONLINE_TOKEN_PREFIX = "online://";
 const ONLINE_SOURCE_LABELS = Object.freeze({
@@ -6171,6 +6168,7 @@ const listeningHistoryMethods = {
       });
   },
   async prepareListeningHistoryQuit() {
+    if (window.__flowaveStartupError) return { ok: true, skipped: "initialization-incomplete" };
     this.listeningHistoryClosing = true;
     clearTimeout(soundMapArchiveTimer);clearTimeout(soundMapRetryTimer);
     this.cancelNaturalCrossfade();
@@ -6198,15 +6196,8 @@ const listeningHistoryMethods = {
       recommendationBehaviorSummary: { ...raw.recommendationBehaviorSummary },
     };
   },
-  setListeningHistoryQuery(value) {
-    this.listeningHistoryKeyword = String(value || "").trim();
-    this.listeningHistoryPage = 1;
-    if (this.$refs.historyTableBody) this.$refs.historyTableBody.scrollTop = 0;
-  },
-  changeListeningHistoryPage(page) {
-    this.listeningHistoryPage = Math.max(1, Math.min(this.listeningHistoryPageCount, page));
-    if (this.$refs.historyTableBody) this.$refs.historyTableBody.scrollTop = 0;
-  },
+  setListeningHistoryQuery() {  },
+  changeListeningHistoryPage() {  },
   queueListeningHistorySave(delay = 1000) {
     if(this.featureEnabled?.('history')===false && this.featureEnabled?.('recommendation')===false)return;
     if (this._listeningHistorySaveTimer) {
@@ -6476,46 +6467,9 @@ const listeningHistoryMethods = {
       duration: Number((this.currentPath === path ? this.duration : t.duration) || 0),
     };
   },
-  addListeningSeconds(path, seconds, startedAtMs) {
-    if(this.featureEnabled?.('history')===false)return;
-    const amount = Math.max(0, Number(seconds || 0));
-    if (!path || amount <= 0) return;
-    const hist = this.listeningHistory || this.getEmptyListeningHistory();
-    const item = this.ensureListeningTrack(path);
-    item.listenedSeconds += amount;
-    item.lastPlayedAt = Date.now();
-    hist.totalSeconds = Math.max(0, Number(hist.totalSeconds || 0)) + amount;
-    this.addListeningSecondsByDay(amount, startedAtMs || Date.now());
-  },
-  addListeningSecondsByDay(seconds, startedAtMs) {
-    let remain = Math.max(0, Number(seconds || 0));
-    let cursor = Number(startedAtMs || Date.now());
-    while (remain > 0) {
-      const dayKey = this.formatLocalDateKey(cursor);
-      const nextDay = new Date(cursor);
-      nextDay.setHours(24, 0, 0, 0);
-      const chunk = Math.min(remain, Math.max(0.001, (nextDay.getTime() - cursor) / 1000));
-      this.listeningHistory.days[dayKey] = Math.max(0, Number(this.listeningHistory.days[dayKey] || 0)) + chunk;
-      remain -= chunk;
-      cursor += chunk * 1000;
-    }
-  },
-  maybeCountListeningPlay(session) {
-    if(this.featureEnabled?.('history')===false)return;
-    if (!session || session.counted || !session.path) return;
-    const item = this.ensureListeningTrack(session.path);
-    const duration = Math.max(0, Number(item.duration || this.duration || 0));
-    if (!duration || !Number.isFinite(duration)) return;
-    const credited = Math.max(
-      0,
-      Number(session.creditedMediaSeconds ?? session.listenedSeconds ?? 0)
-    );
-    if (credited + 0.01 < duration * 0.5) return;
-    item.playCount = Math.max(0, Math.floor(Number(item.playCount || 0))) + 1;
-    item.lastCountedAt = Date.now();
-    this.listeningHistory.totalPlays = Math.max(0, Math.floor(Number(this.listeningHistory.totalPlays || 0))) + 1;
-    session.counted = true;
-  },
+  addListeningSeconds() {  },
+  addListeningSecondsByDay() {  },
+  maybeCountListeningPlay() {  },
   getDislikeCorrectionConfig() {
     const cfg = this.params?.dislike_correction || {};
     return {
@@ -6666,66 +6620,10 @@ const listeningHistoryMethods = {
     const day = String(d.getDate()).padStart(2, "0");
     return `${y}-${m}-${day}`;
   },
-  getListeningDayBars() {
-    const today = new Date();
-    const days = [];
-    for (let i = LISTENING_HISTORY_DAYS - 1; i >= 0; i -= 1) {
-      const d = new Date(today);
-      d.setDate(today.getDate() - i);
-      const key = this.formatLocalDateKey(d.getTime());
-      const seconds = Number(this.listeningHistory?.days?.[key] || 0);
-      days.push({
-        key,
-        label: `${d.getMonth() + 1}/${d.getDate()}`,
-        seconds,
-      });
-    }
-    const max = Math.max(1, ...days.map((d) => d.seconds));
-    return days.map((d) => ({
-      ...d,
-      percent: d.seconds > 0 ? Math.max(2, Math.round((d.seconds / max) * 100)) : 0,
-      timeText: this.formatDurationLong(d.seconds),
-    }));
-  },
-  getListeningHistoryRows() {
-    const kw = String(this.listeningHistoryKeyword || "").trim().toLowerCase();
-    const rows = Object.values(this.listeningHistory?.tracks || {}).filter((item) => (
-      Math.max(0, Number(item?.playCount || 0)) > 0
-      || Math.max(0, Number(item?.listenedSeconds || 0)) > 0
-    )).filter((item) => {
-      if (!kw) return true;
-      const fields = [item.title || "", item.artist || "", item.album || "", item.path || ""];
-      let cached = historySearchFields.get(item);
-      if (!cached || fields.some((field, i) => cached.fields[i] !== field)) {
-        cached = { fields, text: fields.join(" ").toLowerCase() };
-        historySearchFields.set(item, cached);
-      }
-      return cached.text.includes(kw);
-    });
-    const sort = String(this.listeningHistorySort || "playCount");
-    rows.sort((a, b) => {
-      if (sort === "listenedSeconds") return (b.listenedSeconds || 0) - (a.listenedSeconds || 0);
-      if (sort === "lastPlayedAt") return (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0);
-      if (sort === "title") return historyTitleCollator.compare(String(a.title || ""), String(b.title || ""));
-      return (b.playCount || 0) - (a.playCount || 0) || (b.listenedSeconds || 0) - (a.listenedSeconds || 0);
-    });
-    return rows;
-  },
-  formatDurationLong(seconds) {
-    const total = Math.max(0, Math.floor(Number(seconds || 0)));
-    const h = Math.floor(total / 3600);
-    const m = Math.floor((total % 3600) / 60);
-    const s = total % 60;
-    if (h > 0) return `${h}小时${String(m).padStart(2, "0")}分`;
-    if (m > 0) return `${m}分${String(s).padStart(2, "0")}秒`;
-    return `${s}秒`;
-  },
-  formatHistoryDate(ts) {
-    const n = Number(ts || 0);
-    if (!n) return "-";
-    const d = new Date(n);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-  },
+  getListeningDayBars() { return []; },
+  getListeningHistoryRows() { return []; },
+  formatDurationLong() { return ""; },
+  formatHistoryDate() { return ""; },
   async clearListeningStats() {
     if (this.listeningHistoryActionBusy) return;
     const confirmed = await this.requestConfirmation({
@@ -10086,6 +9984,11 @@ function mountedHook() {
   const rememberIpcUnsubscribe = (unsubscribe) => {
     if (typeof unsubscribe === "function") this._ipcUnsubscribers.push(unsubscribe);
   };
+  if (window.lxEnv?.onOfficialModuleProgress) {
+    rememberIpcUnsubscribe(window.lxEnv.onOfficialModuleProgress(value => {
+      this.featurePackageProgress = value || {};
+    }));
+  }
   this._onLyricOutputCalibration=()=>{
     this.syncOutputCalibrationConsumers?.();
     this.resetKaraokeWordProgress();
@@ -10390,9 +10293,13 @@ function mountedHook() {
   this.refreshAll({ silent: true, startup: true }).catch(() => {});
   this.$nextTick(() => this.refreshVirtualViewport());
   this.sendLyricOverlay();
+  window.__flowaveMounted = true;
 }
 
 function beforeUnmountHook() {
+  // Failed startup may still contain defaults rather than the saved profile.
+  // Release resources without publishing those partial preferences or history.
+  const initialized = window.__flowaveMounted === true && !window.__flowaveStartupError;
   document.removeEventListener('visibilitychange',this.outputCalibrationVisibility);
   this.outputCalibrationClosed=true;
   for(const release of this.outputCalibrationLeases?.values()||[])release();
@@ -10483,11 +10390,11 @@ function beforeUnmountHook() {
     clearTimeout(this._configAutoSaveTimer);
     this._configAutoSaveTimer = null;
   }
-  this.flushConfigBeforeUnload();
+  if (initialized) this.flushConfigBeforeUnload();
   if (this._shortcutAutoSaveTimer) {
     clearTimeout(this._shortcutAutoSaveTimer);
     this._shortcutAutoSaveTimer = null;
-    this.saveShortcutSettings();
+    if (initialized) this.saveShortcutSettings();
   }
   this._searchIndexBuildId = Number(this._searchIndexBuildId || 0) + 1;
   this._searchWorkerController?.close();
@@ -10523,7 +10430,7 @@ function beforeUnmountHook() {
   this.resetKaraokeWordProgress();
   this.cancelNaturalCrossfade();
   clearTimeout(audioSettingsSaveTimer);
-  this.flushListeningSession("unmount");
+  if (initialized) this.flushListeningSession("unmount");
   this.clearAdjacentRecommendations();
   audioEngine?.dispose();
   practiceController?.abort(); practiceController = null;
@@ -10531,8 +10438,10 @@ function beforeUnmountHook() {
   ++practiceTrainingGeneration;practiceTraining?.dispose();practiceTraining=null;
   practicePlayer?.dispose(); practicePlayer = null; practiceOriginal = null;
   window.FlowaveStemPlayer?.clearCache();
-  this.saveListeningHistoryNow();
-  this.saveUiSnapshot({ flushLibrary: true });
+  if (initialized) {
+    this.saveListeningHistoryNow();
+    this.saveUiSnapshot({ flushLibrary: true });
+  }
   this.cancelRecommendPrefetch();
   if (this._recommendationRatePollTimer) {
     clearTimeout(this._recommendationRatePollTimer);
@@ -10550,12 +10459,12 @@ function beforeUnmountHook() {
   if (this._lyricSettingsSaveTimer) {
     clearTimeout(this._lyricSettingsSaveTimer);
     this._lyricSettingsSaveTimer = null;
-    this.persistLyricSettings();
+    if (initialized) this.persistLyricSettings();
   }
   if (this._desktopLyricSettingsSaveTimer) {
     clearTimeout(this._desktopLyricSettingsSaveTimer);
     this._desktopLyricSettingsSaveTimer = null;
-    this.persistDesktopLyricSettings();
+    if (initialized) this.persistDesktopLyricSettings();
   }
   this.clearAudioInterruptSchedule(true);
   this.clearLyricResumeTimer();
@@ -10916,6 +10825,9 @@ const kumikoVueApp = createApp({
       _stallDiagLastAt: 0,
       featureSelection: window.FlowaveFeatureModules?.initial || {active:{enabled:{}},selected:{enabled:{}}},
       featureCatalog: window.FlowaveFeatureModules?.catalog || [],
+      moduleFailures: window.FlowaveFeatureModules?.failures || {},
+      featureDataLocations: [],
+      featurePackageProgress: {},
       featureSaving: false,
       featureMessage: '',
       useRecommend: window.FlowaveFeatureModules?.enabled('recommendation')===false ? false : readStoredBool(STORAGE_KEYS.USE_RECOMMEND, true),
@@ -11080,11 +10992,21 @@ const kumikoVueApp = createApp({
     ...shortcutMethods,
     ...dataMethods,
     ...listeningHistoryMethods,
+    ...(window.FlowaveHistoryModule?.methods || {}),
     ...playlistMethods,
     ...songInfoBatchMethods,
     ...utilityMethods,
   },
 });
+window.__flowaveMounted = false;
+window.__flowaveStartupError = "";
+if (kumikoVueApp.config) kumikoVueApp.config.errorHandler = (error, _instance, info) => {
+  const message = String(error?.message || error);
+  if (!window.__flowaveMounted) window.__flowaveStartupError = message;
+  const item = { type: "vue", message, source: String(info || ""), stack: String(error?.stack || "") };
+  window.__kumikoErrors?.push(item);
+  console.error("[kumiko-vue-error]", error, info);
+};
 const kumikoAppVm = kumikoVueApp.mount("#app");
 Object.defineProperty(window, "__kumikoApp", {
   value: kumikoAppVm,

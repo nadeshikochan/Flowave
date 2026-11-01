@@ -252,6 +252,8 @@ function createRendererHarness(options = {}) {
     Promise,
   };
   sandbox.globalThis = sandbox;
+  const historyPackage = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'official-modules', 'packages', 'history-1.0.0.fwm'), 'utf8'));
+  nodeVm.runInNewContext(Buffer.from(historyPackage.files['module.js'], 'base64').toString('utf8'), sandbox, { filename: 'official-history/module.js' });
   nodeVm.runInNewContext(
     fs.readFileSync(path.join(__dirname, "..", "renderer", "app.js"), "utf8"),
     sandbox,

@@ -1,5 +1,6 @@
 (function(root){
   'use strict';
+  const moduleBase=root.document?.currentScript?.src||root.location?.href||'kumiko-app://renderer/';
   const {markRaw}=root.Vue,Model=root.FlowaveSoundMapModel;
   const runtimes=new WeakMap();
   const key=path=>String(path||'').replace(/\\/g,'/').toLocaleLowerCase();
@@ -24,7 +25,7 @@
       for(const name of ['hideArtwork','rotateAtPointer','allRelations','diagnosticsOpen'])if(typeof preferences[name]==='boolean')this[name]=preferences[name];
       const rt={graph:null,paths:[],idToIndex:new Map(),pathToId:new Map(),tracks:new Map(),expanded:new Set([0]),history:[],request:0,controller:null,poll:0,worker:null,relation:null,local:null,metadataQueue:[],metadataPending:new Set(),metadataBusy:0,metadataAttempted:new Set(),seeds:[],scene:null,dead:false,dirty:true,routeSource:[],metadataGeneration:0};runtimes.set(this,rt);
       rt.scope=0;rt.failedCovers=new Set();rt.scene=new root.FlowaveSoundMapScene(this.$refs.stage,{play:node=>this.playNode(node),select:(node,shift)=>this.selectNode(node,shift),edge:edge=>this.selectEdge(edge),zoom:z=>this.onZoom(z),visible:ids=>this.enqueueMetadata(ids)});
-      try{rt.worker=new Worker('sound-map-worker.js');rt.worker.onmessage=e=>{if(rt.dead||e.data.request!==rt.request||!this.active)return;this.relationLoading=false;if(e.data.error){this.error=e.data.error;return;}rt.local=e.data.result;this.comparisonNote=e.data.result.coincident?'当前声音模型几乎无法区分这两首歌。':'';this.rebuild(true);};rt.worker.onerror=()=>{this.relationLoading=false;this.error='附近歌曲展开失败，请重试。';};}catch(_){this.error='当前环境无法展开附近歌曲。';}
+      try{rt.worker=new Worker(new URL('sound-map-worker.js',moduleBase).href);rt.worker.onmessage=e=>{if(rt.dead||e.data.request!==rt.request||!this.active)return;this.relationLoading=false;if(e.data.error){this.error=e.data.error;return;}rt.local=e.data.result;this.comparisonNote=e.data.result.coincident?'当前声音模型几乎无法区分这两首歌。':'';this.rebuild(true);};rt.worker.onerror=()=>{this.relationLoading=false;this.error='附近歌曲展开失败，请重试。';};}catch(_){this.error='当前环境无法展开附近歌曲。';}
       rt.visibility=()=>{rt.scene.setActive(this.active&&!document.hidden);if(this.active&&!document.hidden&&rt.dirty)this.load();};document.addEventListener('visibilitychange',rt.visibility);
       rt.scene.setActive(this.active);if(this.active)this.load();
     },

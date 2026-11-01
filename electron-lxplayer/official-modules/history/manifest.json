@@ -1,0 +1,9 @@
+{
+  "id": "history",
+  "version": "1.0.0",
+  "hostApi": 1,
+  "files": [
+    "module.js",
+    "view.html"
+  ]
+}
