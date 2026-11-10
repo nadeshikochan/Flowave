@@ -1,0 +1,654 @@
+{
+  "schema": 1,
+  "recipe": "practice-combined-v1",
+  "local_evaluation_only": true,
+  "python": [
+    3,
+    13
+  ],
+  "language": "unspecified",
+  "files": [
+    {
+      "path": "sheetsage2/__init__.py",
+      "bytes": 39,
+      "sha256": "19539a965cabf22d08231688efc15547d005e6345745f48684c2f02d010f82fd"
+    },
+    {
+      "path": "sheetsage2/audio_sheetsage2.py",
+      "bytes": 4289,
+      "sha256": "ecce56e7bb8a08cbca9eb27a74d9aeff17f55e80efcc7c48f7436440f610ccc1"
+    },
+    {
+      "path": "sheetsage2/benchmark_results.json",
+      "bytes": 13616,
+      "sha256": "780bff9fb34f2ecc115f11625bece4b7444fffc66e0384e852c4d77d2d9eb178"
+    },
+    {
+      "path": "sheetsage2/chord_spelling_sheetsage2.py",
+      "bytes": 9330,
+      "sha256": "5a673e3c8caa6d0a4cda19227ce5587c611a2bf85343f6bc623e3d66d99ed8b1"
+    },
+    {
+      "path": "sheetsage2/config.json",
+      "bytes": 2060,
+      "sha256": "a986e63f5d831ecb823c11d19cfb371d763f25ae2e614ec9acd714c0b8bb87fd"
+    },
+    {
+      "path": "sheetsage2/configuration_mert2.py",
+      "bytes": 3860,
+      "sha256": "77b53ec9d7ee31a599d744fb006e812c7eeaf7390deb46e2f460cf8c17b00bd6"
+    },
+    {
+      "path": "sheetsage2/configuration_sheetsage2.py",
+      "bytes": 4119,
+      "sha256": "36d174331b3721d984608252830179bf3516d77b7225f413acc85bdf5efb3bec"
+    },
+    {
+      "path": "sheetsage2/durations_sheetsage2.py",
+      "bytes": 296,
+      "sha256": "abbc297b70b63a86f8509b1db74d0e85d7b46dcb83867cf33741c43f9d49db83"
+    },
+    {
+      "path": "sheetsage2/exports_sheetsage2.py",
+      "bytes": 10405,
+      "sha256": "11782cff50f96dac1bf1eedefed86b3cd60222e31b8456bee366eeb373b6a7e5"
+    },
+    {
+      "path": "sheetsage2/generation_sheetsage2.py",
+      "bytes": 24722,
+      "sha256": "b58dbbfaebfba2a441a79b8c36183f0e4956acdd3aaf7c655c559933b4c20afd"
+    },
+    {
+      "path": "sheetsage2/infer.py",
+      "bytes": 4253,
+      "sha256": "20e6b23c910bfdecf012a8ee8d45efcb31cb6cb21351da5921d95fb877e70de6"
+    },
+    {
+      "path": "sheetsage2/io_sheetsage2.py",
+      "bytes": 1830,
+      "sha256": "afb5b4d4a52b513b11cfdad40e7b9d2286dd4ff6585b89688dbb31b3d5376da6"
+    },
+    {
+      "path": "sheetsage2/labels_sheetsage2.py",
+      "bytes": 978,
+      "sha256": "4a80870695dd91da6070e7d8d0ce6b50f3bf71c3f629417a86cf12f4ef4f97e0"
+    },
+    {
+      "path": "sheetsage2/LICENSE",
+      "bytes": 20000,
+      "sha256": "73593d6cad4ca80f3ab1448a4908f92ab802dfffe029561e3b12fa7d07c8b87c"
+    },
+    {
+      "path": "sheetsage2/midi_sheetsage2.py",
+      "bytes": 4230,
+      "sha256": "32f80d13592c669e56683ebb4c415f13bf8278c8ad1fe43afa500347bed35099"
+    },
+    {
+      "path": "sheetsage2/model.safetensors",
+      "bytes": 228738564,
+      "sha256": "b235f68091a5f5b644000f2b5acb57d1e70432aca2b34ab1b9cf27236e1f4274"
+    },
+    {
+      "path": "sheetsage2/modeling_mert2.py",
+      "bytes": 17081,
+      "sha256": "b1a3174e5649c4b26b0c90d8626f0adacfbbba111a58ed3bb72ad651945a2f5c"
+    },
+    {
+      "path": "sheetsage2/modeling_sheetsage2.py",
+      "bytes": 24664,
+      "sha256": "f1c45346dd76329fcbeadc5c721312836509326310c034634bc12d75263688bb"
+    },
+    {
+      "path": "sheetsage2/notation_sheetsage2.py",
+      "bytes": 55775,
+      "sha256": "f75f0e8b268cd9e9c622d791d3fd77d2e68ad355a4e67018c7e15aeb2bc05af7"
+    },
+    {
+      "path": "sheetsage2/pipeline_sheetsage2.py",
+      "bytes": 15022,
+      "sha256": "0ae572554ca375323e2aa4ea1fb25ba27e7f4d520c0ba5b101d74930c0a66c33"
+    },
+    {
+      "path": "sheetsage2/processing_sheetsage2.py",
+      "bytes": 5408,
+      "sha256": "ec5ef34ad61455437c750dd5ffb92142f7309638559e74114c639b57da56263c"
+    },
+    {
+      "path": "sheetsage2/processor_config.json",
+      "bytes": 277,
+      "sha256": "1eed73513a74029fe74c71faba70f8cff002ae7be23ac1c926125846d1b29817"
+    },
+    {
+      "path": "sheetsage2/README.md",
+      "bytes": 17655,
+      "sha256": "46cece7664fc0b531d379311af7caf3bb6a46e89d9bf8a6b6bbbbf5e7318bc81"
+    },
+    {
+      "path": "sheetsage2/render.py",
+      "bytes": 1927,
+      "sha256": "446b18e0ba7250c8584c14bda241f8d063083cd10b1432de82c3cf56736af9de"
+    },
+    {
+      "path": "sheetsage2/rendering_sheetsage2.py",
+      "bytes": 15862,
+      "sha256": "ddbcaf314139d67727cb5df6840d7d60d671d5c67f6b185a26b840df1e2d9288"
+    },
+    {
+      "path": "sheetsage2/schema_sheetsage2.py",
+      "bytes": 3893,
+      "sha256": "3ee069f0d4dcfb8080f730c43676318d471ab6b3cfef86c6c225aa63a9db182f"
+    },
+    {
+      "path": "sheetsage2/setup_render.py",
+      "bytes": 1540,
+      "sha256": "8ee1004067f8e50443005a761d86435337f6ee71eeabf447d543eb5f3ad5561d"
+    },
+    {
+      "path": "sheetsage2/tensors_sheetsage2.py",
+      "bytes": 4645,
+      "sha256": "51f72b51ed5a22c751d5adf915198490b1a95ec8959fcf9a38ee71b4444fc8b3"
+    },
+    {
+      "path": "sheetsage2/THIRD_PARTY_NOTICES.md",
+      "bytes": 589,
+      "sha256": "ab8b195c2c1475f254a04181a9841db2f2581c579b95858c78ee0040eb495a29"
+    },
+    {
+      "path": "sheetsage2/tokenization_sheetsage2.py",
+      "bytes": 30043,
+      "sha256": "2ad9f7734e3d9f750fe575f22fd9ec03a9a4ab52497a6314e76f53ed9024fa75"
+    },
+    {
+      "path": "mert2/config.json",
+      "bytes": 882,
+      "sha256": "f2e194895f58be3ddba327255db129ff0e3bee550cc0ecf08e4d22d79ce3bca3"
+    },
+    {
+      "path": "mert2/configuration_mert2.py",
+      "bytes": 3860,
+      "sha256": "77b53ec9d7ee31a599d744fb006e812c7eeaf7390deb46e2f460cf8c17b00bd6"
+    },
+    {
+      "path": "mert2/LICENSE",
+      "bytes": 20000,
+      "sha256": "73593d6cad4ca80f3ab1448a4908f92ab802dfffe029561e3b12fa7d07c8b87c"
+    },
+    {
+      "path": "mert2/marble_results.json",
+      "bytes": 8997,
+      "sha256": "ced741a3d9684b551a2569c2206ba86911addd07a42df72d65b74e4288d4bd0e"
+    },
+    {
+      "path": "mert2/model.safetensors",
+      "bytes": 2529812848,
+      "sha256": "e6dd2ab187d6dd62b6521cd7d8f932e237acf0c5757745a7232082e28391350d"
+    },
+    {
+      "path": "mert2/modeling_mert2.py",
+      "bytes": 17081,
+      "sha256": "b1a3174e5649c4b26b0c90d8626f0adacfbbba111a58ed3bb72ad651945a2f5c"
+    },
+    {
+      "path": "mert2/preprocessor_config.json",
+      "bytes": 215,
+      "sha256": "fc7337f113b71062b8efd03f8a43a07aa769ce85c6a53fdc0b3bb90c299fe63f"
+    },
+    {
+      "path": "mert2/README.md",
+      "bytes": 10419,
+      "sha256": "2b025166f640a0416b5544f4c3775aced46bf0c467af4ef7b302d52496335da6"
+    },
+    {
+      "path": "mert2/THIRD_PARTY_NOTICES.md",
+      "bytes": 541,
+      "sha256": "ce8fd578969f1bdad9a0be5e20cab0251dc4253bd4dbfaa9abeb1c11d68bafdc"
+    },
+    {
+      "path": "mert2/weights_manifest.json",
+      "bytes": 241,
+      "sha256": "413e2ddfa71ae5bb364bfd15364e221249111e14c2f0843ea6162afb776a8300"
+    },
+    {
+      "path": "game-source/.gitattributes",
+      "bytes": 66,
+      "sha256": "1a1dbe176bc233b499d35a57db7513f2941c99ab9759f177830c9149be99005b"
+    },
+    {
+      "path": "game-source/.gitignore",
+      "bytes": 163,
+      "sha256": "e296904e6c136f588f708350e3b496bc22db343e7d17d1da51338c1edefddb18"
+    },
+    {
+      "path": "game-source/assets/onnx-workflow.drawio",
+      "bytes": 18442,
+      "sha256": "820d7664a1992c7cac7aee708d88c425cba474ef6572eb960238ab72759efc64"
+    },
+    {
+      "path": "game-source/assets/onnx-workflow.jpg",
+      "bytes": 103434,
+      "sha256": "def5e40b013717d160344a994f658750e450166865eeb616157034cbfc988a00"
+    },
+    {
+      "path": "game-source/binarize.py",
+      "bytes": 1221,
+      "sha256": "83f8d88790c3f7af5540174f98ecdad2ff5be14c523fcaaf8c4d610b77dbb31d"
+    },
+    {
+      "path": "game-source/configs/base.yaml",
+      "bytes": 2098,
+      "sha256": "865782e2ea444662c5d60cd21ce894ac84f03c9ca8d5239d04042cfd9f8b3acc"
+    },
+    {
+      "path": "game-source/configs/midi.yaml",
+      "bytes": 2847,
+      "sha256": "a278d7c7daaa5a46f7372f7624b63ad47fc28e7a26ffbd3b8dbcc7aab88ab75e"
+    },
+    {
+      "path": "game-source/configs/muon.yaml",
+      "bytes": 340,
+      "sha256": "f3567e1dbd2d6fbf60b56fe5bc64e342ef5a71e5d3e58e338e50f0f1045155c5"
+    },
+    {
+      "path": "game-source/data/.gitkeep",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "game-source/deploy.py",
+      "bytes": 1502,
+      "sha256": "5de2f4828b0b867799cf293ac13787ada76ae67556d5d285b4dd4b351e21c347"
+    },
+    {
+      "path": "game-source/deployment/__init__.py",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "game-source/deployment/api.py",
+      "bytes": 1081,
+      "sha256": "e4fcc76129ef0ff78928c822b974f15dc834ba6f7901ed04150037dd4cd8d0cc"
+    },
+    {
+      "path": "game-source/deployment/context.py",
+      "bytes": 332,
+      "sha256": "16935023e3681d644fcf33e3b5401c275f163da8ec94db8f49dbcf6f665ad614"
+    },
+    {
+      "path": "game-source/deployment/exporter.py",
+      "bytes": 15705,
+      "sha256": "37f48edecd8727ae02667eac0a637ab4427b548f13dc515814e1380bb82fdb9e"
+    },
+    {
+      "path": "game-source/evaluate.py",
+      "bytes": 3819,
+      "sha256": "94ac15ba9278e1f0ebcd8d3acf76ef3be54c2dfa85f8a6f887817c45f5aeea90"
+    },
+    {
+      "path": "game-source/experiments/.gitkeep",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "game-source/infer.py",
+      "bytes": 18042,
+      "sha256": "1ee837262b34040cfae4001deb8cb8b7bf25df100deebc9b880fdb4d9079c707"
+    },
+    {
+      "path": "game-source/inference/__init__.py",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "game-source/inference/api.py",
+      "bytes": 4558,
+      "sha256": "c8e01d3fcba84df5699ebf7cfc0e79bbf58c270bfac75f0d0b97488250bfc43b"
+    },
+    {
+      "path": "game-source/inference/callbacks.py",
+      "bytes": 16696,
+      "sha256": "bc843915554b36ed2f5aaeb309e086ef9fc11287b793e0b7fbc9bd929e8ea95c"
+    },
+    {
+      "path": "game-source/inference/data.py",
+      "bytes": 6681,
+      "sha256": "8db831b6749b41d5345f5d5baaf6c225762456daa210a5b3d8b84fcdc39e2ee8"
+    },
+    {
+      "path": "game-source/inference/me_infer.py",
+      "bytes": 8148,
+      "sha256": "46edbba78a13e6b2f12f1035e99c4517ce0713945f6f2f3e405d943ca5e72fa6"
+    },
+    {
+      "path": "game-source/inference/me_infer_module.py",
+      "bytes": 6928,
+      "sha256": "483c248f9571e58b1aa3dffb4d86217454b5fac93f4b656a70ceb486f9e46df0"
+    },
+    {
+      "path": "game-source/inference/slicer2.py",
+      "bytes": 6381,
+      "sha256": "66ae7c194d66b770c6a20898659aecba996b3b117ef09e86795ff0f111efe61f"
+    },
+    {
+      "path": "game-source/inference/utils.py",
+      "bytes": 5744,
+      "sha256": "672a1746a7595056f1041590076c9795b0c7ab14eaeaaab977a4ee999c696505"
+    },
+    {
+      "path": "game-source/lib/__init__.py",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "game-source/lib/config/__init__.py",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "game-source/lib/config/core.py",
+      "bytes": 6903,
+      "sha256": "b20fc1d02545815b92d97a92cfe12f9d3d157cd078b925f23633bbe924fae580"
+    },
+    {
+      "path": "game-source/lib/config/formatter.py",
+      "bytes": 5118,
+      "sha256": "e4081f4ad342aee88758a230e43ec27c2c316d7f3d05ffb1a87a34c470dc581a"
+    },
+    {
+      "path": "game-source/lib/config/io.py",
+      "bytes": 1370,
+      "sha256": "79b1c97d098d2ed274699182db66f47c36f427a21a7913f17f99c15ea53b6080"
+    },
+    {
+      "path": "game-source/lib/config/ops.py",
+      "bytes": 16110,
+      "sha256": "f5fc4eae93a091973d7184e6cf3179fcce47d37842e7d7d8d9be5049993cb252"
+    },
+    {
+      "path": "game-source/lib/config/schema.py",
+      "bytes": 14001,
+      "sha256": "5fe37dabef34b84c23a58a929bf7daab2e370b55d74f3254c290f9d7374ae5e5"
+    },
+    {
+      "path": "game-source/lib/feature/__init__.py",
+      "bytes": 2938,
+      "sha256": "0921cddfcdf7e0ffcc06d5d2ba0f2e306b38912b4fda3f69391a87482f0cc551"
+    },
+    {
+      "path": "game-source/lib/feature/mel.py",
+      "bytes": 2715,
+      "sha256": "6ba689c1787d2019b0bcd91c2602b95a2cc4e5ad2a6fb7ace6a68b926e6c9504"
+    },
+    {
+      "path": "game-source/lib/feature/pitch.py",
+      "bytes": 2518,
+      "sha256": "048f0966c80333b83ac7ab76669dcef4603191e2583ee2b6f27de3131bf0b490"
+    },
+    {
+      "path": "game-source/lib/indexed_dataset.py",
+      "bytes": 2789,
+      "sha256": "e1ab58d075b94416ec0b7196e254f48501726e62f2c89eaf456f87734372d00f"
+    },
+    {
+      "path": "game-source/lib/logging.py",
+      "bytes": 2212,
+      "sha256": "1eb176cddfa280cfcf2f938b42d096db2942667542d8956a911ddd750e867f1f"
+    },
+    {
+      "path": "game-source/lib/multiprocess.py",
+      "bytes": 1268,
+      "sha256": "28ecfab8201f66f474f154d7314c3580fee77c08749d7e878a8da54ba4a238cd"
+    },
+    {
+      "path": "game-source/lib/optimizer/__init__.py",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "game-source/lib/optimizer/chained_optimizer.py",
+      "bytes": 8911,
+      "sha256": "fab4942b50e69df1b236fbffbd638f119698685f46e246105fd21777cb54bb66"
+    },
+    {
+      "path": "game-source/lib/optimizer/muon.py",
+      "bytes": 5738,
+      "sha256": "17e9a4c80c116e7ad8e559d06191fd5bdcfa2c714946ff6ce08ed9c58047976a"
+    },
+    {
+      "path": "game-source/lib/plot.py",
+      "bytes": 4930,
+      "sha256": "9a6f4a3638ed6455db0b5a6008f0545dd88f9c65afab6d1677f52907367ae901"
+    },
+    {
+      "path": "game-source/lib/reflection.py",
+      "bytes": 3434,
+      "sha256": "0ecf6d59a6e3d43bc0aeb7d31854bceffad9c4b38274a1ae510f05b7e53cba51"
+    },
+    {
+      "path": "game-source/LICENSE",
+      "bytes": 1069,
+      "sha256": "515ecbf58c3f070e2bc8e95b0c3aa66a41431950ce31cd25d3e9abd49db28d0f"
+    },
+    {
+      "path": "game-source/modules/__init__.py",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "game-source/modules/backbones/__init__.py",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "game-source/modules/backbones/EBF.py",
+      "bytes": 13686,
+      "sha256": "dc3a15230d110439cba3e56a591bcb4c231100aba00be71d193493544e0a5da2"
+    },
+    {
+      "path": "game-source/modules/backbones/ebf_with_joint_attention.py",
+      "bytes": 47219,
+      "sha256": "f11a751f65c3a941a6c1787b97d7f1b951d1be31085f20ea48e9da419e3740a4"
+    },
+    {
+      "path": "game-source/modules/backbones/eglu.py",
+      "bytes": 8805,
+      "sha256": "f038d1af913b4c0b5f5692748bdad53f517e5b2c677b5af6c2b168593364eea8"
+    },
+    {
+      "path": "game-source/modules/backbones/RoPosEmb_s2.py",
+      "bytes": 3462,
+      "sha256": "a5d971ba6c276c1bb716eeecf910bd674aeb83e0650b79969fd99a4859e3bcae"
+    },
+    {
+      "path": "game-source/modules/commons/__init__.py",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "game-source/modules/commons/common_layers.py",
+      "bytes": 1706,
+      "sha256": "1e0b4ad8c5b422ba1349c11b0ee9913bb14b610e684fd71774e9917694bdbd4e"
+    },
+    {
+      "path": "game-source/modules/commons/tts_modules.py",
+      "bytes": 1660,
+      "sha256": "88e75def6521ce059c50b44fe55027186745a6cda73140d279fd289b07604022"
+    },
+    {
+      "path": "game-source/modules/d3pm.py",
+      "bytes": 5227,
+      "sha256": "27fe6a7b9a14a6c05daa03aa0077731fd785ad72f25c5dfa9f9b5f20d74ee9f4"
+    },
+    {
+      "path": "game-source/modules/decoding.py",
+      "bytes": 6845,
+      "sha256": "1779a507fb0bb390ba297254c9a71236a3348acc93861dbbb2b09953109a7328"
+    },
+    {
+      "path": "game-source/modules/functional.py",
+      "bytes": 1369,
+      "sha256": "33dacde5e18dd5b3b4eb5066fd38a8427ecf22da437f6bff5b33e71a57c9bf7d"
+    },
+    {
+      "path": "game-source/modules/losses/__init__.py",
+      "bytes": 228,
+      "sha256": "f80bec7fd9af0d0e0b76295b1b39844607526395486d275098c4303f4d70df3e"
+    },
+    {
+      "path": "game-source/modules/losses/boundary_loss.py",
+      "bytes": 7507,
+      "sha256": "97b7776991b970687cf908a5c364fbe7086339182b12bbf46f769c04d429870e"
+    },
+    {
+      "path": "game-source/modules/losses/note_loss.py",
+      "bytes": 4009,
+      "sha256": "b68dc14fccaab94223fd2b292bcb07af1c4fc2c84eb0117a083a1cdbff94b80d"
+    },
+    {
+      "path": "game-source/modules/losses/region_loss.py",
+      "bytes": 2507,
+      "sha256": "5b175827332083ef3390e3c39ed56ee481f0d2feac9bd43f86ef0ae6aac96052"
+    },
+    {
+      "path": "game-source/modules/metrics/__init__.py",
+      "bytes": 238,
+      "sha256": "3d22a22a25cb93ae3da61cc729123909fed56dbb3af3749717830f9285c170c8"
+    },
+    {
+      "path": "game-source/modules/metrics/distance.py",
+      "bytes": 2799,
+      "sha256": "e89457659164b19955d221a222f93f329527d68f78621ccdd3079f5f667e6f24"
+    },
+    {
+      "path": "game-source/modules/metrics/overlap.py",
+      "bytes": 2623,
+      "sha256": "a9cea268c5687df99bae80762699c59d8254957012aac381395f3aa84bc54d04"
+    },
+    {
+      "path": "game-source/modules/metrics/pitch.py",
+      "bytes": 8452,
+      "sha256": "80c4c5a77f97de6d3b0c2b56eb40045e4782cd47836e7008e5b38a14c4093247"
+    },
+    {
+      "path": "game-source/modules/metrics/quantity.py",
+      "bytes": 4254,
+      "sha256": "b75130707c41c728dd18d878585f1e992e3e6b3e18dcb5782a493c8a35da5fa8"
+    },
+    {
+      "path": "game-source/modules/midi_extraction.py",
+      "bytes": 2796,
+      "sha256": "992f856c5654c222888f515534cdadab16114b0d23ce324a9a041dc35785df8c"
+    },
+    {
+      "path": "game-source/ONNX.md",
+      "bytes": 6908,
+      "sha256": "2cac5b62b97556b962a63785226f659f94df379be042a24f34d78264e4c768f4"
+    },
+    {
+      "path": "game-source/preprocessing/__init__.py",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "game-source/preprocessing/api.py",
+      "bytes": 993,
+      "sha256": "e4049fd7d5a4c97b99da936b693992fa3d5be87efcff2b3a2f687a61cee57d94"
+    },
+    {
+      "path": "game-source/preprocessing/binarizer_base.py",
+      "bytes": 8279,
+      "sha256": "4be6ed0953f84f428b4849a1ebf5bf2676abd5c030f6f333a569d526aea74b90"
+    },
+    {
+      "path": "game-source/preprocessing/notes_binarizer.py",
+      "bytes": 5792,
+      "sha256": "f5e3c9780926342ac8264643c1b78f81aedadfa5bf8369a1df2682fde019e7eb"
+    },
+    {
+      "path": "game-source/README.md",
+      "bytes": 13273,
+      "sha256": "6940310f465686d4714e1a1f2689e3164325f9750f4adb12550eb49d427cbadc"
+    },
+    {
+      "path": "game-source/reduce.py",
+      "bytes": 868,
+      "sha256": "4c2ef5d04609ba0340b612ec81539efa5899c7bd510f9ab7f9dcca06a6648671"
+    },
+    {
+      "path": "game-source/requirements.txt",
+      "bytes": 401,
+      "sha256": "3c1cce7b0e9005159de0e89454ac7ba40ae1115c12307708f360edbe07a3d158"
+    },
+    {
+      "path": "game-source/train.py",
+      "bytes": 3241,
+      "sha256": "709f58528734dce17c33283039ccb61995c024709705f991f95e7fedacb1aeb2"
+    },
+    {
+      "path": "game-source/training/__init__.py",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "game-source/training/api.py",
+      "bytes": 8499,
+      "sha256": "f34f8392fd85d4660b8ca3b65094edc4982fb5076e3d9e402ce1d6219ac862d4"
+    },
+    {
+      "path": "game-source/training/augmentation.py",
+      "bytes": 9243,
+      "sha256": "592603d98169c626f93940112e7f14f7922a8f8c90ffe2be6813689eed8fc44f"
+    },
+    {
+      "path": "game-source/training/callbacks.py",
+      "bytes": 7639,
+      "sha256": "0ebe517561ca14b3cc2976e7bb00f8b52de88b46ba2ffd8093af366904f24f14"
+    },
+    {
+      "path": "game-source/training/data.py",
+      "bytes": 13983,
+      "sha256": "cc41b8a37853dcb491e1ff0cc80979ec51c8d8c8ecfa8f178f48264e1432a16e"
+    },
+    {
+      "path": "game-source/training/me_module.py",
+      "bytes": 15859,
+      "sha256": "1b05625ec884cbaec40b37a155bcb74c8adfb706ca62cdbe6be5f44630edda61"
+    },
+    {
+      "path": "game-source/training/pl_module_base.py",
+      "bytes": 18657,
+      "sha256": "fc87aeb6f11e47ed67a7423172b130cfd41ba97627fbb5e47ffbce2fdba47014"
+    },
+    {
+      "path": "game-source/training/strategy.py",
+      "bytes": 4804,
+      "sha256": "354b44fa34fc986d3faceae9725a771b6462887f05452fbb8ddb74b85fff459b"
+    },
+    {
+      "path": "game-source/training/weight_averaging.py",
+      "bytes": 4184,
+      "sha256": "b6878b8c467e4c668eadc4584e87d856bc2681aada711b3ed889c6637cda8988"
+    },
+    {
+      "path": "game-model/config.yaml",
+      "bytes": 1690,
+      "sha256": "c4cca41410bfce49859db5544e1a0820749f9795d4e3f97e5283917ceeeea813"
+    },
+    {
+      "path": "game-model/lang_map.json",
+      "bytes": 37,
+      "sha256": "cf7ca24d93682464c5d57d1cd7d238d29d565f7e5774575dbcdff7034852ca37"
+    },
+    {
+      "path": "game-model/model.pt",
+      "bytes": 199764599,
+      "sha256": "e9904159fb0646e1a352b9d2bc74615547cfa3e32d45c7464d440ac142846d93"
+    }
+  ],
+  "runtime": [
+    "runtime313",
+    "runtime-common"
+  ],
+  "sheet_revision": "b83c3d79a6d98bcffaf8f9ed112c90aa887887bc",
+  "parent_revision": "d8ba1c745e733b3908ce6ad16ebeb17ac7600a42",
+  "game_revision": "475a8ee781fe8cca980b3b12fbe6c80c768a813a"
+}

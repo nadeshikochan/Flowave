@@ -1,0 +1,4 @@
+SongFormer: https://github.com/ASLP-lab/SongFormer (CC BY 4.0).
+MusicFM: https://github.com/minzwon/musicfm (MIT, notices retained in source).
+MuQ: https://github.com/tencent-ailab/MuQ. Package licenses and metadata retained in shared/.
+Private local optional component; redistribution is a separate release review.

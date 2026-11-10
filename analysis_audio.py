@@ -2,6 +2,7 @@
 from contextlib import contextmanager
 from pathlib import Path
 import os,shutil,subprocess,tempfile,time
+from resource_runtime import asset_path
 
 def stop_process_tree(proc):
     if proc is None or proc.poll() is not None:return
@@ -15,8 +16,8 @@ def stop_process_tree(proc):
 def decoder():
     found=shutil.which('ffmpeg')
     if found:return found
-    root=Path(__file__).resolve().parent
-    for path in (root/'data/components/ffmpeg/ffmpeg.exe',root/'ffmpeg/bin/ffmpeg.exe'):
+    root=Path(os.environ.get('KUMIKO_APP_HOME') or Path(__file__).resolve().parent)
+    for path in (asset_path(root,'models/stem-separation/ffmpeg.exe'),root/'data/components/ffmpeg/ffmpeg.exe',root/'ffmpeg/bin/ffmpeg.exe'):
         if path.is_file():return str(path)
     return None
 

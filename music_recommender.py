@@ -10,6 +10,7 @@ import torchaudio.transforms as T
 import torch
 from transformers import AutoModel, Wav2Vec2FeatureExtractor
 from runtime_paths import APP_CONFIG_PATH, APP_HOME, DOWNLOAD_DIR, LIBRARY_DIR, MODEL_DIR
+from resource_runtime import asset_path
 from index_progress import report_progress
 
 # ------------ 常量与模型 -------------
@@ -18,7 +19,7 @@ AUDIO_DIR = None
 INDEX_PATH = LIBRARY_DIR / "music_index.pt"
 CONFIG_PATH = APP_CONFIG_PATH
 MODEL_ID = "m-a-p/MERT-v1-330M"
-LOCAL_MODEL_DIR = MODEL_DIR
+LOCAL_MODEL_DIR = asset_path(APP_HOME,'models/MERT-v1-330M')
 MODEL_CONFIG_DEFAULT = {
     "source": MODEL_ID,
     "local_dir": "models/MERT-v1-330M",
@@ -81,7 +82,7 @@ def _resolve_model_source() -> str:
     model_cfg = _read_model_config()
     local_dir = str(model_cfg.get("local_dir", "")).strip()
     if local_dir:
-        local_path = _resolve_project_path(local_dir)
+        local_path = asset_path(APP_HOME,local_dir) if local_dir.replace('\\','/')=='models/MERT-v1-330M' else _resolve_project_path(local_dir)
         if not local_path.exists():
             raise FileNotFoundError(f"config.model.local_dir 不存在: {local_dir}")
         return str(local_path.resolve())

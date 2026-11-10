@@ -18,7 +18,7 @@ function locations(data,appHome,layout=dataLayout(data)){
   {id:'stems',name:'分轨与演奏成果',path:path.join(data,'library','stems'),note:'已生成的伴奏分轨。',important:true},
   {id:'practice',name:'谱面分析结果',path:path.join(data,'library','practice-analysis'),note:'谱面、原始音高与历史版本。',important:true},
   {id:'traces',name:'听歌轨迹',path:path.join(data,'library','listening-traces'),note:'路线事件、诊断及迁移回退材料。',important:true},
-  {id:'models',name:'模型资产',path:path.join(appHome,'models'),note:'沿用现有模型位置；自定义MERT位置可在推荐模型设置中打开。',important:true},
+  {id:'models',name:'模型资产',path:fs.existsSync(path.join(data,'components/resources'))?path.join(data,'components/resources'):path.join(appHome,'models'),note:'模型和独立计算环境保留在受管资源目录，移除插件不会删除。',important:true},
   {id:'mert-model',name:'MERT 模型实际位置',path:mert,note:'按当前保存的模型目录显示；清除模型不会删除已建立的索引。',important:true},
   {id:'index-runtime',name:'推荐计算组件',path:path.join(appHome,'backend','index-worker'),note:'用于新增音乐的特征处理，安装位置沿原组件约定。'},
   {id:'packages',name:'功能包代码',path:layout.packages,note:'只存受管功能版本，与用户记录和模型分开。'},

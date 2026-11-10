@@ -1,6 +1,7 @@
 """Small transactional result database. No audio/model imports in the API process."""
 from contextlib import contextmanager
 from pathlib import Path
+from resource_runtime import asset_path, source_path
 import json,sqlite3,time,hashlib
 from analysis_vocab import VERSION
 from analysis_visibility import visible_payload
@@ -65,7 +66,7 @@ def recipe_version(root):
     """Fingerprint implementation + exact model manifests without loading neural weights."""
     root=Path(root);digest=hashlib.sha256(VERSION.encode())
     for name in ('analysis_features.py','analysis_vocab.py','analysis_audio.py','music_analysis_worker.py','models/Essentia-tagging/download-manifest.json','models/MuQ-MuLan-download.json'):
-        digest.update((root/name).read_bytes())
-    component=root/'data/components/music-analysis/manifest.json'
+        digest.update((asset_path(root,name) if name.startswith('models/') else source_path(root,name)).read_bytes())
+    component=asset_path(root,'data/components/music-analysis/manifest.json')
     if component.is_file():digest.update(component.read_bytes())
     return digest.hexdigest()

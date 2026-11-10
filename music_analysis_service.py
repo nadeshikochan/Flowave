@@ -4,6 +4,7 @@ from pathlib import Path
 from music_analysis_store import AnalysisStore,source_version,recipe_version
 from music_structure import StructureStore,recipe_version as structure_recipe,availability as structure_availability
 from analysis_audio import stop_process_tree
+from resource_runtime import asset_path, runtime_python, worker_command, worker_environment
 
 class MusicAnalysisService:
     def __init__(self,root,data,snapshot):
@@ -99,14 +100,11 @@ class MusicAnalysisService:
             row_ids={r['id'] for r in rows};current_ids={r['id'] for r in current}
             carried_failures={f['id']:f for f in previous.get('failures',[])
                               if f.get('id') in current_ids and f['id'] not in row_ids} if mode=='resume' else {}
-            python=self.root/'.venv-index/Scripts/python.exe'
-            if not python.is_file():
-                if getattr(sys,'frozen',False):raise ValueError('音乐分析组件尚未准备好；本版本暂不支持此运行环境。')
-                python=Path(sys.executable)
+            python=runtime_python(self.root,'analysis')
             for name in (() if target=='structure' else ('Essentia-tagging/discogs-effnet-bsdynamic-1.onnx','MuQ-MuLan-large/pytorch_model.bin','MuQ-large-msd-iter/model.safetensors','xlm-roberta-base/model.safetensors')):
-                if not (self.root/'models'/name).is_file():raise ValueError('音乐分析模型不完整，请先准备分析组件。')
+                if not asset_path(self.root,'models/'+name).is_file():raise ValueError('音乐分析模型不完整，请先准备分析组件。')
             self.folder=self.data/'cache/analysis-jobs'/uuid.uuid4().hex;self.folder.mkdir(parents=True)
-            manifest={'rows':rows,'models':str(self.root/'models'),'recipe':recipe,'target':target}
+            manifest={'rows':rows,'models':str(asset_path(self.root,'models/MuQ-MuLan-large').parent),'recipe':recipe,'target':target}
             (self.folder/'job.json').write_text(json.dumps(manifest,ensure_ascii=False),encoding='utf-8')
             self.state={'state':'running','stage':'preparing','total':len(rows)+len(carried_failures),'done':len(carried_failures),'success':0,'failed':len(carried_failures),'failures':list(carried_failures.values()),
                         'reused':len(current)-len(rows) if mode=='missing' else 0,
@@ -132,10 +130,10 @@ class MusicAnalysisService:
         failed_fatal=False
         try:
             flags=(getattr(subprocess,'CREATE_NO_WINDOW',0)|getattr(subprocess,'BELOW_NORMAL_PRIORITY_CLASS',0)) if os.name=='nt' else 0
-            env=dict(os.environ);env['KUMIKO_APP_HOME']=str(self.root);env['KUMIKO_DATA_DIR']=str(self.data);env['PYTHONIOENCODING']='utf-8'
+            env=worker_environment(self.root);env['KUMIKO_DATA_DIR']=str(self.data)
             with (folder/'worker.log').open('w',encoding='utf-8') as log:
                 script='music_structure_worker.py' if manifest['target']=='structure' else 'music_analysis_worker.py'
-                proc=subprocess.Popen([str(python),str(self.root/script),str(folder/'job.json')],cwd=str(self.root),env=env,
+                proc=subprocess.Popen(worker_command(self.root,'analysis',script,folder/'job.json'),cwd=str(self.root),env=env,
                                       stdout=subprocess.PIPE,stderr=log,text=True,encoding='utf-8',errors='replace',creationflags=flags)
                 with self.lock:self.proc=proc
                 byid={r['id']:r for r in manifest['rows']}

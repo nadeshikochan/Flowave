@@ -2,6 +2,7 @@
 import hashlib,json,math,time
 from pathlib import Path
 from music_analysis_store import AnalysisStore
+from resource_runtime import asset_path, source_path
 
 LABELS={'intro':'前奏','verse':'主歌','pre-chorus':'预副歌','chorus':'副歌',
         'bridge':'桥段','inst':'器乐段','outro':'尾奏','silence':'静默区间'}
@@ -10,11 +11,11 @@ MAX_DURATION=600
 _availability_cache={}
 _recipe_cache={}
 
-def component_path(root):return Path(root)/'data/components/music-structure'
+def component_path(root):return asset_path(root,'data/components/music-structure')
 
 def recipe_version(root):
     root=Path(root)
-    paths=[root/name for name in ('music_structure.py','analysis_audio.py','music_structure_engine.py','music_structure_worker.py')]+[component_path(root)/'manifest.json']
+    paths=[source_path(root,name) for name in ('music_structure.py','analysis_audio.py','music_structure_engine.py','music_structure_worker.py')]+[component_path(root)/'manifest.json']
     signature=tuple((p.stat().st_size,p.stat().st_mtime_ns) for p in paths)
     cached=_recipe_cache.get(str(root))
     if cached and cached[0]==signature:return cached[1]
@@ -32,7 +33,7 @@ def availability(root):
         manifest=json.loads((component/'manifest.json').read_text(encoding='utf-8'))
         if manifest.get('recipe')!=RECIPE_ID:raise ValueError()
         for row in manifest['files']:
-            path=Path(root)/row['file']
+            path=asset_path(root,row['file'])
             if not path.is_file() or path.stat().st_size!=row['bytes']:raise ValueError()
         if not manifest['files']:raise ValueError()
         result={'available':True,'message':'','max_duration':MAX_DURATION}

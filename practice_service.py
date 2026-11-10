@@ -8,6 +8,7 @@ import time
 import uuid
 from music_analysis_store import source_version
 from stem_store import safe_id
+from resource_runtime import asset_path, runtime_python, worker_command, worker_environment
 
 class PracticeService:
     def __init__(self, root, data, snapshot, stems, store):
@@ -42,14 +43,14 @@ class PracticeService:
                 time.sleep(.04*(attempt+1))
 
     def component(self):
-        path = self.root / 'models/practice-analysis/manifest.json'
+        path = asset_path(self.root, 'models/practice-analysis/manifest.json')
         try:
             manifest = json.loads(path.read_text(encoding='utf-8'))
             if manifest.get('schema') != 1 or manifest.get('recipe') != 'practice-combined-v1': raise ValueError()
             for name in ('sheetsage2/model.safetensors','mert2/model.safetensors','game-model/model.pt','game-source/inference/me_infer.py'):
                 info = next(f for f in manifest['files'] if f['path']==name)
                 if (path.parent/name).stat().st_size != info['bytes']: raise ValueError()
-            if not (self.root/'.venv-index/Scripts/python.exe').is_file(): raise ValueError()
+            runtime_python(self.root,'practice')
             return path.parent
         except (OSError, ValueError, KeyError, StopIteration):
             raise ValueError('演奏分析组件尚未准备完整，暂不能开始准备。')
@@ -184,8 +185,8 @@ class PracticeService:
     def run_worker(self, folder):
         flags=(getattr(subprocess,'CREATE_NO_WINDOW',0)|getattr(subprocess,'BELOW_NORMAL_PRIORITY_CLASS',0)) if os.name=='nt' else 0
         with (folder/'worker.log').open('w',encoding='utf-8') as log:
-            proc = subprocess.Popen([str(self.root/'.venv-index/Scripts/python.exe'),str(self.root/'practice_worker.py'),str(folder/'job.json')],cwd=self.root,
-                                    creationflags=flags,stdout=subprocess.PIPE,stderr=log,text=True,encoding='utf-8',errors='replace',env=dict(os.environ,PYTHONIOENCODING='utf-8'))
+            proc = subprocess.Popen(worker_command(self.root,'practice','practice_worker.py',folder/'job.json'),cwd=self.root,
+                                    creationflags=flags,stdout=subprocess.PIPE,stderr=log,text=True,encoding='utf-8',errors='replace',env=worker_environment(self.root))
             try:
                 with self.lock:
                     self.proc=proc

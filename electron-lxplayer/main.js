@@ -26,6 +26,8 @@ const { writeJsonObjectAtomic, createCoalescedWriter } = require("./async-json-w
 const backendHealth = require("./backend-health");
 const {AudioOutputMonitor}=require('./audio-output-monitor');
 const audioOutputMonitor=new AudioOutputMonitor();
+const {AudioOutputSafety}=require('./audio-output-safety');
+const audioOutputSafety=new AudioOutputSafety(audioOutputMonitor);
 const outputLeaseOwners=new Map(),outputLeaseWatched=new WeakSet();
 function releaseOutputOwner(ownerId){const owned=outputLeaseOwners.get(ownerId);if(owned)for(const id of owned)audioOutputMonitor.release(id);outputLeaseOwners.delete(ownerId)}
 function setOutputLease(event,consumer,enabled){
@@ -33,7 +35,7 @@ function setOutputLease(event,consumer,enabled){
   const contents=event.sender,id=`${contents.id}:${consumer}`;
   if(!outputLeaseWatched.has(contents)){
     const ownerId=contents.id;
-    outputLeaseWatched.add(contents);contents.once('destroyed',()=>releaseOutputOwner(ownerId));
+    outputLeaseWatched.add(contents);contents.once('destroyed',()=>{releaseOutputOwner(ownerId);if(audioOutputSafety.owner===contents)audioOutputSafety.release()});
     contents.on('render-process-gone',()=>releaseOutputOwner(ownerId));
     contents.on('did-start-navigation',(_event,_url,inPlace,mainFrame)=>{if(mainFrame&&!inPlace)releaseOutputOwner(ownerId)});
   }
@@ -86,7 +88,9 @@ const APP_HOME = path.resolve(process.env.KUMIKO_APP_HOME || (isDev ? path.join(
 const DATA_DIR = resolvePortableDataDir(process.env.KUMIKO_DATA_DIR);
 const tracePersistence = require("./trace-persistence").createTracePersistence(path.join(DATA_DIR, "library", "listening-traces"));
 const CONFIG_DIR = path.join(DATA_DIR, "config");
-const officialCatalog = require('./official-modules/catalog.json');
+let distribution={};try{distribution=JSON.parse(fs.readFileSync(path.join(APP_HOME,'distribution.json'),'utf8'));}catch{}
+const officialCatalog = JSON.parse(JSON.stringify(require('./official-modules/catalog.json')));
+if(distribution.officialPackages==='bundled')for(const item of Object.values(officialCatalog.packages))for(const release of item.releases)delete release.url;
 const dataLayout = require('./data-layout').dataLayout(DATA_DIR);
 const LISTENING_CONFIG_DIR = dataLayout.history;
 const existingFeatureProfile = require('./feature-profile').isExistingProfile(DATA_DIR);
@@ -102,9 +106,10 @@ const featureSelection = require('./feature-selection').createFeatureSelection(p
   initialEnabled:existingFeatureProfile,
   available:id=>officialPackages.hasActive(id),
 });
+const resourceManager=new (require('./resource-manager').ResourceManager)(APP_HOME);
 function featureSnapshot(){
   const selection=featureSelection.snapshot(),packages=officialPackages.snapshot();
-  return {...selection,packages,restartRequired:selection.restartRequired||Object.values(packages).some(value=>value?.restartRequired)};
+  return {...selection,packages,resources:resourceManager.snapshot(),restartRequired:selection.restartRequired||Object.values(packages).some(value=>value?.restartRequired)};
 }
 let officialModuleOperation = null;
 const startupBackground = new (require('./startup-background').StartupBackgroundStore)(path.join(CONFIG_DIR, 'appearance'));
@@ -391,6 +396,7 @@ let lyricOverlaySaveTimer = null;
 let mainWindowSaveTimer = null;
 let shortcutConfig = loadShortcutConfig();
 let shortcutStatus = {};
+let mediaSessionAvailable = null;
 let controlServer = null;
 let backendProc = null;
 let backendReady = false;
@@ -404,10 +410,14 @@ let quitCleanupFinished = false;
 let lyricSourceConfig = loadLyricSourceConfig();
 const pendingControlRequests = new Map();
 const MEDIA_DIAG_MAX = 200;
-const MEDIA_EVENT_DEDUPE_MS = 350;
 let mediaDiagSeq = 0;
 const mediaDiagEvents = [];
-const mediaActionRecentMap = new Map();
+const { MediaInputCoordinator } = require('./media-input');
+const mediaInput = new MediaInputCoordinator({ deliver(action, source) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  pushMediaDiag('media_input_accepted', { action, source });
+  mainWindow.webContents.send('hotkey', action);
+} });
 let audioFocusWatcherProc = null;
 let audioFocusWatcherAvailable = false;
 const installerProcesses = new Map();
@@ -451,13 +461,10 @@ function pushMediaDiag(type, payload = {}) {
   return event;
 }
 
-function cleanupRecentMediaActions(now = Date.now()) {
-  for (const [key, ts] of mediaActionRecentMap.entries()) {
-    if (now - ts > MEDIA_EVENT_DEDUPE_MS) {
-      mediaActionRecentMap.delete(key);
-    }
-  }
-}
+audioOutputMonitor.on('wear-state', value => {
+  // Keep hardware addresses and raw vendor payloads out of renderer diagnostics.
+  pushMediaDiag('headphone_wear', { status: value.status, worn: value.worn });
+});
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
@@ -509,25 +516,6 @@ function configurePortableElectronRuntime() {
   } catch (e) {
     console.warn("[runtime] configure portable electron paths failed:", e?.message || e);
   }
-}
-
-function normalizeMediaSignal(raw) {
-  return String(raw || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[\s_-]+/g, "");
-}
-
-function shouldDedupMediaAction(action, raw = "") {
-  const act = String(action || "").trim().toLowerCase();
-  const signal = normalizeMediaSignal(raw);
-  if (!act) return false;
-  const now = Date.now();
-  cleanupRecentMediaActions(now);
-  const dedupeKey = `${act}:${signal || "unknown"}`;
-  const prev = mediaActionRecentMap.get(dedupeKey);
-  mediaActionRecentMap.set(dedupeKey, now);
-  return Number.isFinite(prev) && now - prev <= MEDIA_EVENT_DEDUPE_MS;
 }
 
 function getMediaDiagSnapshot() {
@@ -1425,6 +1413,7 @@ app.on("before-quit", (event) => {
     lyricOverlayWindow.close();
   }
   quitCleanupPromise = (async () => {
+    await resourceManager.close();
     if (mainWindow && !mainWindow.isDestroyed()) {
       let timeout;
       try {
@@ -1488,10 +1477,16 @@ function registerAllShortcuts(win) {
   const mediaBindings = [
     ["MediaPlayPause", "play_pause"],
     ["MediaStop", "stop"],
-    ["MediaNextTrack", "dislike_next"], // “下一首”映射为“不喜欢下一首”
-    ["MediaPreviousTrack", "prev"],
+    ["MediaNextTrack", "next_like"], // 耳机下一首：找回本段感觉
+    ["MediaPreviousTrack", "dislike_next"],
   ];
   mediaBindings.forEach(([accelerator, action]) => {
+    // Standard Windows session routing coexists with other players. Global
+    // media accelerators are only a fallback when session handlers are absent.
+    if (mediaSessionAvailable !== false) {
+      shortcutStatus[`media:${accelerator}`] = {ok:mediaSessionAvailable===true,reason:mediaSessionAvailable ? 'system-session' : 'session-pending'};
+      return;
+    }
     try {
       const ok = globalShortcut.register(accelerator, () => {
         pushMediaDiag("global_shortcut_fired", { source: "media-global-shortcut", accelerator, action });
@@ -1514,6 +1509,8 @@ function registerAllShortcuts(win) {
 }
 
 app.on("will-quit", () => {
+  mediaInput.dispose();
+  audioOutputSafety.dispose();
   audioOutputMonitor.dispose();
   for (const [name, cache] of [["metadata", songInfoQueryCache], ["lyrics", lyricQueryCache]]) {
     try {
@@ -1601,11 +1598,28 @@ function registerIpc() {
     }catch(error){progress({phase:'error'});return {ok:false,error:operation.control.signal.aborted?'安装已取消，原版本保留。':String(error.message||error),selection:featureSnapshot()};}
     finally{if(officialModuleOperation===operation)officialModuleOperation=null;}
   });
+  ipcMain.handle('lx-resource-status',event=>secureProtocols.isTrustedRendererUrl(event.senderFrame?.url)&&event.sender===mainWindow?.webContents?resourceManager.snapshot():{});
+  ipcMain.handle('lx-resource-prepare',async(event,value)=>{
+    if(!secureProtocols.isTrustedRendererUrl(event.senderFrame?.url)||event.sender!==mainWindow?.webContents)return {ok:false,error:'当前页面无权准备资源。'};
+    if(appIsQuitting)return {ok:false,error:'软件正在退出。'};
+    try{
+      const id=value?.id;
+      if(value?.action==='cancel'){await resourceManager.cancel(id);return {ok:true,status:resourceManager.snapshot()};}
+      if(!officialPackages.snapshot()[id]?.installed)throw Error('请先安装对应功能包。');
+      return resourceManager.start(id,event.sender);
+    }catch(error){return {ok:false,error:String(error.message||error),status:resourceManager.snapshot()};}
+  });
   ipcMain.handle('lx-features-select', async (event, value) => {
     if (!secureProtocols.isTrustedRendererUrl(event.senderFrame?.url) || event.sender !== mainWindow?.webContents)
       return {ok:false,error:'当前页面无权更改功能。'};
     try { await featureSelection.select(value?.id, value?.enabled, value?.revision);return {ok:true,selection:featureSnapshot()}; }
     catch (error) { return {ok:false,error:String(error.message || error)}; }
+  });
+  ipcMain.handle('lx-audio-output-playback', async (event, value) => {
+    if (!secureProtocols.isTrustedRendererUrl(event.senderFrame?.url) || event.sender !== mainWindow?.webContents) return {ok:false};
+    if (value?.playing === false) { audioOutputSafety.pause(event.sender); return {ok:true}; }
+    if (value?.playing !== true) return {ok:false};
+    return audioOutputSafety.prepare(event.sender, {resume:value.resume===true,allowOutputChange:value.allowOutputChange===true});
   });
   ipcMain.handle('lx-audio-output-get',async event=>secureProtocols.isTrustedRendererUrl(event.senderFrame?.url)?audioOutputMonitor.get():{id:'',transport:'unknown',confirmed:false,reason:'untrusted-page'});
   ipcMain.handle('lx-audio-output-acquire',(event,id)=>setOutputLease(event,id,true));
@@ -2212,6 +2226,17 @@ function registerIpc() {
     }
     return getShortcutPayload();
   });
+  ipcMain.handle('lx-media-session-ready', (event, available) => {
+    if (!secureProtocols.isTrustedRendererUrl(event.senderFrame?.url) || event.sender !== mainWindow?.webContents || typeof available !== 'boolean') return false;
+    mediaSessionAvailable = available;
+    registerAllShortcuts(mainWindow);
+    return true;
+  });
+  ipcMain.handle('lx-media-input', (event, action) => {
+    if (!secureProtocols.isTrustedRendererUrl(event.senderFrame?.url)) return false;
+    if (!['play','pause','play_pause','stop','next_like','dislike_next'].includes(action)) return false;
+    return dispatchHotkeyAction(mainWindow, action, 'media-session', action);
+  });
   ipcMain.handle("lx-media-diag-get", async () => getMediaDiagSnapshot());
   ipcMain.handle("lx-lyric-overlay-open", async (_event, payload) => {
     const win = createLyricOverlayWindow();
@@ -2260,8 +2285,10 @@ function registerIpc() {
 }
 
 function bindWindowShortcutEvents(win) {
+  win.webContents.once('destroyed',()=>{if(audioOutputSafety.owner===win.webContents)audioOutputSafety.release()});
+  win.webContents.on('render-process-gone',()=>{if(audioOutputSafety.owner===win.webContents)audioOutputSafety.release()});
   win.webContents.on("before-input-event", (event, input) => {
-    if (input.type !== "keyDown") return;
+    if (input.type !== "keyDown" || input.isAutoRepeat && String(input.key || "").toLowerCase().startsWith("media")) return;
     const mediaKey = String(input.key || "").toLowerCase();
     if (mediaKey.startsWith("media")) {
       pushMediaDiag("before_input_event_raw", { source: "before-input-event", key: mediaKey, raw: String(input?.key || "") });
@@ -2288,12 +2315,12 @@ function bindWindowShortcutEvents(win) {
     }
     if (mediaKey === "medianexttrack") {
       event.preventDefault();
-      dispatchHotkeyAction(win, "dislike_next", "before-input-event", mediaKey);
+      dispatchHotkeyAction(win, "next_like", "before-input-event", mediaKey);
       return;
     }
     if (mediaKey === "mediaprevioustrack") {
       event.preventDefault();
-      dispatchHotkeyAction(win, "prev", "before-input-event", mediaKey);
+      dispatchHotkeyAction(win, "dislike_next", "before-input-event", mediaKey);
       return;
     }
     const hit = Object.entries(shortcutConfig).find(([, item]) => {
@@ -2316,8 +2343,8 @@ function bindWindowShortcutEvents(win) {
     else if (c === "media-play") action = "play";
     else if (c === "media-pause") action = "pause";
     else if (c === "media-stop") action = "stop";
-    else if (c === "media-next-track" || c === "media-nexttrack") action = "dislike_next";
-    else if (c === "media-previous-track" || c === "media-previoustrack") action = "prev";
+    else if (c === "media-next-track" || c === "media-nexttrack") action = "next_like";
+    else if (c === "media-previous-track" || c === "media-previoustrack") action = "dislike_next";
     if (!action) return;
     event.preventDefault();
     dispatchHotkeyAction(win, action, "app-command", c);
@@ -2337,18 +2364,10 @@ function dispatchHotkeyAction(win, action, source = "unknown", raw = "") {
     pushMediaDiag("dispatch_hotkey_action", { req, source, action: act, raw: String(raw || ""), ok: false, reason: "no-target-window" });
     return false;
   }
-  if (String(source || "").includes("media") || String(source || "").includes("app-command")) {
-    if (shouldDedupMediaAction(act, raw || source)) {
-      pushMediaDiag("dispatch_hotkey_action", {
-        req,
-        source,
-        action: act,
-        raw: String(raw || ""),
-        ok: false,
-        reason: "deduped",
-      });
-      return false;
-    }
+  if (["media-global-shortcut", "before-input-event", "app-command", "media-session"].includes(source)) {
+    const accepted = mediaInput.submit(act, source);
+    pushMediaDiag("dispatch_hotkey_action", { req, source, action: act, ok: accepted, reason: accepted ? "coalescing" : "deduped" });
+    return accepted;
   }
   console.info(`[media-input] req=${req} source=${source} action=${act} raw=${String(raw || "")}`);
   pushMediaDiag("dispatch_hotkey_action", { req, source, action: act, raw: String(raw || ""), ok: true });

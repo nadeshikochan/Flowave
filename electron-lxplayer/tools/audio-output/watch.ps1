@@ -1,10 +1,13 @@
-param([int]$OwnerProcessId = 0, [switch]$Once)
+param([int]$OwnerProcessId = 0, [switch]$Once, [int]$WearDiagnosticSeconds = 0)
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+Add-Type -Path (Join-Path $PSScriptRoot 'wear-state.cs')
 Add-Type -TypeDefinition @'
 using System;
 using System.Text;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
+using System.Threading;
 using System.Runtime.InteropServices;
 namespace FlowaveOutput {
  [ComImport,Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")] class EnumeratorObject {}
@@ -12,6 +15,8 @@ namespace FlowaveOutput {
   [PreserveSig]int EnumAudioEndpoints(int flow,uint mask,out Devices devices);
   [PreserveSig]int GetDefaultAudioEndpoint(int flow,int role,out Device device);
   [PreserveSig]int GetDevice([MarshalAs(UnmanagedType.LPWStr)]string id,out Device device);
+  [PreserveSig]int RegisterEndpointNotificationCallback([MarshalAs(UnmanagedType.Interface)]IEndpointNotifications client);
+  [PreserveSig]int UnregisterEndpointNotificationCallback([MarshalAs(UnmanagedType.Interface)]IEndpointNotifications client);
  }
  [ComImport,Guid("0BD7A1BE-7A1A-44DB-8397-CC5392387B5E"),InterfaceType(ComInterfaceType.InterfaceIsIUnknown)] interface Devices {
   [PreserveSig]int GetCount(out uint count);[PreserveSig]int Item(uint index,out Device device);
@@ -21,7 +26,7 @@ namespace FlowaveOutput {
   [PreserveSig]int OpenPropertyStore(uint access,out Properties properties);
   [PreserveSig]int GetId([MarshalAs(UnmanagedType.LPWStr)]out string id);[PreserveSig]int GetState(out uint state);
  }
- [StructLayout(LayoutKind.Sequential)] struct Key {public Guid fmt;public uint pid;public Key(string f,uint p){fmt=new Guid(f);pid=p;}}
+ [StructLayout(LayoutKind.Sequential)] public struct Key {public Guid fmt;public uint pid;public Key(string f,uint p){fmt=new Guid(f);pid=p;}}
  [StructLayout(LayoutKind.Explicit,Size=24)] struct Value {[FieldOffset(0)]public ushort type;[FieldOffset(8)]public IntPtr pointer;}
  [ComImport,Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99"),InterfaceType(ComInterfaceType.InterfaceIsIUnknown)] interface Properties {
   [PreserveSig]int GetCount(out uint n);[PreserveSig]int GetAt(uint n,out Key key);[PreserveSig]int GetValue(ref Key key,out Value value);
@@ -47,6 +52,30 @@ namespace FlowaveOutput {
   public uint size,usage,pid;public UIntPtr heap;public uint module,threads,parent;public int priority;public uint flags;
   [MarshalAs(UnmanagedType.ByValTStr,SizeConst=260)]public string name;
  }
+ [ComVisible(true),Guid("7991EEC9-7E89-4D85-8390-6C703CEC60C0"),InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+ public interface IEndpointNotifications {
+  [PreserveSig]int OnDeviceStateChanged([MarshalAs(UnmanagedType.LPWStr)]string id,uint state);
+  [PreserveSig]int OnDeviceAdded([MarshalAs(UnmanagedType.LPWStr)]string id);
+  [PreserveSig]int OnDeviceRemoved([MarshalAs(UnmanagedType.LPWStr)]string id);
+  [PreserveSig]int OnDefaultDeviceChanged(int flow,int role,[MarshalAs(UnmanagedType.LPWStr)]string id);
+  [PreserveSig]int OnPropertyValueChanged([MarshalAs(UnmanagedType.LPWStr)]string id,Key key);
+ }
+ public class DeviceEvent {public string type="device-event",kind,id;public uint state;public int flow,role;}
+ [ComVisible(true),ClassInterface(ClassInterfaceType.None)]
+ public class EndpointEvents:IEndpointNotifications,IDisposable {
+  volatile bool closed;Enumerator enumerator;ConcurrentQueue<DeviceEvent> queue=new ConcurrentQueue<DeviceEvent>();AutoResetEvent signal=new AutoResetEvent(false);
+  public EndpointEvents(){enumerator=(Enumerator)new EnumeratorObject();int hr=enumerator.RegisterEndpointNotificationCallback(this);if(hr!=0){Marshal.ReleaseComObject(enumerator);enumerator=null;Marshal.ThrowExceptionForHR(hr);}}
+  int Push(string kind,string id,uint state=0,int flow=-1,int role=-1){if(closed)return 0;if(queue.Count<128)queue.Enqueue(new DeviceEvent{kind=kind,id=id??"",state=state,flow=flow,role=role});try{signal.Set();}catch(ObjectDisposedException){}return 0;}
+  public int OnDeviceStateChanged(string id,uint state){return Push("state",id,state);}
+  public int OnDeviceAdded(string id){return Push("added",id);}
+  public int OnDeviceRemoved(string id){return Push("removed",id);}
+  public int OnDefaultDeviceChanged(int flow,int role,string id){return Push("default",id,0,flow,role);}
+  public int OnPropertyValueChanged(string id,Key key){return Push("property",id);}
+  public DeviceEvent[] Drain(){var result=new List<DeviceEvent>();DeviceEvent value;while(queue.TryDequeue(out value))result.Add(value);return result.ToArray();}
+  public void Wait(int milliseconds){signal.WaitOne(milliseconds);}
+  public WaitHandle Signal {get{return signal;}}
+  public void Dispose(){closed=true;if(enumerator!=null){enumerator.UnregisterEndpointNotificationCallback(this);Marshal.ReleaseComObject(enumerator);enumerator=null;}signal.Dispose();}
+ }
  public class Route {public string id="",name="",transport="unknown",route="unknown",reason="";public bool confirmed=false;}
  public static class Probe {
   [DllImport("ole32.dll")]static extern int PropVariantClear(ref Value value);
@@ -68,6 +97,24 @@ namespace FlowaveOutput {
    foreach(string key in keys){if(String.IsNullOrEmpty(key))continue;uint node;if(CM_Locate_DevNodeW(out node,key,0)!=0)continue;for(int i=0;i<16;i++){var b=new StringBuilder(1024);if(CM_Get_Device_IDW(node,b,1024,0)!=0)break;string value=b.ToString().ToUpperInvariant();if(value.StartsWith("BTHENUM\\")||value.StartsWith("BTHHFENUM\\")||value.StartsWith("BTHLEDEVICE\\")||value.StartsWith("BTH\\"))return "bluetooth";if(value.StartsWith("HDAUDIO\\")||value.StartsWith("USB\\")||value.StartsWith("INTELAUDIO\\")||value.StartsWith("DISPLAY\\"))physical=true;uint next;if(CM_Get_Parent(out next,node,0)!=0||next==node)break;node=next;}}
    return physical?"other":"unknown";
   }
+  // Resolve the remote radio from this endpoint's actual PnP ancestry. Never
+  // pick a paired headset by name or expose its hardware address in JSON/IPC.
+  public static ulong WearAddress(string id){
+   Enumerator e=null;Device d=null;
+   try {
+    e=(Enumerator)new EnumeratorObject();if(e.GetDevice(id,out d)!=0)return 0;
+    var keys=new string[]{Property(d,new Key("78c34fc8-104a-4aca-9ea4-524d52996e57",256)),"SWD\\MMDEVAPI\\"+id};
+    foreach(string key in keys){uint node;if(String.IsNullOrEmpty(key)||CM_Locate_DevNodeW(out node,key,0)!=0)continue;
+     for(int i=0;i<16;i++){var text=new StringBuilder(1024);if(CM_Get_Device_IDW(node,text,1024,0)!=0)break;
+      var match=System.Text.RegularExpressions.Regex.Match(text.ToString(),@"^BTHENUM\\DEV_([0-9A-F]{12})(?:\\|$)",System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+      if(match.Success)return Convert.ToUInt64(match.Groups[1].Value,16);
+      match=System.Text.RegularExpressions.Regex.Match(text.ToString(),@"^BTHENUM\\\{[^}]+\}[^\\]*\\[^\\]*&([0-9A-F]{12})_C[0-9A-F]+$",System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+      if(match.Success)return Convert.ToUInt64(match.Groups[1].Value,16);
+      uint parent;if(CM_Get_Parent(out parent,node,0)!=0||parent==node)break;node=parent;
+     }
+    }
+   }catch{}finally{Release(d);Release(e);}return 0;
+  }
   public static Route Read(int owner){Enumerator e=null;Devices devices=null;Device def=null;try{
    e=(Enumerator)new EnumeratorObject();string defaultId="";if(e.GetDefaultAudioEndpoint(0,0,out def)==0)def.GetId(out defaultId);
    if(e.EnumAudioEndpoints(0,1,out devices)!=0)return new Route{reason="endpoints-unavailable"};uint count;devices.GetCount(out count);var parents=Parents();var active=new List<Route>();var idle=new List<Route>();Route defaultRoute=null;
@@ -81,9 +128,42 @@ namespace FlowaveOutput {
  }
 }
 '@
-do {
-  if ($OwnerProcessId -gt 0) { try { $null = [System.Diagnostics.Process]::GetProcessById($OwnerProcessId) } catch { break } }
-  $route = [FlowaveOutput.Probe]::Read($OwnerProcessId)
-  $route | ConvertTo-Json -Compress
-  if (-not $Once) { Start-Sleep -Milliseconds 750 }
-} while (-not $Once)
+$events = $null
+$wear = $null
+$diagnosticUntil = [DateTime]::UtcNow.AddSeconds([Math]::Min(60, [Math]::Max(0, $WearDiagnosticSeconds)))
+$wearEndpoint = $null
+try {
+  if (-not $Once) { $events = New-Object FlowaveOutput.EndpointEvents; $wear = New-Object FlowaveWear.WearWatcher -ArgumentList ($WearDiagnosticSeconds -gt 0) }
+  do {
+    if ($WearDiagnosticSeconds -gt 0 -and [DateTime]::UtcNow -ge $diagnosticUntil) { break }
+    if ($OwnerProcessId -gt 0) { try { $null = [System.Diagnostics.Process]::GetProcessById($OwnerProcessId) } catch { break } }
+    if ($events) { foreach ($eventValue in $events.Drain()) { if ($WearDiagnosticSeconds -le 0) { $eventValue | ConvertTo-Json -Compress } } }
+    $route = [FlowaveOutput.Probe]::Read($OwnerProcessId)
+    if ($wear) {
+      if ($wearEndpoint -ne $route.id) {
+        $wearEndpoint = $route.id
+        $address = [uint64]0
+        # The model name selects a documented protocol; PnP selects the device.
+        if ($route.transport -eq 'bluetooth' -and $route.name -match '(?i)HUAWEI FreeBuds Pro 5(?:\)|$)') {
+          $address = [FlowaveOutput.Probe]::WearAddress($route.id)
+        }
+        $wear.SetTarget($route.id, $address)
+        if ($WearDiagnosticSeconds -gt 0) {
+          @{type='wear-diagnostic'; supported=($address -ne 0); status=$(if ($address -ne 0) {'connecting'} else {'no-supported-output'})} | ConvertTo-Json -Compress
+        }
+        elseif ($address -eq 0) { @{type='wear-state'; id=$route.id; status='unsupported'; worn=$null} | ConvertTo-Json -Compress }
+      }
+      foreach ($wearValue in $wear.Drain()) {
+        if ($wearValue.id -ne $route.id) { continue }
+        if ($WearDiagnosticSeconds -gt 0) { @{type='wear-diagnostic'; status=$wearValue.status; worn=$wearValue.worn} | ConvertTo-Json -Compress }
+        else { $wearValue | ConvertTo-Json -Compress }
+      }
+    }
+    if ($WearDiagnosticSeconds -le 0) { $route | ConvertTo-Json -Compress }
+    [Console]::Out.Flush()
+    if (-not $Once) { $null = [System.Threading.WaitHandle]::WaitAny([System.Threading.WaitHandle[]]@($events.Signal, $wear.Signal), 750) }
+  } while (-not $Once)
+} finally {
+  if ($wear) { $wear.Dispose() }
+  if ($events) { $events.Dispose() }
+}

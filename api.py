@@ -43,6 +43,7 @@ import numpy as np
 import vector_store
 from music_library_roots import configured_roots, normalize_roots, roots_key, scan_roots, contains as root_contains
 from lazy_service import DeferredService
+from resource_runtime import worker_command, runtime_python, source_path
 from listening_trace_service import ListeningTraceService
 from listening_trace_store import TraceConflict
 import sqlite3
@@ -282,7 +283,7 @@ def load_config() -> Dict[str, Any]:
 
 def _run_worker(args: List[str]) -> Dict[str, Any]:
     global ACTIVE_WORKER_PROCESS
-    script = PROJECT_ROOT / "index_worker.py"
+    script = source_path(APP_HOME, "index_worker.py")
     exe_candidates = [
         APP_HOME / "backend" / "index-worker.exe",
         APP_HOME / "backend" / "index-worker" / "index-worker.exe",
@@ -291,7 +292,11 @@ def _run_worker(args: List[str]) -> Dict[str, Any]:
     index_python = PROJECT_ROOT / ".venv-index" / "Scripts" / "python.exe"
     ready = index_python.parent.parent / ".gpu-ready"
     use_gpu_environment = not getattr(sys, "frozen", False) and index_python.is_file() and ready.is_file()
-    if use_gpu_environment:
+    managed_python = runtime_python(APP_HOME, "recommendation", required=False)
+    if managed_python and managed_python != index_python:
+        cmd = worker_command(APP_HOME, "recommendation", "index_worker.py", *args)
+        use_gpu_environment = True
+    elif use_gpu_environment:
         cmd = [str(index_python), str(script), *args]
     elif exe.exists():
         cmd = [str(exe), *args]
@@ -309,7 +314,7 @@ def _run_worker(args: List[str]) -> Dict[str, Any]:
             creationflags |= getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0)
         proc = subprocess.Popen(
             cmd,
-            cwd=str(PROJECT_ROOT),
+            cwd=str(APP_HOME),
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -2652,17 +2657,17 @@ def _analysis_snapshot(resource_id=None, only_path=None):
 
 def _create_music_analysis_service():
     from music_analysis_service import MusicAnalysisService
-    return MusicAnalysisService(PROJECT_ROOT, DATA_DIR, _analysis_snapshot)
+    return MusicAnalysisService(APP_HOME, DATA_DIR, _analysis_snapshot)
 
 
 def _create_semantic_library():
     from semantic_library import SemanticLibrary
-    return SemanticLibrary(PROJECT_ROOT, DATA_DIR / 'library/track-analysis/results.sqlite3')
+    return SemanticLibrary(APP_HOME, DATA_DIR / 'library/track-analysis/results.sqlite3')
 
 
 def _create_stem_service():
     from stem_service import StemService
-    return StemService(PROJECT_ROOT, DATA_DIR, _analysis_snapshot)
+    return StemService(APP_HOME, DATA_DIR, _analysis_snapshot)
 
 
 def _create_practice_store():
@@ -2672,11 +2677,11 @@ def _create_practice_store():
 
 def _create_practice_service():
     from practice_service import PracticeService
-    return PracticeService(PROJECT_ROOT, DATA_DIR, _analysis_snapshot, STEM_SERVICE, PRACTICE_ANALYSIS_STORE)
+    return PracticeService(APP_HOME, DATA_DIR, _analysis_snapshot, STEM_SERVICE, PRACTICE_ANALYSIS_STORE)
 
 
 MUSIC_ANALYSIS_SERVICE = DeferredService(_create_music_analysis_service)
-SEED_SEMANTIC_VERIFIER = SeedSemanticVerifier(PROJECT_ROOT, DATA_DIR / 'library/track-analysis/results.sqlite3')
+SEED_SEMANTIC_VERIFIER = SeedSemanticVerifier(APP_HOME, DATA_DIR / 'library/track-analysis/results.sqlite3')
 RECOMMEND_SEMANTIC_LIBRARY = DeferredService(_create_semantic_library)
 RECOMMEND_VECTOR_CACHE = recommendation_engine.VectorCache()
 STEM_SERVICE = DeferredService(_create_stem_service)

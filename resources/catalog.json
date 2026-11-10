@@ -1,0 +1,1355 @@
+{
+  "schema": 1,
+  "profiles": {
+    "recommendation": {
+      "name": "推荐计算环境",
+      "python": {
+        "path": "python.zip",
+        "url": "https://www.python.org/ftp/python/3.13.2/python-3.13.2-embed-amd64.zip",
+        "bytes": 10854852,
+        "sha256": "1e803610b140cbf69dfa2ceaaeb39651bef75a239c381289e827c30862a27b93"
+      },
+      "uv": {
+        "path": "uv.whl",
+        "url": "https://files.pythonhosted.org/packages/1c/cc/dd88c9f20c054ef0aea84ad1dd9f8b547463824857e4376463a948983bed/uv-0.10.6-py3-none-win_amd64.whl",
+        "bytes": 23981891,
+        "sha256": "ecded4d21834b21002bc6e9a2628d21f5c8417fd77a5db14250f1101bcb69dac"
+      },
+      "lock": "resources/locks/recommendation.txt",
+      "lock_sha256": "2c910d17b83f1e0d9ae52388363918718524af6ed80a8198df42c6f5f500c5d6",
+      "probe": [
+        "torch",
+        "torchaudio",
+        "transformers",
+        "numpy",
+        "soundfile"
+      ],
+      "bootstrap_wheels": [
+        {
+          "path": "torch-2.7.0+cu126-cp313-cp313-win_amd64.whl",
+          "url": "https://download-r2.pytorch.org/whl/cu126/torch-2.7.0%2Bcu126-cp313-cp313-win_amd64.whl",
+          "bytes": 2770851306,
+          "sha256": "1f98f55295bba3834bfaabb0e4f06fc076ec7d76a825ce0f96ec57ba86bba584"
+        }
+      ],
+      "bundled_wheels": [
+        {
+          "file": "resources/wheels/antlr4_python3_runtime-4.9.3-py3-none-any.whl",
+          "sha256": "6e9a6083fec1d979936d63000e47a713d448ade78506109808f539f124070c22"
+        },
+        {
+          "file": "resources/wheels/pretty_midi-0.2.11-py3-none-any.whl",
+          "sha256": "a40c6248cdb613ddfac374d3f9b9cdf2fea261b4b6d1af65bd3fc27a7263f882"
+        }
+      ]
+    },
+    "analysis": {
+      "name": "标签与段落计算环境",
+      "python": {
+        "path": "python.zip",
+        "url": "https://www.python.org/ftp/python/3.13.2/python-3.13.2-embed-amd64.zip",
+        "bytes": 10854852,
+        "sha256": "1e803610b140cbf69dfa2ceaaeb39651bef75a239c381289e827c30862a27b93"
+      },
+      "uv": {
+        "path": "uv.whl",
+        "url": "https://files.pythonhosted.org/packages/1c/cc/dd88c9f20c054ef0aea84ad1dd9f8b547463824857e4376463a948983bed/uv-0.10.6-py3-none-win_amd64.whl",
+        "bytes": 23981891,
+        "sha256": "ecded4d21834b21002bc6e9a2628d21f5c8417fd77a5db14250f1101bcb69dac"
+      },
+      "lock": "resources/locks/analysis.txt",
+      "lock_sha256": "03dc11021a61446c200cde0ac6c7f479a7486a8ff7e3c164c3e8712824c9beba",
+      "probe": [
+        "torch",
+        "torchaudio",
+        "transformers",
+        "numpy",
+        "soundfile"
+      ],
+      "bootstrap_wheels": [
+        {
+          "path": "torch-2.7.0+cu126-cp313-cp313-win_amd64.whl",
+          "url": "https://download-r2.pytorch.org/whl/cu126/torch-2.7.0%2Bcu126-cp313-cp313-win_amd64.whl",
+          "bytes": 2770851306,
+          "sha256": "1f98f55295bba3834bfaabb0e4f06fc076ec7d76a825ce0f96ec57ba86bba584"
+        }
+      ],
+      "bundled_wheels": [
+        {
+          "file": "resources/wheels/antlr4_python3_runtime-4.9.3-py3-none-any.whl",
+          "sha256": "6e9a6083fec1d979936d63000e47a713d448ade78506109808f539f124070c22"
+        },
+        {
+          "file": "resources/wheels/pretty_midi-0.2.11-py3-none-any.whl",
+          "sha256": "a40c6248cdb613ddfac374d3f9b9cdf2fea261b4b6d1af65bd3fc27a7263f882"
+        }
+      ]
+    },
+    "practice": {
+      "name": "分轨与演奏计算环境",
+      "python": {
+        "path": "python.zip",
+        "url": "https://www.python.org/ftp/python/3.13.2/python-3.13.2-embed-amd64.zip",
+        "bytes": 10854852,
+        "sha256": "1e803610b140cbf69dfa2ceaaeb39651bef75a239c381289e827c30862a27b93"
+      },
+      "uv": {
+        "path": "uv.whl",
+        "url": "https://files.pythonhosted.org/packages/1c/cc/dd88c9f20c054ef0aea84ad1dd9f8b547463824857e4376463a948983bed/uv-0.10.6-py3-none-win_amd64.whl",
+        "bytes": 23981891,
+        "sha256": "ecded4d21834b21002bc6e9a2628d21f5c8417fd77a5db14250f1101bcb69dac"
+      },
+      "lock": "resources/locks/practice.txt",
+      "lock_sha256": "f5b9527f329d6786648427ada1da35cf554ea3ea13d2e09a64ebea6c7d3c72e7",
+      "probe": [
+        "torch",
+        "torchaudio",
+        "transformers",
+        "numpy",
+        "soundfile"
+      ],
+      "bootstrap_wheels": [
+        {
+          "path": "torch-2.7.0+cu126-cp313-cp313-win_amd64.whl",
+          "url": "https://download-r2.pytorch.org/whl/cu126/torch-2.7.0%2Bcu126-cp313-cp313-win_amd64.whl",
+          "bytes": 2770851306,
+          "sha256": "1f98f55295bba3834bfaabb0e4f06fc076ec7d76a825ce0f96ec57ba86bba584"
+        }
+      ],
+      "bundled_wheels": [
+        {
+          "file": "resources/wheels/antlr4_python3_runtime-4.9.3-py3-none-any.whl",
+          "sha256": "6e9a6083fec1d979936d63000e47a713d448ade78506109808f539f124070c22"
+        },
+        {
+          "file": "resources/wheels/pretty_midi-0.2.11-py3-none-any.whl",
+          "sha256": "a40c6248cdb613ddfac374d3f9b9cdf2fea261b4b6d1af65bd3fc27a7263f882"
+        }
+      ]
+    }
+  },
+  "groups": {
+    "mert": {
+      "name": "MERT声音索引模型",
+      "prefixes": [
+        "models/MERT-v1-330M"
+      ],
+      "files": [
+        {
+          "path": "models/MERT-v1-330M/config.json",
+          "url": "https://huggingface.co/m-a-p/MERT-v1-330M/resolve/5240c2708a5acaee1007f43fb9735c7dcd0b78c9/config.json",
+          "bytes": 2032,
+          "sha256": "a5b40f9db03c84f29e3114abe813a9226178d5437b517d45cd4c2924ac3d0ce0"
+        },
+        {
+          "path": "models/MERT-v1-330M/configuration_MERT.py",
+          "url": "https://huggingface.co/m-a-p/MERT-v1-330M/resolve/5240c2708a5acaee1007f43fb9735c7dcd0b78c9/configuration_MERT.py",
+          "bytes": 5340,
+          "sha256": "ae0ec2bab8f59c724ba9878a7c20b67210189536ea62d34a56775968e9decb03"
+        },
+        {
+          "path": "models/MERT-v1-330M/modeling_MERT.py",
+          "url": "https://huggingface.co/m-a-p/MERT-v1-330M/resolve/5240c2708a5acaee1007f43fb9735c7dcd0b78c9/modeling_MERT.py",
+          "bytes": 18033,
+          "sha256": "6c3ee73cef6f0c30ef494f88d96f891fa6925ffe663fa391b512f4b57abecc6c"
+        },
+        {
+          "path": "models/MERT-v1-330M/preprocessor_config.json",
+          "url": "https://huggingface.co/m-a-p/MERT-v1-330M/resolve/5240c2708a5acaee1007f43fb9735c7dcd0b78c9/preprocessor_config.json",
+          "bytes": 212,
+          "sha256": "c623b903eb1967474b27522975cfb81638e265df99aa640d2c0bd87a987ab538"
+        },
+        {
+          "path": "models/MERT-v1-330M/pytorch_model.bin",
+          "url": "https://huggingface.co/m-a-p/MERT-v1-330M/resolve/5240c2708a5acaee1007f43fb9735c7dcd0b78c9/pytorch_model.bin",
+          "bytes": 1261846489,
+          "sha256": "0c03774d821a6ad972cb48220b128a10ebea2c790116bd0fd35e5a013f8017f6"
+        }
+      ],
+      "metadata": {}
+    },
+    "analysis-models": {
+      "name": "MuQ语义与乐器/风格/氛围模型",
+      "prefixes": [
+        "models/MuQ-MuLan-large",
+        "models/MuQ-large-msd-iter",
+        "models/xlm-roberta-base",
+        "models/Essentia-tagging",
+        "models/MuQ-MuLan-download.json",
+        "data/components/music-analysis"
+      ],
+      "files": [
+        {
+          "path": "models/MuQ-MuLan-large/README.md",
+          "url": "https://huggingface.co/OpenMuQ/MuQ-MuLan-large/resolve/2e01c796b71dca71b45251384c04cd7b237c9020/README.md",
+          "bytes": 4405,
+          "sha256": "2a23fa7c94ed047a57240293dd5d6267ae385d1605f2f9756c188b5e9ba5b0c7"
+        },
+        {
+          "path": "models/MuQ-MuLan-large/config.json",
+          "url": "https://huggingface.co/OpenMuQ/MuQ-MuLan-large/resolve/2e01c796b71dca71b45251384c04cd7b237c9020/config.json",
+          "bytes": 847,
+          "sha256": "8fefc545ef87ecd9bcde7417dd03464370c48c321f36dcff20266a752079e468"
+        },
+        {
+          "path": "models/MuQ-MuLan-large/pytorch_model.bin",
+          "url": "https://huggingface.co/OpenMuQ/MuQ-MuLan-large/resolve/2e01c796b71dca71b45251384c04cd7b237c9020/pytorch_model.bin",
+          "bytes": 2653954401,
+          "sha256": "d42ae3f7cb9b66759ee0089ddc70e2f28b130c2d8ba621457358272d32dd0444"
+        },
+        {
+          "path": "models/MuQ-large-msd-iter/README.md",
+          "url": "https://huggingface.co/OpenMuQ/MuQ-large-msd-iter/resolve/0562a57814f6f8bbd9fdea0a25921a2fce1a841a/README.md",
+          "bytes": 4407,
+          "sha256": "8d7322961d39f52f83953bef164503d6fb84757b00326a0107c0e1d84b880465"
+        },
+        {
+          "path": "models/MuQ-large-msd-iter/config.json",
+          "url": "https://huggingface.co/OpenMuQ/MuQ-large-msd-iter/resolve/0562a57814f6f8bbd9fdea0a25921a2fce1a841a/config.json",
+          "bytes": 3133,
+          "sha256": "237335ee27d8fb951ce778701a12a79e06c51ae636dd786f97e45f51ce532543"
+        },
+        {
+          "path": "models/MuQ-large-msd-iter/model.safetensors",
+          "url": "https://huggingface.co/OpenMuQ/MuQ-large-msd-iter/resolve/0562a57814f6f8bbd9fdea0a25921a2fce1a841a/model.safetensors",
+          "bytes": 1333825096,
+          "sha256": "273febab2be02872c37d2c37e48a9d6c52c1c9392f3eeeabd498efa281ccb7a6"
+        },
+        {
+          "path": "models/xlm-roberta-base/README.md",
+          "url": "https://huggingface.co/FacebookAI/xlm-roberta-base/resolve/e73636d4f797dec63c3081bb6ed5c7b0bb3f2089/README.md",
+          "bytes": 5238,
+          "sha256": "bec9f2cd81f7396a64ee474145117d81139906443a21480cbe4993c97cb499aa"
+        },
+        {
+          "path": "models/xlm-roberta-base/config.json",
+          "url": "https://huggingface.co/FacebookAI/xlm-roberta-base/resolve/e73636d4f797dec63c3081bb6ed5c7b0bb3f2089/config.json",
+          "bytes": 615,
+          "sha256": "d66ed8cd4f2a93b358c245e50736fa389ed4f35c0bae7aad0b32abb20c62b579"
+        },
+        {
+          "path": "models/xlm-roberta-base/model.safetensors",
+          "url": "https://huggingface.co/FacebookAI/xlm-roberta-base/resolve/e73636d4f797dec63c3081bb6ed5c7b0bb3f2089/model.safetensors",
+          "bytes": 1115567652,
+          "sha256": "6fd4797bc397c3b8b55d6bb5740366b57e6a3ce91c04c77f22aafc0c128e6feb"
+        },
+        {
+          "path": "models/xlm-roberta-base/sentencepiece.bpe.model",
+          "url": "https://huggingface.co/FacebookAI/xlm-roberta-base/resolve/e73636d4f797dec63c3081bb6ed5c7b0bb3f2089/sentencepiece.bpe.model",
+          "bytes": 5069051,
+          "sha256": "cfc8146abe2a0488e9e2a0c56de7952f7c11ab059eca145a0a727afce0db2865"
+        },
+        {
+          "path": "models/xlm-roberta-base/tokenizer.json",
+          "url": "https://huggingface.co/FacebookAI/xlm-roberta-base/resolve/e73636d4f797dec63c3081bb6ed5c7b0bb3f2089/tokenizer.json",
+          "bytes": 9096718,
+          "sha256": "a898ea75433890f6610f4e470b8ebeb0c21dce5c8dd61f892eb09eb5919d2e2c"
+        },
+        {
+          "path": "models/xlm-roberta-base/tokenizer_config.json",
+          "url": "https://huggingface.co/FacebookAI/xlm-roberta-base/resolve/e73636d4f797dec63c3081bb6ed5c7b0bb3f2089/tokenizer_config.json",
+          "bytes": 25,
+          "sha256": "994f46754c5bf4014f1aa92d34b1374319c3a6b3f702105cd5b742beaecd18ce"
+        },
+        {
+          "path": "models/Essentia-tagging/discogs-effnet-bsdynamic-1.onnx",
+          "url": "https://essentia.upf.edu/models/feature-extractors/discogs-effnet/discogs-effnet-bsdynamic-1.onnx",
+          "bytes": 18027718,
+          "sha256": "a280825b334797cf677939db8cd5762c0392aedd0ca6415dbc1cd083f045e43c"
+        },
+        {
+          "path": "models/Essentia-tagging/discogs-effnet-bsdynamic-1.json",
+          "url": "https://essentia.upf.edu/models/feature-extractors/discogs-effnet/discogs-effnet-bsdynamic-1.json",
+          "bytes": 14986,
+          "sha256": "a2e85b2e7372d5f8e0f35bdd6aeae1139f101087d183d0b2fb60b0ea0f01a0ff"
+        },
+        {
+          "path": "models/Essentia-tagging/mtg_jamendo_genre-discogs-effnet-1.onnx",
+          "url": "https://essentia.upf.edu/models/classification-heads/mtg_jamendo_genre/mtg_jamendo_genre-discogs-effnet-1.onnx",
+          "bytes": 2802925,
+          "sha256": "637acf45315191a2c9a87d5977d48f02da6fc823192fe794a1537c55e7c7ce6a"
+        },
+        {
+          "path": "models/Essentia-tagging/mtg_jamendo_genre-discogs-effnet-1.json",
+          "url": "https://essentia.upf.edu/models/classification-heads/mtg_jamendo_genre/mtg_jamendo_genre-discogs-effnet-1.json",
+          "bytes": 4267,
+          "sha256": "b0ae89110ddbdba5ed3ad375910b1cffc738436fbb4138ac4c2801b48fc5ec59"
+        },
+        {
+          "path": "models/Essentia-tagging/mtg_jamendo_instrument-discogs-effnet-1.onnx",
+          "url": "https://essentia.upf.edu/models/classification-heads/mtg_jamendo_instrument/mtg_jamendo_instrument-discogs-effnet-1.onnx",
+          "bytes": 2706492,
+          "sha256": "9ae2d9e763d66bd8eed654d1ac3aa171e6539cb8a0e11f3dcd53df1428980802"
+        },
+        {
+          "path": "models/Essentia-tagging/mtg_jamendo_instrument-discogs-effnet-1.json",
+          "url": "https://essentia.upf.edu/models/classification-heads/mtg_jamendo_instrument/mtg_jamendo_instrument-discogs-effnet-1.json",
+          "bytes": 3382,
+          "sha256": "7d02204c6451b5615e2968ec6364bbae3b915c886e608f05f00d3a38dc5177c4"
+        },
+        {
+          "path": "models/Essentia-tagging/mtg_jamendo_moodtheme-discogs-effnet-1.onnx",
+          "url": "https://essentia.upf.edu/models/classification-heads/mtg_jamendo_moodtheme/mtg_jamendo_moodtheme-discogs-effnet-1.onnx",
+          "bytes": 2739322,
+          "sha256": "7d6270acaa5f4bba4b115a0d6849aca05ed6bd153dcb6d9da4f6ab9f99ef10ff"
+        },
+        {
+          "path": "models/Essentia-tagging/mtg_jamendo_moodtheme-discogs-effnet-1.json",
+          "url": "https://essentia.upf.edu/models/classification-heads/mtg_jamendo_moodtheme/mtg_jamendo_moodtheme-discogs-effnet-1.json",
+          "bytes": 3646,
+          "sha256": "d62cd90263e4d613fa7fcce7a831e339450394794af63685f96e065c1a896ab0"
+        }
+      ],
+      "metadata": {
+        "models/MuQ-MuLan-download.json": {
+          "file": "resources/manifests/muq-download.json",
+          "sha256": "dbfc456afedfbf032ebe01ac576d7e30a7d6d10c927af0a013d2a32659cb36f9"
+        },
+        "models/Essentia-tagging/download-manifest.json": {
+          "file": "resources/manifests/essentia-download.json",
+          "sha256": "18685197a9193ced31455eaf9d8095bc9053c7cda836fce70a8be3c86fd31d30"
+        },
+        "data/components/music-analysis/manifest.json": {
+          "file": "resources/manifests/analysis-runtime.json",
+          "sha256": "8264a1a7c8cecab051387e2eece53d8be9e8ee54f7a62533240a28d417bdc29b"
+        }
+      }
+    },
+    "structure": {
+      "name": "SongFormer歌曲段落模型",
+      "prefixes": [
+        "data/components/music-structure"
+      ],
+      "files": [
+        {
+          "path": "data/components/music-structure/upstream/configuration_songformer.py",
+          "url": "https://huggingface.co/ASLP-lab/SongFormer/resolve/a75880ed1b7375ac71860ec6c4fc9c899cf99515/configuration_songformer.py",
+          "bytes": 736,
+          "sha256": "8d4b5660645901c0a54ffb3a7b7e4667e35b572981c3b203fbdc04a614e210fa"
+        },
+        {
+          "path": "data/components/music-structure/upstream/config.json",
+          "url": "https://huggingface.co/ASLP-lab/SongFormer/resolve/a75880ed1b7375ac71860ec6c4fc9c899cf99515/config.json",
+          "bytes": 655,
+          "sha256": "912c39afb6543fedfd47f27eb1596ed971bb4911e374e24e9ffe329bf6cb303d"
+        },
+        {
+          "path": "data/components/music-structure/upstream/dataset/custom_types.py",
+          "url": "https://huggingface.co/ASLP-lab/SongFormer/resolve/a75880ed1b7375ac71860ec6c4fc9c899cf99515/dataset/custom_types.py",
+          "bytes": 358,
+          "sha256": "93510ccd1b7d4b7ab06f9a15ff04dac557d7aab9b5a36d68fb5881a7e04844c3"
+        },
+        {
+          "path": "data/components/music-structure/upstream/dataset/label2id.py",
+          "url": "https://huggingface.co/ASLP-lab/SongFormer/resolve/a75880ed1b7375ac71860ec6c4fc9c899cf99515/dataset/label2id.py",
+          "bytes": 3341,
+          "sha256": "beae7c16d5878c42772be06fc1ac307d8d55b56ce7aa395864b2263d9c5b6e83"
+        },
+        {
+          "path": "data/components/music-structure/upstream/model.py",
+          "url": "https://huggingface.co/ASLP-lab/SongFormer/resolve/a75880ed1b7375ac71860ec6c4fc9c899cf99515/model.py",
+          "bytes": 18578,
+          "sha256": "d0e32c179f044ccca553375bf31d71c3fc24ff2c723f0e2dbb3f77bc867bb28a"
+        },
+        {
+          "path": "data/components/music-structure/upstream/model_config.py",
+          "url": "https://huggingface.co/ASLP-lab/SongFormer/resolve/a75880ed1b7375ac71860ec6c4fc9c899cf99515/model_config.py",
+          "bytes": 2725,
+          "sha256": "3676ead26f900d664dc89d86a216482e778833a65f2279fb8e726b61290680f6"
+        },
+        {
+          "path": "data/components/music-structure/upstream/modeling_songformer.py",
+          "url": "https://huggingface.co/ASLP-lab/SongFormer/resolve/a75880ed1b7375ac71860ec6c4fc9c899cf99515/modeling_songformer.py",
+          "bytes": 12436,
+          "sha256": "904c8e650f753c918038ac24e776df94464df61de911bf5d35eb1a0f17e83cb3"
+        },
+        {
+          "path": "data/components/music-structure/upstream/msd_stats.json",
+          "url": "https://huggingface.co/ASLP-lab/SongFormer/resolve/a75880ed1b7375ac71860ec6c4fc9c899cf99515/msd_stats.json",
+          "bytes": 2531,
+          "sha256": "10a2ca43de6b94522bfb651fdfccc2336d89a8a746af0a597528f66f56e64586"
+        },
+        {
+          "path": "data/components/music-structure/upstream/musicfm/model/__init__.py",
+          "url": "https://huggingface.co/ASLP-lab/SongFormer/resolve/a75880ed1b7375ac71860ec6c4fc9c899cf99515/musicfm/model/__init__.py",
+          "bytes": 2,
+          "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+        },
+        {
+          "path": "data/components/music-structure/upstream/muq_config2.json",
+          "url": "https://huggingface.co/ASLP-lab/SongFormer/resolve/a75880ed1b7375ac71860ec6c4fc9c899cf99515/muq_config2.json",
+          "bytes": 3719,
+          "sha256": "8de4a64926105f3377d715615e59f6798db60bcae94a9aa45d21edb18fc370fa"
+        },
+        {
+          "path": "data/components/music-structure/upstream/musicfm/modules/__init__.py",
+          "url": "https://huggingface.co/ASLP-lab/SongFormer/resolve/a75880ed1b7375ac71860ec6c4fc9c899cf99515/musicfm/modules/__init__.py",
+          "bytes": 2,
+          "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+        },
+        {
+          "path": "data/components/music-structure/upstream/musicfm/model/musicfm_25hz.py",
+          "url": "https://huggingface.co/ASLP-lab/SongFormer/resolve/a75880ed1b7375ac71860ec6c4fc9c899cf99515/musicfm/model/musicfm_25hz.py",
+          "bytes": 8615,
+          "sha256": "33071676d19f953318ead3099bead5a44f40ec455fb4ff550d9d7d0616a215a1"
+        },
+        {
+          "path": "data/components/music-structure/upstream/musicfm/modules/features.py",
+          "url": "https://huggingface.co/ASLP-lab/SongFormer/resolve/a75880ed1b7375ac71860ec6c4fc9c899cf99515/musicfm/modules/features.py",
+          "bytes": 1869,
+          "sha256": "aa8e99711f4a4eab522ff89fe86fc27e281e373ed0ae416743736da229f171da"
+        },
+        {
+          "path": "data/components/music-structure/upstream/musicfm/modules/flash_conformer.py",
+          "url": "https://huggingface.co/ASLP-lab/SongFormer/resolve/a75880ed1b7375ac71860ec6c4fc9c899cf99515/musicfm/modules/flash_conformer.py",
+          "bytes": 95453,
+          "sha256": "c0bf5df817a9c50e4706b4414b75e5399bcbdf89cec3a03de05f5ad8d0b3abfb"
+        },
+        {
+          "path": "data/components/music-structure/upstream/musicfm/modules/conv.py",
+          "url": "https://huggingface.co/ASLP-lab/SongFormer/resolve/a75880ed1b7375ac71860ec6c4fc9c899cf99515/musicfm/modules/conv.py",
+          "bytes": 3154,
+          "sha256": "585705a6450db374e8c411034e846491f7f48d4ed0516fbf8d3b84855ef0d7d1"
+        },
+        {
+          "path": "data/components/music-structure/upstream/postprocessing/functional.py",
+          "url": "https://huggingface.co/ASLP-lab/SongFormer/resolve/a75880ed1b7375ac71860ec6c4fc9c899cf99515/postprocessing/functional.py",
+          "bytes": 2567,
+          "sha256": "0bafe5406ee38fefabdf4537c5c0572331e717e950bf05c4ee3d9c6a5be6b898"
+        },
+        {
+          "path": "data/components/music-structure/upstream/musicfm/modules/random_quantizer.py",
+          "url": "https://huggingface.co/ASLP-lab/SongFormer/resolve/a75880ed1b7375ac71860ec6c4fc9c899cf99515/musicfm/modules/random_quantizer.py",
+          "bytes": 3055,
+          "sha256": "2ffae390fbf7fefa8a62000ba0490af92ecc001d3b5715fb98f7a1e1578c2aa2"
+        },
+        {
+          "path": "data/components/music-structure/upstream/postprocessing/helpers.py",
+          "url": "https://huggingface.co/ASLP-lab/SongFormer/resolve/a75880ed1b7375ac71860ec6c4fc9c899cf99515/postprocessing/helpers.py",
+          "bytes": 3732,
+          "sha256": "06f970fdcf42e02b4ae9395a69a5a902ec96ecc2aaa38a949ecc34517984ffbb"
+        },
+        {
+          "path": "data/components/music-structure/models/SongFormer.safetensors",
+          "url": "https://huggingface.co/ASLP-lab/SongFormer/resolve/a75880ed1b7375ac71860ec6c4fc9c899cf99515/SongFormer.safetensors",
+          "bytes": 104468437,
+          "sha256": "87f17bfbed37014c6af4314abd9eb6971a94e3a95e9fc70f9e5ee33bdacb487b"
+        },
+        {
+          "path": "data/components/music-structure/models/pretrained_msd.pt",
+          "url": "https://huggingface.co/minzwon/MusicFM/resolve/4513b38bc25ad1d227b1980819b9691ba97f4d87/pretrained_msd.pt",
+          "bytes": 1316802088,
+          "sha256": "218b483a0256ddef736267425fabb166fd97008983696bb9270def464b47bded"
+        },
+        {
+          "path": "data/components/music-structure/runtime/model.py",
+          "url": "https://huggingface.co/ASLP-lab/SongFormer/resolve/a75880ed1b7375ac71860ec6c4fc9c899cf99515/model.py",
+          "bytes": 18578,
+          "sha256": "d0e32c179f044ccca553375bf31d71c3fc24ff2c723f0e2dbb3f77bc867bb28a",
+          "replacements": [
+            [
+              "from msaf.eval import compute_results",
+              ""
+            ]
+          ],
+          "output_sha256": "390e640e092ae6f6fb6edb2acac976cb9dfb19ca2943f853bf83f3b165d17a71"
+        }
+      ],
+      "metadata": {
+        "data/components/music-structure/wav2vec-config/config.json": {
+          "file": "resources/manifests/structure-wav2vec.json",
+          "sha256": "be066c248382ce4af121445dae5537b5a77146688471057e270abea9a709d671"
+        },
+        "data/components/music-structure/SOURCE-NOTICE.txt": {
+          "file": "resources/manifests/structure-notice.txt",
+          "sha256": "4d35a0f74536a42006babc1a66a9604902cf23c373c923c921c6cb5c451ac37e"
+        },
+        "data/components/music-structure/manifest.json": {
+          "file": "resources/manifests/structure.json",
+          "sha256": "5fbdbfc2b6ebc92ae9b71fa2852b7983ddd17f5310cb8f0854284cd57f02073b"
+        }
+      }
+    },
+    "stems": {
+      "name": "四轨/六轨分离及音频编码工具",
+      "prefixes": [
+        "models/stem-separation"
+      ],
+      "files": [
+        {
+          "path": "models/stem-separation/BS-Roformer-SW.ckpt",
+          "url": "https://huggingface.co/baicai1145/pymss/resolve/f02318ef92c43472777ed7aeeded3d2b29a68b58/music_stems/six_stem/BS-Roformer-SW.ckpt",
+          "bytes": 699412152,
+          "sha256": "24e7d35ee9c64415673d3fd33e06a67cac2c103c5df6267ba1576459c775916e"
+        },
+        {
+          "path": "models/stem-separation/BS-Roformer-SW.yaml",
+          "url": "https://huggingface.co/baicai1145/pymss/resolve/f02318ef92c43472777ed7aeeded3d2b29a68b58/music_stems/six_stem/BS-Roformer-SW.yaml",
+          "bytes": 4658,
+          "sha256": "f76111edc8ffa6fdf4f7f777b0826a052e551b855d976086d7f20bcecde73c89"
+        },
+        {
+          "path": "models/stem-separation/model_scnet_ep_36_sdr_10.0891.ckpt",
+          "url": "https://huggingface.co/baicai1145/pymss/resolve/f02318ef92c43472777ed7aeeded3d2b29a68b58/music_stems/four_stem/model_scnet_ep_36_sdr_10.0891.ckpt",
+          "bytes": 214063778,
+          "sha256": "ac25975f0f5704f3d1a3c3c251505b7a0f417a22eafe82773440ee4f7e14b74f"
+        },
+        {
+          "path": "models/stem-separation/model_scnet_ep_36_sdr_10.0891.yaml",
+          "url": "https://huggingface.co/baicai1145/pymss/resolve/f02318ef92c43472777ed7aeeded3d2b29a68b58/music_stems/four_stem/model_scnet_ep_36_sdr_10.0891.yaml",
+          "bytes": 5727,
+          "sha256": "7640c30cfc9f8a1047561b4188278453405b5c36e71ce370e35879672604d1e9"
+        },
+        {
+          "path": "models/stem-separation/wheels/pymss-2.1.9-py3-none-any.whl",
+          "url": "https://files.pythonhosted.org/packages/fd/49/05651446e20c4c25eae25f79e64b7461268bcb9a14aa5803cdbfd695378f/pymss-2.1.9-py3-none-any.whl",
+          "bytes": 736935,
+          "sha256": "d1b28ec05ed716657ff38302ca9633208ce9ac60b2e4012da4e2b134e9011fb2",
+          "extract_to": "models/stem-separation/runtime"
+        },
+        {
+          "path": "models/stem-separation/wheels/pymss_core-0.1.11-py3-none-any.whl",
+          "url": "https://files.pythonhosted.org/packages/e4/ca/86a5822f3dcbfbb01e1c2d357ce57c34d865626baa70d62704aabef738e6/pymss_core-0.1.11-py3-none-any.whl",
+          "bytes": 124736,
+          "sha256": "04822a78f768b344538a0aeaccecb3dcf6d191dba39fd0eda2acbf833fa5039a",
+          "extract_to": "models/stem-separation/runtime"
+        },
+        {
+          "path": "models/stem-separation/wheels/imageio_ffmpeg-0.6.0-py3-none-win_amd64.whl",
+          "url": "https://files.pythonhosted.org/packages/2c/c6/fa760e12a2483469e2bf5058c5faff664acf66cadb4df2ad6205b016a73d/imageio_ffmpeg-0.6.0-py3-none-win_amd64.whl",
+          "bytes": 31246824,
+          "sha256": "02fa47c83703c37df6bfe4896aab339013f62bf02c5ebf2dce6da56af04ffc0a",
+          "extract_member_suffix": "ffmpeg-win-x86_64-v7.1.exe",
+          "extract_target": "models/stem-separation/ffmpeg.exe",
+          "output_sha256": "2ce797a0f88d7f067180338fb227f7b1928ea727bd9a4d7a1d022f7c52af71a3"
+        }
+      ],
+      "metadata": {
+        "models/stem-separation/manifest.json": {
+          "file": "resources/manifests/stems.json",
+          "sha256": "90ba626ae7c46cc86b8f8c45cad5c80bd0314e8fbb62c220874eec9cd7244755"
+        }
+      }
+    },
+    "practice-models": {
+      "name": "节拍/和弦/调性及歌声旋律模型",
+      "prefixes": [
+        "models/practice-analysis"
+      ],
+      "files": [
+        {
+          "path": "models/practice-analysis/sheetsage2/__init__.py",
+          "url": "https://huggingface.co/m-a-p/SheetSage2/resolve/b83c3d79a6d98bcffaf8f9ed112c90aa887887bc/__init__.py",
+          "bytes": 39,
+          "sha256": "19539a965cabf22d08231688efc15547d005e6345745f48684c2f02d010f82fd"
+        },
+        {
+          "path": "models/practice-analysis/sheetsage2/audio_sheetsage2.py",
+          "url": "https://huggingface.co/m-a-p/SheetSage2/resolve/b83c3d79a6d98bcffaf8f9ed112c90aa887887bc/audio_sheetsage2.py",
+          "bytes": 4289,
+          "sha256": "ecce56e7bb8a08cbca9eb27a74d9aeff17f55e80efcc7c48f7436440f610ccc1"
+        },
+        {
+          "path": "models/practice-analysis/sheetsage2/benchmark_results.json",
+          "url": "https://huggingface.co/m-a-p/SheetSage2/resolve/b83c3d79a6d98bcffaf8f9ed112c90aa887887bc/benchmark_results.json",
+          "bytes": 13616,
+          "sha256": "780bff9fb34f2ecc115f11625bece4b7444fffc66e0384e852c4d77d2d9eb178"
+        },
+        {
+          "path": "models/practice-analysis/sheetsage2/chord_spelling_sheetsage2.py",
+          "url": "https://huggingface.co/m-a-p/SheetSage2/resolve/b83c3d79a6d98bcffaf8f9ed112c90aa887887bc/chord_spelling_sheetsage2.py",
+          "bytes": 9330,
+          "sha256": "5a673e3c8caa6d0a4cda19227ce5587c611a2bf85343f6bc623e3d66d99ed8b1"
+        },
+        {
+          "path": "models/practice-analysis/sheetsage2/config.json",
+          "url": "https://huggingface.co/m-a-p/SheetSage2/resolve/b83c3d79a6d98bcffaf8f9ed112c90aa887887bc/config.json",
+          "bytes": 2060,
+          "sha256": "a986e63f5d831ecb823c11d19cfb371d763f25ae2e614ec9acd714c0b8bb87fd"
+        },
+        {
+          "path": "models/practice-analysis/sheetsage2/configuration_mert2.py",
+          "url": "https://huggingface.co/m-a-p/SheetSage2/resolve/b83c3d79a6d98bcffaf8f9ed112c90aa887887bc/configuration_mert2.py",
+          "bytes": 3860,
+          "sha256": "77b53ec9d7ee31a599d744fb006e812c7eeaf7390deb46e2f460cf8c17b00bd6"
+        },
+        {
+          "path": "models/practice-analysis/sheetsage2/configuration_sheetsage2.py",
+          "url": "https://huggingface.co/m-a-p/SheetSage2/resolve/b83c3d79a6d98bcffaf8f9ed112c90aa887887bc/configuration_sheetsage2.py",
+          "bytes": 4119,
+          "sha256": "36d174331b3721d984608252830179bf3516d77b7225f413acc85bdf5efb3bec"
+        },
+        {
+          "path": "models/practice-analysis/sheetsage2/durations_sheetsage2.py",
+          "url": "https://huggingface.co/m-a-p/SheetSage2/resolve/b83c3d79a6d98bcffaf8f9ed112c90aa887887bc/durations_sheetsage2.py",
+          "bytes": 296,
+          "sha256": "abbc297b70b63a86f8509b1db74d0e85d7b46dcb83867cf33741c43f9d49db83"
+        },
+        {
+          "path": "models/practice-analysis/sheetsage2/exports_sheetsage2.py",
+          "url": "https://huggingface.co/m-a-p/SheetSage2/resolve/b83c3d79a6d98bcffaf8f9ed112c90aa887887bc/exports_sheetsage2.py",
+          "bytes": 10405,
+          "sha256": "11782cff50f96dac1bf1eedefed86b3cd60222e31b8456bee366eeb373b6a7e5"
+        },
+        {
+          "path": "models/practice-analysis/sheetsage2/generation_sheetsage2.py",
+          "url": "https://huggingface.co/m-a-p/SheetSage2/resolve/b83c3d79a6d98bcffaf8f9ed112c90aa887887bc/generation_sheetsage2.py",
+          "bytes": 24722,
+          "sha256": "b58dbbfaebfba2a441a79b8c36183f0e4956acdd3aaf7c655c559933b4c20afd"
+        },
+        {
+          "path": "models/practice-analysis/sheetsage2/infer.py",
+          "url": "https://huggingface.co/m-a-p/SheetSage2/resolve/b83c3d79a6d98bcffaf8f9ed112c90aa887887bc/infer.py",
+          "bytes": 4253,
+          "sha256": "20e6b23c910bfdecf012a8ee8d45efcb31cb6cb21351da5921d95fb877e70de6"
+        },
+        {
+          "path": "models/practice-analysis/sheetsage2/io_sheetsage2.py",
+          "url": "https://huggingface.co/m-a-p/SheetSage2/resolve/b83c3d79a6d98bcffaf8f9ed112c90aa887887bc/io_sheetsage2.py",
+          "bytes": 1830,
+          "sha256": "afb5b4d4a52b513b11cfdad40e7b9d2286dd4ff6585b89688dbb31b3d5376da6"
+        },
+        {
+          "path": "models/practice-analysis/sheetsage2/labels_sheetsage2.py",
+          "url": "https://huggingface.co/m-a-p/SheetSage2/resolve/b83c3d79a6d98bcffaf8f9ed112c90aa887887bc/labels_sheetsage2.py",
+          "bytes": 978,
+          "sha256": "4a80870695dd91da6070e7d8d0ce6b50f3bf71c3f629417a86cf12f4ef4f97e0"
+        },
+        {
+          "path": "models/practice-analysis/sheetsage2/LICENSE",
+          "url": "https://huggingface.co/m-a-p/SheetSage2/resolve/b83c3d79a6d98bcffaf8f9ed112c90aa887887bc/LICENSE",
+          "bytes": 20000,
+          "sha256": "73593d6cad4ca80f3ab1448a4908f92ab802dfffe029561e3b12fa7d07c8b87c"
+        },
+        {
+          "path": "models/practice-analysis/sheetsage2/midi_sheetsage2.py",
+          "url": "https://huggingface.co/m-a-p/SheetSage2/resolve/b83c3d79a6d98bcffaf8f9ed112c90aa887887bc/midi_sheetsage2.py",
+          "bytes": 4230,
+          "sha256": "32f80d13592c669e56683ebb4c415f13bf8278c8ad1fe43afa500347bed35099"
+        },
+        {
+          "path": "models/practice-analysis/sheetsage2/model.safetensors",
+          "url": "https://huggingface.co/m-a-p/SheetSage2/resolve/b83c3d79a6d98bcffaf8f9ed112c90aa887887bc/model.safetensors",
+          "bytes": 228738564,
+          "sha256": "b235f68091a5f5b644000f2b5acb57d1e70432aca2b34ab1b9cf27236e1f4274"
+        },
+        {
+          "path": "models/practice-analysis/sheetsage2/modeling_mert2.py",
+          "url": "https://huggingface.co/m-a-p/SheetSage2/resolve/b83c3d79a6d98bcffaf8f9ed112c90aa887887bc/modeling_mert2.py",
+          "bytes": 17081,
+          "sha256": "b1a3174e5649c4b26b0c90d8626f0adacfbbba111a58ed3bb72ad651945a2f5c"
+        },
+        {
+          "path": "models/practice-analysis/sheetsage2/modeling_sheetsage2.py",
+          "url": "https://huggingface.co/m-a-p/SheetSage2/resolve/b83c3d79a6d98bcffaf8f9ed112c90aa887887bc/modeling_sheetsage2.py",
+          "bytes": 24664,
+          "sha256": "f1c45346dd76329fcbeadc5c721312836509326310c034634bc12d75263688bb"
+        },
+        {
+          "path": "models/practice-analysis/sheetsage2/notation_sheetsage2.py",
+          "url": "https://huggingface.co/m-a-p/SheetSage2/resolve/b83c3d79a6d98bcffaf8f9ed112c90aa887887bc/notation_sheetsage2.py",
+          "bytes": 55775,
+          "sha256": "f75f0e8b268cd9e9c622d791d3fd77d2e68ad355a4e67018c7e15aeb2bc05af7"
+        },
+        {
+          "path": "models/practice-analysis/sheetsage2/pipeline_sheetsage2.py",
+          "url": "https://huggingface.co/m-a-p/SheetSage2/resolve/b83c3d79a6d98bcffaf8f9ed112c90aa887887bc/pipeline_sheetsage2.py",
+          "bytes": 15022,
+          "sha256": "0ae572554ca375323e2aa4ea1fb25ba27e7f4d520c0ba5b101d74930c0a66c33"
+        },
+        {
+          "path": "models/practice-analysis/sheetsage2/processing_sheetsage2.py",
+          "url": "https://huggingface.co/m-a-p/SheetSage2/resolve/b83c3d79a6d98bcffaf8f9ed112c90aa887887bc/processing_sheetsage2.py",
+          "bytes": 5408,
+          "sha256": "ec5ef34ad61455437c750dd5ffb92142f7309638559e74114c639b57da56263c"
+        },
+        {
+          "path": "models/practice-analysis/sheetsage2/processor_config.json",
+          "url": "https://huggingface.co/m-a-p/SheetSage2/resolve/b83c3d79a6d98bcffaf8f9ed112c90aa887887bc/processor_config.json",
+          "bytes": 277,
+          "sha256": "1eed73513a74029fe74c71faba70f8cff002ae7be23ac1c926125846d1b29817"
+        },
+        {
+          "path": "models/practice-analysis/sheetsage2/README.md",
+          "url": "https://huggingface.co/m-a-p/SheetSage2/resolve/b83c3d79a6d98bcffaf8f9ed112c90aa887887bc/README.md",
+          "bytes": 17655,
+          "sha256": "46cece7664fc0b531d379311af7caf3bb6a46e89d9bf8a6b6bbbbf5e7318bc81"
+        },
+        {
+          "path": "models/practice-analysis/sheetsage2/render.py",
+          "url": "https://huggingface.co/m-a-p/SheetSage2/resolve/b83c3d79a6d98bcffaf8f9ed112c90aa887887bc/render.py",
+          "bytes": 1927,
+          "sha256": "446b18e0ba7250c8584c14bda241f8d063083cd10b1432de82c3cf56736af9de"
+        },
+        {
+          "path": "models/practice-analysis/sheetsage2/rendering_sheetsage2.py",
+          "url": "https://huggingface.co/m-a-p/SheetSage2/resolve/b83c3d79a6d98bcffaf8f9ed112c90aa887887bc/rendering_sheetsage2.py",
+          "bytes": 15862,
+          "sha256": "ddbcaf314139d67727cb5df6840d7d60d671d5c67f6b185a26b840df1e2d9288"
+        },
+        {
+          "path": "models/practice-analysis/sheetsage2/schema_sheetsage2.py",
+          "url": "https://huggingface.co/m-a-p/SheetSage2/resolve/b83c3d79a6d98bcffaf8f9ed112c90aa887887bc/schema_sheetsage2.py",
+          "bytes": 3893,
+          "sha256": "3ee069f0d4dcfb8080f730c43676318d471ab6b3cfef86c6c225aa63a9db182f"
+        },
+        {
+          "path": "models/practice-analysis/sheetsage2/setup_render.py",
+          "url": "https://huggingface.co/m-a-p/SheetSage2/resolve/b83c3d79a6d98bcffaf8f9ed112c90aa887887bc/setup_render.py",
+          "bytes": 1540,
+          "sha256": "8ee1004067f8e50443005a761d86435337f6ee71eeabf447d543eb5f3ad5561d"
+        },
+        {
+          "path": "models/practice-analysis/sheetsage2/tensors_sheetsage2.py",
+          "url": "https://huggingface.co/m-a-p/SheetSage2/resolve/b83c3d79a6d98bcffaf8f9ed112c90aa887887bc/tensors_sheetsage2.py",
+          "bytes": 4645,
+          "sha256": "51f72b51ed5a22c751d5adf915198490b1a95ec8959fcf9a38ee71b4444fc8b3"
+        },
+        {
+          "path": "models/practice-analysis/sheetsage2/THIRD_PARTY_NOTICES.md",
+          "url": "https://huggingface.co/m-a-p/SheetSage2/resolve/b83c3d79a6d98bcffaf8f9ed112c90aa887887bc/THIRD_PARTY_NOTICES.md",
+          "bytes": 589,
+          "sha256": "ab8b195c2c1475f254a04181a9841db2f2581c579b95858c78ee0040eb495a29"
+        },
+        {
+          "path": "models/practice-analysis/sheetsage2/tokenization_sheetsage2.py",
+          "url": "https://huggingface.co/m-a-p/SheetSage2/resolve/b83c3d79a6d98bcffaf8f9ed112c90aa887887bc/tokenization_sheetsage2.py",
+          "bytes": 30043,
+          "sha256": "2ad9f7734e3d9f750fe575f22fd9ec03a9a4ab52497a6314e76f53ed9024fa75"
+        },
+        {
+          "path": "models/practice-analysis/mert2/config.json",
+          "url": "https://huggingface.co/m-a-p/MERT-v2-FullSong/resolve/d8ba1c745e733b3908ce6ad16ebeb17ac7600a42/config.json",
+          "bytes": 882,
+          "sha256": "f2e194895f58be3ddba327255db129ff0e3bee550cc0ecf08e4d22d79ce3bca3"
+        },
+        {
+          "path": "models/practice-analysis/mert2/configuration_mert2.py",
+          "url": "https://huggingface.co/m-a-p/MERT-v2-FullSong/resolve/d8ba1c745e733b3908ce6ad16ebeb17ac7600a42/configuration_mert2.py",
+          "bytes": 3860,
+          "sha256": "77b53ec9d7ee31a599d744fb006e812c7eeaf7390deb46e2f460cf8c17b00bd6"
+        },
+        {
+          "path": "models/practice-analysis/mert2/LICENSE",
+          "url": "https://huggingface.co/m-a-p/MERT-v2-FullSong/resolve/d8ba1c745e733b3908ce6ad16ebeb17ac7600a42/LICENSE",
+          "bytes": 20000,
+          "sha256": "73593d6cad4ca80f3ab1448a4908f92ab802dfffe029561e3b12fa7d07c8b87c"
+        },
+        {
+          "path": "models/practice-analysis/mert2/marble_results.json",
+          "url": "https://huggingface.co/m-a-p/MERT-v2-FullSong/resolve/d8ba1c745e733b3908ce6ad16ebeb17ac7600a42/marble_results.json",
+          "bytes": 8997,
+          "sha256": "ced741a3d9684b551a2569c2206ba86911addd07a42df72d65b74e4288d4bd0e"
+        },
+        {
+          "path": "models/practice-analysis/mert2/model.safetensors",
+          "url": "https://huggingface.co/m-a-p/MERT-v2-FullSong/resolve/d8ba1c745e733b3908ce6ad16ebeb17ac7600a42/model.safetensors",
+          "bytes": 2529812848,
+          "sha256": "e6dd2ab187d6dd62b6521cd7d8f932e237acf0c5757745a7232082e28391350d"
+        },
+        {
+          "path": "models/practice-analysis/mert2/modeling_mert2.py",
+          "url": "https://huggingface.co/m-a-p/MERT-v2-FullSong/resolve/d8ba1c745e733b3908ce6ad16ebeb17ac7600a42/modeling_mert2.py",
+          "bytes": 17081,
+          "sha256": "b1a3174e5649c4b26b0c90d8626f0adacfbbba111a58ed3bb72ad651945a2f5c"
+        },
+        {
+          "path": "models/practice-analysis/mert2/preprocessor_config.json",
+          "url": "https://huggingface.co/m-a-p/MERT-v2-FullSong/resolve/d8ba1c745e733b3908ce6ad16ebeb17ac7600a42/preprocessor_config.json",
+          "bytes": 215,
+          "sha256": "fc7337f113b71062b8efd03f8a43a07aa769ce85c6a53fdc0b3bb90c299fe63f"
+        },
+        {
+          "path": "models/practice-analysis/mert2/README.md",
+          "url": "https://huggingface.co/m-a-p/MERT-v2-FullSong/resolve/d8ba1c745e733b3908ce6ad16ebeb17ac7600a42/README.md",
+          "bytes": 10419,
+          "sha256": "2b025166f640a0416b5544f4c3775aced46bf0c467af4ef7b302d52496335da6"
+        },
+        {
+          "path": "models/practice-analysis/mert2/THIRD_PARTY_NOTICES.md",
+          "url": "https://huggingface.co/m-a-p/MERT-v2-FullSong/resolve/d8ba1c745e733b3908ce6ad16ebeb17ac7600a42/THIRD_PARTY_NOTICES.md",
+          "bytes": 541,
+          "sha256": "ce8fd578969f1bdad9a0be5e20cab0251dc4253bd4dbfaa9abeb1c11d68bafdc"
+        },
+        {
+          "path": "models/practice-analysis/mert2/weights_manifest.json",
+          "url": "https://huggingface.co/m-a-p/MERT-v2-FullSong/resolve/d8ba1c745e733b3908ce6ad16ebeb17ac7600a42/weights_manifest.json",
+          "bytes": 241,
+          "sha256": "413e2ddfa71ae5bb364bfd15364e221249111e14c2f0843ea6162afb776a8300"
+        },
+        {
+          "path": "models/practice-analysis/game-source/.gitattributes",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/.gitattributes",
+          "bytes": 66,
+          "sha256": "1a1dbe176bc233b499d35a57db7513f2941c99ab9759f177830c9149be99005b"
+        },
+        {
+          "path": "models/practice-analysis/game-source/.gitignore",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/.gitignore",
+          "bytes": 163,
+          "sha256": "e296904e6c136f588f708350e3b496bc22db343e7d17d1da51338c1edefddb18"
+        },
+        {
+          "path": "models/practice-analysis/game-source/assets/onnx-workflow.drawio",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/assets/onnx-workflow.drawio",
+          "bytes": 18442,
+          "sha256": "820d7664a1992c7cac7aee708d88c425cba474ef6572eb960238ab72759efc64"
+        },
+        {
+          "path": "models/practice-analysis/game-source/assets/onnx-workflow.jpg",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/assets/onnx-workflow.jpg",
+          "bytes": 103434,
+          "sha256": "def5e40b013717d160344a994f658750e450166865eeb616157034cbfc988a00"
+        },
+        {
+          "path": "models/practice-analysis/game-source/binarize.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/binarize.py",
+          "bytes": 1221,
+          "sha256": "83f8d88790c3f7af5540174f98ecdad2ff5be14c523fcaaf8c4d610b77dbb31d"
+        },
+        {
+          "path": "models/practice-analysis/game-source/configs/base.yaml",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/configs/base.yaml",
+          "bytes": 2098,
+          "sha256": "865782e2ea444662c5d60cd21ce894ac84f03c9ca8d5239d04042cfd9f8b3acc"
+        },
+        {
+          "path": "models/practice-analysis/game-source/configs/midi.yaml",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/configs/midi.yaml",
+          "bytes": 2847,
+          "sha256": "a278d7c7daaa5a46f7372f7624b63ad47fc28e7a26ffbd3b8dbcc7aab88ab75e"
+        },
+        {
+          "path": "models/practice-analysis/game-source/configs/muon.yaml",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/configs/muon.yaml",
+          "bytes": 340,
+          "sha256": "f3567e1dbd2d6fbf60b56fe5bc64e342ef5a71e5d3e58e338e50f0f1045155c5"
+        },
+        {
+          "path": "models/practice-analysis/game-source/data/.gitkeep",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/data/.gitkeep",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "models/practice-analysis/game-source/deploy.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/deploy.py",
+          "bytes": 1502,
+          "sha256": "5de2f4828b0b867799cf293ac13787ada76ae67556d5d285b4dd4b351e21c347"
+        },
+        {
+          "path": "models/practice-analysis/game-source/deployment/__init__.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/deployment/__init__.py",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "models/practice-analysis/game-source/deployment/api.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/deployment/api.py",
+          "bytes": 1081,
+          "sha256": "e4fcc76129ef0ff78928c822b974f15dc834ba6f7901ed04150037dd4cd8d0cc"
+        },
+        {
+          "path": "models/practice-analysis/game-source/deployment/context.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/deployment/context.py",
+          "bytes": 332,
+          "sha256": "16935023e3681d644fcf33e3b5401c275f163da8ec94db8f49dbcf6f665ad614"
+        },
+        {
+          "path": "models/practice-analysis/game-source/deployment/exporter.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/deployment/exporter.py",
+          "bytes": 15705,
+          "sha256": "37f48edecd8727ae02667eac0a637ab4427b548f13dc515814e1380bb82fdb9e"
+        },
+        {
+          "path": "models/practice-analysis/game-source/evaluate.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/evaluate.py",
+          "bytes": 3819,
+          "sha256": "94ac15ba9278e1f0ebcd8d3acf76ef3be54c2dfa85f8a6f887817c45f5aeea90"
+        },
+        {
+          "path": "models/practice-analysis/game-source/experiments/.gitkeep",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/experiments/.gitkeep",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "models/practice-analysis/game-source/infer.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/infer.py",
+          "bytes": 18042,
+          "sha256": "1ee837262b34040cfae4001deb8cb8b7bf25df100deebc9b880fdb4d9079c707"
+        },
+        {
+          "path": "models/practice-analysis/game-source/inference/__init__.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/inference/__init__.py",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "models/practice-analysis/game-source/inference/api.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/inference/api.py",
+          "bytes": 4558,
+          "sha256": "c8e01d3fcba84df5699ebf7cfc0e79bbf58c270bfac75f0d0b97488250bfc43b"
+        },
+        {
+          "path": "models/practice-analysis/game-source/inference/callbacks.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/inference/callbacks.py",
+          "bytes": 16696,
+          "sha256": "bc843915554b36ed2f5aaeb309e086ef9fc11287b793e0b7fbc9bd929e8ea95c"
+        },
+        {
+          "path": "models/practice-analysis/game-source/inference/data.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/inference/data.py",
+          "bytes": 6681,
+          "sha256": "8db831b6749b41d5345f5d5baaf6c225762456daa210a5b3d8b84fcdc39e2ee8"
+        },
+        {
+          "path": "models/practice-analysis/game-source/inference/me_infer.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/inference/me_infer.py",
+          "bytes": 8148,
+          "sha256": "46edbba78a13e6b2f12f1035e99c4517ce0713945f6f2f3e405d943ca5e72fa6"
+        },
+        {
+          "path": "models/practice-analysis/game-source/inference/me_infer_module.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/inference/me_infer_module.py",
+          "bytes": 6928,
+          "sha256": "483c248f9571e58b1aa3dffb4d86217454b5fac93f4b656a70ceb486f9e46df0"
+        },
+        {
+          "path": "models/practice-analysis/game-source/inference/slicer2.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/inference/slicer2.py",
+          "bytes": 6381,
+          "sha256": "66ae7c194d66b770c6a20898659aecba996b3b117ef09e86795ff0f111efe61f"
+        },
+        {
+          "path": "models/practice-analysis/game-source/inference/utils.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/inference/utils.py",
+          "bytes": 5744,
+          "sha256": "672a1746a7595056f1041590076c9795b0c7ab14eaeaaab977a4ee999c696505"
+        },
+        {
+          "path": "models/practice-analysis/game-source/lib/__init__.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/lib/__init__.py",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "models/practice-analysis/game-source/lib/config/__init__.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/lib/config/__init__.py",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "models/practice-analysis/game-source/lib/config/core.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/lib/config/core.py",
+          "bytes": 6903,
+          "sha256": "b20fc1d02545815b92d97a92cfe12f9d3d157cd078b925f23633bbe924fae580"
+        },
+        {
+          "path": "models/practice-analysis/game-source/lib/config/formatter.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/lib/config/formatter.py",
+          "bytes": 5118,
+          "sha256": "e4081f4ad342aee88758a230e43ec27c2c316d7f3d05ffb1a87a34c470dc581a"
+        },
+        {
+          "path": "models/practice-analysis/game-source/lib/config/io.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/lib/config/io.py",
+          "bytes": 1370,
+          "sha256": "79b1c97d098d2ed274699182db66f47c36f427a21a7913f17f99c15ea53b6080"
+        },
+        {
+          "path": "models/practice-analysis/game-source/lib/config/ops.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/lib/config/ops.py",
+          "bytes": 16110,
+          "sha256": "f5fc4eae93a091973d7184e6cf3179fcce47d37842e7d7d8d9be5049993cb252"
+        },
+        {
+          "path": "models/practice-analysis/game-source/lib/config/schema.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/lib/config/schema.py",
+          "bytes": 14001,
+          "sha256": "5fe37dabef34b84c23a58a929bf7daab2e370b55d74f3254c290f9d7374ae5e5"
+        },
+        {
+          "path": "models/practice-analysis/game-source/lib/feature/__init__.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/lib/feature/__init__.py",
+          "bytes": 2938,
+          "sha256": "0921cddfcdf7e0ffcc06d5d2ba0f2e306b38912b4fda3f69391a87482f0cc551"
+        },
+        {
+          "path": "models/practice-analysis/game-source/lib/feature/mel.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/lib/feature/mel.py",
+          "bytes": 2715,
+          "sha256": "6ba689c1787d2019b0bcd91c2602b95a2cc4e5ad2a6fb7ace6a68b926e6c9504"
+        },
+        {
+          "path": "models/practice-analysis/game-source/lib/feature/pitch.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/lib/feature/pitch.py",
+          "bytes": 2518,
+          "sha256": "048f0966c80333b83ac7ab76669dcef4603191e2583ee2b6f27de3131bf0b490"
+        },
+        {
+          "path": "models/practice-analysis/game-source/lib/indexed_dataset.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/lib/indexed_dataset.py",
+          "bytes": 2789,
+          "sha256": "e1ab58d075b94416ec0b7196e254f48501726e62f2c89eaf456f87734372d00f"
+        },
+        {
+          "path": "models/practice-analysis/game-source/lib/logging.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/lib/logging.py",
+          "bytes": 2212,
+          "sha256": "1eb176cddfa280cfcf2f938b42d096db2942667542d8956a911ddd750e867f1f"
+        },
+        {
+          "path": "models/practice-analysis/game-source/lib/multiprocess.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/lib/multiprocess.py",
+          "bytes": 1268,
+          "sha256": "28ecfab8201f66f474f154d7314c3580fee77c08749d7e878a8da54ba4a238cd"
+        },
+        {
+          "path": "models/practice-analysis/game-source/lib/optimizer/__init__.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/lib/optimizer/__init__.py",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "models/practice-analysis/game-source/lib/optimizer/chained_optimizer.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/lib/optimizer/chained_optimizer.py",
+          "bytes": 8911,
+          "sha256": "fab4942b50e69df1b236fbffbd638f119698685f46e246105fd21777cb54bb66"
+        },
+        {
+          "path": "models/practice-analysis/game-source/lib/optimizer/muon.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/lib/optimizer/muon.py",
+          "bytes": 5738,
+          "sha256": "17e9a4c80c116e7ad8e559d06191fd5bdcfa2c714946ff6ce08ed9c58047976a"
+        },
+        {
+          "path": "models/practice-analysis/game-source/lib/plot.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/lib/plot.py",
+          "bytes": 4930,
+          "sha256": "9a6f4a3638ed6455db0b5a6008f0545dd88f9c65afab6d1677f52907367ae901"
+        },
+        {
+          "path": "models/practice-analysis/game-source/lib/reflection.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/lib/reflection.py",
+          "bytes": 3434,
+          "sha256": "0ecf6d59a6e3d43bc0aeb7d31854bceffad9c4b38274a1ae510f05b7e53cba51"
+        },
+        {
+          "path": "models/practice-analysis/game-source/LICENSE",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/LICENSE",
+          "bytes": 1069,
+          "sha256": "515ecbf58c3f070e2bc8e95b0c3aa66a41431950ce31cd25d3e9abd49db28d0f"
+        },
+        {
+          "path": "models/practice-analysis/game-source/modules/__init__.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/modules/__init__.py",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "models/practice-analysis/game-source/modules/backbones/__init__.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/modules/backbones/__init__.py",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "models/practice-analysis/game-source/modules/backbones/EBF.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/modules/backbones/EBF.py",
+          "bytes": 13686,
+          "sha256": "dc3a15230d110439cba3e56a591bcb4c231100aba00be71d193493544e0a5da2"
+        },
+        {
+          "path": "models/practice-analysis/game-source/modules/backbones/ebf_with_joint_attention.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/modules/backbones/ebf_with_joint_attention.py",
+          "bytes": 47219,
+          "sha256": "f11a751f65c3a941a6c1787b97d7f1b951d1be31085f20ea48e9da419e3740a4"
+        },
+        {
+          "path": "models/practice-analysis/game-source/modules/backbones/eglu.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/modules/backbones/eglu.py",
+          "bytes": 8805,
+          "sha256": "f038d1af913b4c0b5f5692748bdad53f517e5b2c677b5af6c2b168593364eea8"
+        },
+        {
+          "path": "models/practice-analysis/game-source/modules/backbones/RoPosEmb_s2.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/modules/backbones/RoPosEmb_s2.py",
+          "bytes": 3462,
+          "sha256": "a5d971ba6c276c1bb716eeecf910bd674aeb83e0650b79969fd99a4859e3bcae"
+        },
+        {
+          "path": "models/practice-analysis/game-source/modules/commons/__init__.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/modules/commons/__init__.py",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "models/practice-analysis/game-source/modules/commons/common_layers.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/modules/commons/common_layers.py",
+          "bytes": 1706,
+          "sha256": "1e0b4ad8c5b422ba1349c11b0ee9913bb14b610e684fd71774e9917694bdbd4e"
+        },
+        {
+          "path": "models/practice-analysis/game-source/modules/commons/tts_modules.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/modules/commons/tts_modules.py",
+          "bytes": 1660,
+          "sha256": "88e75def6521ce059c50b44fe55027186745a6cda73140d279fd289b07604022"
+        },
+        {
+          "path": "models/practice-analysis/game-source/modules/d3pm.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/modules/d3pm.py",
+          "bytes": 5227,
+          "sha256": "27fe6a7b9a14a6c05daa03aa0077731fd785ad72f25c5dfa9f9b5f20d74ee9f4"
+        },
+        {
+          "path": "models/practice-analysis/game-source/modules/decoding.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/modules/decoding.py",
+          "bytes": 6845,
+          "sha256": "1779a507fb0bb390ba297254c9a71236a3348acc93861dbbb2b09953109a7328"
+        },
+        {
+          "path": "models/practice-analysis/game-source/modules/functional.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/modules/functional.py",
+          "bytes": 1369,
+          "sha256": "33dacde5e18dd5b3b4eb5066fd38a8427ecf22da437f6bff5b33e71a57c9bf7d"
+        },
+        {
+          "path": "models/practice-analysis/game-source/modules/losses/__init__.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/modules/losses/__init__.py",
+          "bytes": 228,
+          "sha256": "f80bec7fd9af0d0e0b76295b1b39844607526395486d275098c4303f4d70df3e"
+        },
+        {
+          "path": "models/practice-analysis/game-source/modules/losses/boundary_loss.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/modules/losses/boundary_loss.py",
+          "bytes": 7507,
+          "sha256": "97b7776991b970687cf908a5c364fbe7086339182b12bbf46f769c04d429870e"
+        },
+        {
+          "path": "models/practice-analysis/game-source/modules/losses/note_loss.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/modules/losses/note_loss.py",
+          "bytes": 4009,
+          "sha256": "b68dc14fccaab94223fd2b292bcb07af1c4fc2c84eb0117a083a1cdbff94b80d"
+        },
+        {
+          "path": "models/practice-analysis/game-source/modules/losses/region_loss.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/modules/losses/region_loss.py",
+          "bytes": 2507,
+          "sha256": "5b175827332083ef3390e3c39ed56ee481f0d2feac9bd43f86ef0ae6aac96052"
+        },
+        {
+          "path": "models/practice-analysis/game-source/modules/metrics/__init__.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/modules/metrics/__init__.py",
+          "bytes": 238,
+          "sha256": "3d22a22a25cb93ae3da61cc729123909fed56dbb3af3749717830f9285c170c8"
+        },
+        {
+          "path": "models/practice-analysis/game-source/modules/metrics/distance.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/modules/metrics/distance.py",
+          "bytes": 2799,
+          "sha256": "e89457659164b19955d221a222f93f329527d68f78621ccdd3079f5f667e6f24"
+        },
+        {
+          "path": "models/practice-analysis/game-source/modules/metrics/overlap.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/modules/metrics/overlap.py",
+          "bytes": 2623,
+          "sha256": "a9cea268c5687df99bae80762699c59d8254957012aac381395f3aa84bc54d04"
+        },
+        {
+          "path": "models/practice-analysis/game-source/modules/metrics/pitch.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/modules/metrics/pitch.py",
+          "bytes": 8452,
+          "sha256": "80c4c5a77f97de6d3b0c2b56eb40045e4782cd47836e7008e5b38a14c4093247"
+        },
+        {
+          "path": "models/practice-analysis/game-source/modules/metrics/quantity.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/modules/metrics/quantity.py",
+          "bytes": 4254,
+          "sha256": "b75130707c41c728dd18d878585f1e992e3e6b3e18dcb5782a493c8a35da5fa8"
+        },
+        {
+          "path": "models/practice-analysis/game-source/modules/midi_extraction.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/modules/midi_extraction.py",
+          "bytes": 2796,
+          "sha256": "992f856c5654c222888f515534cdadab16114b0d23ce324a9a041dc35785df8c"
+        },
+        {
+          "path": "models/practice-analysis/game-source/ONNX.md",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/ONNX.md",
+          "bytes": 6908,
+          "sha256": "2cac5b62b97556b962a63785226f659f94df379be042a24f34d78264e4c768f4"
+        },
+        {
+          "path": "models/practice-analysis/game-source/preprocessing/__init__.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/preprocessing/__init__.py",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "models/practice-analysis/game-source/preprocessing/api.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/preprocessing/api.py",
+          "bytes": 993,
+          "sha256": "e4049fd7d5a4c97b99da936b693992fa3d5be87efcff2b3a2f687a61cee57d94"
+        },
+        {
+          "path": "models/practice-analysis/game-source/preprocessing/binarizer_base.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/preprocessing/binarizer_base.py",
+          "bytes": 8279,
+          "sha256": "4be6ed0953f84f428b4849a1ebf5bf2676abd5c030f6f333a569d526aea74b90"
+        },
+        {
+          "path": "models/practice-analysis/game-source/preprocessing/notes_binarizer.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/preprocessing/notes_binarizer.py",
+          "bytes": 5792,
+          "sha256": "f5e3c9780926342ac8264643c1b78f81aedadfa5bf8369a1df2682fde019e7eb"
+        },
+        {
+          "path": "models/practice-analysis/game-source/README.md",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/README.md",
+          "bytes": 13273,
+          "sha256": "6940310f465686d4714e1a1f2689e3164325f9750f4adb12550eb49d427cbadc"
+        },
+        {
+          "path": "models/practice-analysis/game-source/reduce.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/reduce.py",
+          "bytes": 868,
+          "sha256": "4c2ef5d04609ba0340b612ec81539efa5899c7bd510f9ab7f9dcca06a6648671"
+        },
+        {
+          "path": "models/practice-analysis/game-source/requirements.txt",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/requirements.txt",
+          "bytes": 401,
+          "sha256": "3c1cce7b0e9005159de0e89454ac7ba40ae1115c12307708f360edbe07a3d158"
+        },
+        {
+          "path": "models/practice-analysis/game-source/train.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/train.py",
+          "bytes": 3241,
+          "sha256": "709f58528734dce17c33283039ccb61995c024709705f991f95e7fedacb1aeb2"
+        },
+        {
+          "path": "models/practice-analysis/game-source/training/__init__.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/training/__init__.py",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "models/practice-analysis/game-source/training/api.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/training/api.py",
+          "bytes": 8499,
+          "sha256": "f34f8392fd85d4660b8ca3b65094edc4982fb5076e3d9e402ce1d6219ac862d4"
+        },
+        {
+          "path": "models/practice-analysis/game-source/training/augmentation.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/training/augmentation.py",
+          "bytes": 9243,
+          "sha256": "592603d98169c626f93940112e7f14f7922a8f8c90ffe2be6813689eed8fc44f"
+        },
+        {
+          "path": "models/practice-analysis/game-source/training/callbacks.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/training/callbacks.py",
+          "bytes": 7639,
+          "sha256": "0ebe517561ca14b3cc2976e7bb00f8b52de88b46ba2ffd8093af366904f24f14"
+        },
+        {
+          "path": "models/practice-analysis/game-source/training/data.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/training/data.py",
+          "bytes": 13983,
+          "sha256": "cc41b8a37853dcb491e1ff0cc80979ec51c8d8c8ecfa8f178f48264e1432a16e"
+        },
+        {
+          "path": "models/practice-analysis/game-source/training/me_module.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/training/me_module.py",
+          "bytes": 15859,
+          "sha256": "1b05625ec884cbaec40b37a155bcb74c8adfb706ca62cdbe6be5f44630edda61"
+        },
+        {
+          "path": "models/practice-analysis/game-source/training/pl_module_base.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/training/pl_module_base.py",
+          "bytes": 18657,
+          "sha256": "fc87aeb6f11e47ed67a7423172b130cfd41ba97627fbb5e47ffbce2fdba47014"
+        },
+        {
+          "path": "models/practice-analysis/game-source/training/strategy.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/training/strategy.py",
+          "bytes": 4804,
+          "sha256": "354b44fa34fc986d3faceae9725a771b6462887f05452fbb8ddb74b85fff459b"
+        },
+        {
+          "path": "models/practice-analysis/game-source/training/weight_averaging.py",
+          "url": "https://raw.githubusercontent.com/openvpi/GAME/475a8ee781fe8cca980b3b12fbe6c80c768a813a/training/weight_averaging.py",
+          "bytes": 4184,
+          "sha256": "b6878b8c467e4c668eadc4584e87d856bc2681aada711b3ed889c6637cda8988"
+        },
+        {
+          "path": "models/practice-analysis/game-medium.zip",
+          "url": "https://github.com/openvpi/GAME/releases/download/v1.0.0/GAME-1.0-medium.zip",
+          "bytes": 184550485,
+          "sha256": "8c5b3e531e2905b935e664e2f533921cd637243770fab5282413bdb5051ca60c",
+          "extract_files": [
+            {
+              "member": "GAME-1.0-medium/config.yaml",
+              "path": "models/practice-analysis/game-model/config.yaml",
+              "bytes": 1690,
+              "sha256": "c4cca41410bfce49859db5544e1a0820749f9795d4e3f97e5283917ceeeea813"
+            },
+            {
+              "member": "GAME-1.0-medium/lang_map.json",
+              "path": "models/practice-analysis/game-model/lang_map.json",
+              "bytes": 37,
+              "sha256": "cf7ca24d93682464c5d57d1cd7d238d29d565f7e5774575dbcdff7034852ca37"
+            },
+            {
+              "member": "GAME-1.0-medium/model.pt",
+              "path": "models/practice-analysis/game-model/model.pt",
+              "bytes": 199764599,
+              "sha256": "e9904159fb0646e1a352b9d2bc74615547cfa3e32d45c7464d440ac142846d93"
+            }
+          ]
+        }
+      ],
+      "metadata": {
+        "models/practice-analysis/manifest.json": {
+          "file": "resources/manifests/practice.json",
+          "sha256": "efb555221c7c8d18305cbe9cc017be566c2b5716c3d79a046a3d94ff3ad56cc1"
+        }
+      }
+    }
+  },
+  "modules": {
+    "recommendation": {
+      "groups": [
+        "mert"
+      ],
+      "profiles": [
+        "recommendation"
+      ],
+      "license": "MERT：CC BY-NC 4.0，仅非商业用途。"
+    },
+    "analysis": {
+      "groups": [
+        "analysis-models",
+        "structure"
+      ],
+      "profiles": [
+        "analysis"
+      ],
+      "license": "MuQ、Essentia、SongFormer等来源许可保留；下载用于本机分析。"
+    },
+    "practice": {
+      "groups": [
+        "stems",
+        "practice-models"
+      ],
+      "profiles": [
+        "practice"
+      ],
+      "license": "SheetSage2/MERT2仅非商业；分轨权重许可仍需核用途，资源从原发布者获取。"
+    },
+    "history": {
+      "groups": [],
+      "profiles": [],
+      "license": "不需要模型。"
+    }
+  }
+}

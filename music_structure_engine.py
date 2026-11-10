@@ -5,9 +5,10 @@ The parity-checked rotary SDPA adapter and BF16 recipe match the accepted valida
 No fixture names, lyrics, user annotations, network access or evaluation-cache imports.
 """
 from pathlib import Path
-import gc,json,math,sys,types
-ROOT=Path(__file__).resolve().parent
-COMPONENT=ROOT/'data/components/music-structure'
+import gc,json,math,sys,types,os
+ROOT=Path(os.environ.get('KUMIKO_APP_HOME') or Path(__file__).resolve().parent)
+from resource_runtime import asset_path
+COMPONENT=asset_path(ROOT,'data/components/music-structure')
 sys.path[:0]=[str(COMPONENT/'runtime'),str(COMPONENT/'upstream'),str(COMPONENT/'shared')]
 import numpy as np
 import soundfile as sf
@@ -128,9 +129,9 @@ def parity(model,kind,sample):
 def encoder_model(kind):
     if kind=='muq':
         from muq import MuQ
-        config=json.loads((ROOT/'models/MuQ-large-msd-iter/config.json').read_text(encoding='utf-8'))
+        config=json.loads((asset_path(ROOT,'models/MuQ-large-msd-iter/config.json')).read_text(encoding='utf-8'))
         model=MuQ(config)
-        state=load_file(str(ROOT/'models/MuQ-large-msd-iter/model.safetensors'))
+        state=load_file(str(asset_path(ROOT,'models/MuQ-large-msd-iter/model.safetensors')))
     else:
         from transformers import Wav2Vec2ConformerConfig
         # Author constructor requests an HF config. Supply the exact cached

@@ -526,7 +526,38 @@ const audioEffectsMethods = {
       }
     }
   },
+  async prepareSafeAudioOutput(resume = false, allowOutputChange = false) {
+    if (this.outputSafetyBlocked && !resume) throw new PlaybackTransitionUtils.StalePlaybackTransitionError("耳机输出变化后已停止播放");
+    if (!window.lxEnv?.prepareAudioOutput) return;
+    const revision = this.outputSafetyRevision;
+    const result = await window.lxEnv.prepareAudioOutput({playing:true,resume,allowOutputChange});
+    if (revision !== this.outputSafetyRevision || !result?.ok) {
+      if (revision === this.outputSafetyRevision && result?.blocked) {
+        this.outputSafetyBlocked = true;
+        this.playbackIntent = "pause";
+      }
+      throw new PlaybackTransitionUtils.StalePlaybackTransitionError("请确认耳机连接后点击播放");
+    }
+    if (resume) this.outputSafetyBlocked = false;
+    if (result.warning === 'output-unconfirmed' && !this.outputSafetyWarningShown) {
+      this.outputSafetyWarningShown = true;
+      this.showNotice("暂时无法确认输出设备，耳机断连保护尚未就绪。", "error");
+    }
+  },
+  handleAudioOutputSafety(event = {}) {
+    this.outputSafetyBlocked = true;
+    this.pauseByManual("output-safety:" + String(event.reason || "changed"));
+    this.playbackGeneration = playbackTransitionCoordinator.invalidate();
+    this.pendingPlaybackTransition = null;
+    for (const slot of audioSlots) if (!slot.paused) slot.pause();
+    practicePlayer?.pause();
+    audioEngine?.context?.suspend()?.catch?.(() => {});
+    this.showNotice(event.reason === 'headphones-removed'
+      ? "已摘下耳机，播放已暂停。"
+      : "耳机输出已变化，播放已暂停。确认设备后点击播放继续。", "error");
+  },
   async resumeEffectsEngine() {
+    await this.prepareSafeAudioOutput();
     if (!audioEngine) return;
     // Leave ordinary playback on the native media path until an effect is needed.
     if (!audioEngine.context && !this.audioEffects.enabled && !this.audioEffects.crossfade) return;
@@ -758,9 +789,12 @@ const playbackMethods = {
     if (this.pendingPlaybackTransition) throw new Error("正在切换歌曲，请稍候");
     const expectedPath = String(this.currentPath);
     const expectedGeneration = Number(this.playbackGeneration) || 0;
+    const outputRevision = this.outputSafetyRevision;
     const assertResumeStillCurrent = () => {
       if (
         this.pendingPlaybackTransition
+        || outputRevision !== this.outputSafetyRevision
+        || this.outputSafetyBlocked
         || expectedGeneration !== Number(this.playbackGeneration)
         || expectedPath !== String(this.currentPath || "")
       ) {
@@ -821,14 +855,21 @@ const playbackMethods = {
     this.isPlaying = true;
   },
   pauseByManual(source = "manual") {
+    this.outputSafetyRevision = Number(this.outputSafetyRevision || 0) + 1;
+    window.lxEnv?.prepareAudioOutput?.({playing:false})?.catch?.(() => {});
     this.recommendationActionId = Number(this.recommendationActionId || 0) + 1;
     this.cancelRecommendPrefetch();
     this.cancelNaturalCrossfade();
     audioEngine?.stopTail(audio);
+    if (this.pendingPlaybackTransition) {
+      this.playbackGeneration = playbackTransitionCoordinator.invalidate();
+      this.pendingPlaybackTransition = null;
+    }
     this.playbackIntent = "pause";
     this.setPauseState("manual", source);
     this.clearAudioInterruptSchedule(true);
-    if (!audio.paused) audio.pause();
+    for (const slot of audioSlots) if (!slot.paused) slot.pause();
+    practicePlayer?.pause();
     this.isPlaying = false;
   },
   pauseByInternal(source = "internal") {
@@ -840,20 +881,14 @@ const playbackMethods = {
     this.isPlaying = false;
   },
   pauseByInterruptionDetected(source = "audio.pause") {
-    this.cancelNaturalCrossfade(); audioEngine?.stopTail(audio);
     if (!this.currentPath) return;
+    // Unexplained pauses include wear detection. Stop all pending playback and
+    // keep user intent paused instead of guessing a timer-based recovery.
+    this.pauseByManual(source);
     this.setPauseState("interruption", source);
-    const st = this.audioInterrupt || {};
-    st.armed = true;
-    st.trackPath = String(this.currentPath || "");
-    this.audioInterrupt = st;
-    if (this.isPlaying && !audio.paused) {
-      this.isPlaying = false;
-      audio.pause();
-    }
-    this.scheduleAutoResume(st.baseDelayMs);
   },
   async resumeByUserAction(source = "user") {
+    const revision = this.outputSafetyRevision = Number(this.outputSafetyRevision || 0) + 1;
     this.playbackIntent = "play";
     this.clearAudioInterruptSchedule(true);
     this.setPauseState("none", source);
@@ -863,10 +898,13 @@ const playbackMethods = {
     }
     if (!this.currentPath) return;
     try {
+      await this.prepareSafeAudioOutput(true, !/hotkey|media/i.test(source));
       await this.resumeCurrentPathPlayback();
+      if (revision !== this.outputSafetyRevision) return;
       this.lastPlaybackError = "";
       this.setPauseState("none", source);
     } catch (e) {
+      if (revision !== this.outputSafetyRevision) return;
       console.warn("播放失败", e);
       this.lastPlaybackError = this.getPlaybackUserMessage(e);
     }
@@ -912,7 +950,7 @@ const playbackMethods = {
       return true;
     }
     if (act === "stop") {
-      this.pauseByInternal(`${source}:stop`);
+      this.pauseByManual(`${source}:stop`);
       return true;
     }
     if (act === "play_pause") {
@@ -3555,7 +3593,9 @@ const shortcutMethods = {
   },
   getMediaHotkeyStatusText() {
     if (!Array.isArray(this.shortcutMediaStatus) || !this.shortcutMediaStatus.length) return "等待检测";
-    return this.shortcutMediaStatus.every((it) => it?.status?.ok) ? "正常" : "失败";
+    if (this.shortcutMediaStatus.every(it=>it?.status?.reason==='system-session')) return "系统媒体会话";
+    if (this.shortcutMediaStatus.some(it=>it?.status?.reason==='session-pending')) return "等待系统媒体会话";
+    return this.shortcutMediaStatus.every((it) => it?.status?.ok) ? "备用按键已注册" : "备用按键冲突";
   },
   formatMediaDiagType(type) {
     const labels = {
@@ -3563,6 +3603,8 @@ const shortcutMethods = {
       renderer_action_dispatched: "控制指令",
       renderer_action_result: "执行结果",
       mediaSession_action: "系统媒体键",
+      media_input_accepted: "媒体操作已接收",
+      headphone_wear: "耳机佩戴",
       audio_focus_event: "音频焦点",
       audio_play: "开始播放",
       audio_pause: "暂停播放",
@@ -3571,14 +3613,20 @@ const shortcutMethods = {
     return labels[String(type || "")] || "媒体事件";
   },
   formatMediaDiagDetail(event) {
+    if (event?.type === 'headphone_wear') {
+      if (event.status === 'reported') return event.worn === false ? '已摘下' : event.worn === true ? '已佩戴' : '状态未知';
+      return ({'awaiting-event':'等待佩戴上报','detection-enabled':'耳机检测已开启','detection-disabled':'耳机检测已关闭',
+        unavailable:'佩戴通道不可用','listener-failed':'佩戴监听失败',unsupported:'当前输出无佩戴状态'})[event.status] || '状态未知';
+    }
     const actionLabels = {
       play: "播放",
       pause: "暂停",
       stop: "停止",
       prev: "上一首",
-      previoustrack: "上一首",
+      previoustrack: "换个方向",
       next: "下一首",
-      nexttrack: "换个感觉",
+      nexttrack: "找回感觉",
+      next_like: "找回感觉",
       dislike_next: "换个感觉",
       like_next: "相似下一首",
       favorite: "收藏",
@@ -8585,40 +8633,51 @@ const utilityMethods = {
     window.lxEnv?.windowControl?.(action).catch?.(() => {});
   },
   setupMediaSessionIntegration() {
-    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) {
+      window.lxEnv?.setMediaSessionAvailable?.(false)?.catch?.(() => {});
+      return;
+    }
+    const bound = new Set();
     const ms = navigator.mediaSession;
     const bind = (action, handler) => {
       try {
         ms.setActionHandler(action, handler);
+        bound.add(action);
       } catch {
         // action not supported on current platform
       }
     };
+    const dispatch = action => {
+      if (window.lxEnv?.sendMediaInput) window.lxEnv.sendMediaInput(action).catch(() => this.showNotice("系统媒体控制暂不可用", "error"));
+      else this.dispatchPlayerAction(action, "mediasession");
+    };
     bind("play", async () => {
       this.appendMediaDiagEvent("mediaSession_action", { action: "play" });
-      this.dispatchPlayerAction("play", "mediasession");
+      dispatch("play");
     });
     bind("pause", () => {
       this.appendMediaDiagEvent("mediaSession_action", { action: "pause" });
-      this.dispatchPlayerAction("pause", "mediasession");
+      dispatch("pause");
     });
     bind("previoustrack", () => {
       this.appendMediaDiagEvent("mediaSession_action", { action: "previoustrack" });
-      this.dispatchPlayerAction("prev", "mediasession");
+      dispatch("dislike_next");
     });
     bind("nexttrack", () => {
-      // 与耳机“下一首”统一到“不喜欢下一首”
+      // 消费系统下一首命令，保持找回本段感觉的语义。
       this.appendMediaDiagEvent("mediaSession_action", { action: "nexttrack" });
-      this.dispatchPlayerAction("dislike_next", "mediasession");
+      dispatch("next_like");
     });
     bind("stop", () => {
       this.appendMediaDiagEvent("mediaSession_action", { action: "stop" });
-      this.dispatchPlayerAction("stop", "mediasession");
+      dispatch("stop");
     });
+    window.lxEnv?.setMediaSessionAvailable?.(['play','pause','nexttrack','previoustrack'].every(action=>bound.has(action)))?.catch?.(() => {});
     this.updateMediaSessionMetadata();
     this.syncMediaSessionPlaybackState();
   },
   syncMediaSessionPlaybackState() {
+    if (!this.isPlaying) window.lxEnv?.prepareAudioOutput?.({playing:false})?.catch?.(() => {});
     if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
     try {
       navigator.mediaSession.playbackState = this.isPlaying ? "playing" : "paused";
@@ -9989,6 +10048,7 @@ function mountedHook() {
       this.featurePackageProgress = value || {};
     }));
   }
+  if(window.lxEnv?.onResourceProgress){rememberIpcUnsubscribe(window.lxEnv.onResourceProgress(value=>{if(value?.status)this.featureSelection.resources=value.status;}));}
   this._onLyricOutputCalibration=()=>{
     this.syncOutputCalibrationConsumers?.();
     this.resetKaraokeWordProgress();
@@ -10029,6 +10089,7 @@ function mountedHook() {
     this.handleEnded();
   });
   bindSlotEvent("play", () => {
+    if (this.outputSafetyBlocked) { for (const slot of audioSlots) if (!slot.paused) slot.pause(); this.isPlaying=false; return; }
     if (audio.paused || !this.isAudioEventForCommittedSource()) return;
     const pausedAt = Number(this._lastPausedAt || 0);
     const resetMinutes = Number(this.getDislikeCorrectionConfig().long_pause_reset_minutes || 0);
@@ -10221,6 +10282,7 @@ function mountedHook() {
     this.syncAudioDuration();
     this.applyPendingSeek();
   });
+  if (window.lxEnv?.onAudioOutputSafety) rememberIpcUnsubscribe(window.lxEnv.onAudioOutputSafety(event => this.handleAudioOutputSafety(event)));
   if (window.lxEnv && typeof window.lxEnv.onHotkey === "function") {
     rememberIpcUnsubscribe(window.lxEnv.onHotkey((action) => this.handleHotkey(action)));
   }
@@ -10809,6 +10871,9 @@ const kumikoVueApp = createApp({
       volume: 80,
       pausedByAudioInterruption: false,
       playbackPauseReason: "none", // none | manual | internal | interruption
+      outputSafetyBlocked: false,
+      outputSafetyWarningShown: false,
+      outputSafetyRevision: 0,
       playbackIntent: "pause", // play | pause
       lastPauseSource: "",
       audioInterrupt: {

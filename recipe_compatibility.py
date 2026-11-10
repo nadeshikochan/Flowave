@@ -6,6 +6,7 @@ stays unchanged so in-flight workers retain their exact publication contract.
 import hashlib
 from functools import lru_cache
 from pathlib import Path
+from resource_runtime import asset_path, source_path
 
 
 @lru_cache(maxsize=4)
@@ -34,7 +35,7 @@ def equivalent_recipes(root, current, target='tags'):
                  'music_analysis_worker.py', 'models/Essentia-tagging/download-manifest.json',
                  'models/MuQ-MuLan-download.json']
         optional = 'data/components/music-analysis/manifest.json'
-        if (root / optional).is_file():
+        if asset_path(root,optional).is_file():
             names.append(optional)
     elif target == 'structure':
         from music_structure import RECIPE_ID
@@ -44,7 +45,7 @@ def equivalent_recipes(root, current, target='tags'):
     else:
         raise ValueError('Unknown analysis recipe target')
     try:
-        contents = tuple((root / name).read_bytes() for name in names)
+        contents = tuple((asset_path(root,name) if name.startswith(("models/","data/")) else source_path(root,name)).read_bytes() for name in names)
     except OSError:
         return frozenset((current,))
     raw = hashlib.sha256(prefix.encode())

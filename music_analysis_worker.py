@@ -5,7 +5,7 @@ os.environ['HF_HUB_OFFLINE']='1';os.environ['TRANSFORMERS_OFFLINE']='1';os.envir
 import sys,json,math,time,hashlib,traceback
 if hasattr(sys.stdout,'reconfigure'):sys.stdout.reconfigure(encoding='utf-8',errors='replace')
 from pathlib import Path
-ROOT=Path(__file__).resolve().parent
+ROOT=Path(os.environ.get('KUMIKO_APP_HOME') or Path(__file__).resolve().parent)
 # Dedicated optional component survives ordinary cache cleanup. No startup download.
 sys.path.insert(0,str(ROOT/'data/components/music-analysis/python'))
 

@@ -8,6 +8,55 @@ const PlaybackTransitionUtils = require("../renderer/playback-transition");
 const ListeningHistoryOps = require("../listening-history-ops");
 const LyricModelAdapter = require("../renderer/lyric-model-adapter");
 
+test("headphone safety latches through real Vue and invalidates pending playback", async () => {
+  const vueContext = { console };
+  nodeVm.runInNewContext(fs.readFileSync(path.join(__dirname, "..", "renderer", "vendor", "vue.global.prod.js"), "utf8"), vueContext);
+  let confirmOutput;
+  const { capturedConfig, fakeAudio } = createRendererHarness({ lxEnv: { prepareAudioOutput: value => value.playing
+    ? new Promise(resolve => { confirmOutput = resolve; }) : Promise.resolve({ok:true}) } });
+  const renderer = vueContext.Vue.createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode: () => null, nextSibling: () => null });
+  const notices = [];
+  const instance = renderer.createApp({ data: capturedConfig.data, render: () => null,
+    methods: { ...capturedConfig.methods, showNotice: text => notices.push(text), appendMediaDiagEvent() {}, cancelRecommendPrefetch() {},
+      cancelNaturalCrossfade() {}, syncMediaSessionPlaybackState() {} } });
+  const app = instance.mount({});
+  try {
+    app.currentPath = 'C:/Fixture/song.mp3'; app.isPlaying = true;
+    app.beginPlaybackTransition('C:/Fixture/next.mp3', 'next', {});
+    const before = app.playbackGeneration;
+    app.handleAudioOutputSafety({ reason: 'headphones-removed' });
+    assert.match(notices.at(-1), /已摘下耳机/);
+    assert.equal(app.outputSafetyBlocked, true);
+    assert.equal(app.isPlaying, false);
+    assert.equal(fakeAudio.paused, true);
+    assert.equal(app.playbackIntent, 'pause');
+    assert.equal(app.pendingPlaybackTransition, null);
+    assert(app.playbackGeneration > before);
+    await assert.rejects(app.prepareSafeAudioOutput(), /耳机输出/);
+    app.pauseByInterruptionDetected();
+    assert.equal(app.audioInterrupt.armed, false);
+    assert.equal(app.audioInterrupt.timer, null);
+    app.outputSafetyBlocked = false;
+    const pending = app.prepareSafeAudioOutput();
+    app.pauseByManual('headphone-pause');
+    confirmOutput({ok:true});
+    await assert.rejects(pending, /确认耳机/);
+    assert.equal(app.playbackIntent, 'pause');
+  } finally { instance.unmount(); }
+});
+
+test("media session mapping uses the common bridge for recover and change", async () => {
+  const sent = [], bindings = new Map();
+  const { app } = createRendererHarness({
+    lxEnv: { sendMediaInput: async action => { sent.push(action); } },
+    navigator: { mediaSession: { setActionHandler: (action, handler) => bindings.set(action, handler) } },
+  });
+  app.setupMediaSessionIntegration();
+  bindings.get('nexttrack')(); bindings.get('previoustrack')(); bindings.get('pause')();
+  await Promise.resolve();
+  assert.deepEqual(sent, ['next_like', 'dislike_next', 'pause']);
+});
+
 test("performance UI snapshots reuse the library during selection and restore both snapshot formats", () => {
   const { app, rendererState, writes } = createRendererHarness();
   app.tracks = Array.from({ length: 3600 }, (_, index) => ({ path: `C:\\Music\\${index}.mp3`, title: `歌曲${index}` }));
@@ -188,6 +237,7 @@ function createRendererHarness(options = {}) {
     LyricModelAdapter,
     LyricTiming: require("../renderer/lyric-timing"),
     PlaybackTransitionUtils,
+    RecommendationContext: require("../renderer/recommendation-context"),
     FlowaveFolders: require("../renderer/folder-browser"),
     KumikoSearch: options.searchUtils,
     Worker: options.Worker,
@@ -217,6 +267,7 @@ function createRendererHarness(options = {}) {
       return options.makeAudio ? options.makeAudio(fakeAudio) : fakeAudio;
     },
     URL,
+    TextEncoder,
     LyricModelAdapter,
     Vue: {
       createApp(config) {
@@ -231,7 +282,7 @@ function createRendererHarness(options = {}) {
     },
     getComputedStyle: (element) => ({ paddingTop: element.paddingTop || "0px" }),
     localStorage: { getItem: () => null },
-    navigator: {},
+    navigator: options.navigator || {},
     axios: options.axios || {},
     console: { ...console, warn() {} },
     alert() {},

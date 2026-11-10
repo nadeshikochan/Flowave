@@ -1,0 +1,10 @@
+torch==2.7.0+cu126
+torchaudio==2.7.0+cu126
+numpy==2.2.6
+scipy==1.16.3
+soundfile==0.13.1
+transformers==5.0.0
+nnAudio==0.3.3
+accelerate==1.10.1
+pydub==0.25.1
+requests==2.32.5

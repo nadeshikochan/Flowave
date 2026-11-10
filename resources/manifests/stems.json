@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "repository_revision": "f02318ef92c43472777ed7aeeded3d2b29a68b58",
+  "models": [
+    {
+      "id": "six",
+      "label": "六轨 · 人声、鼓、贝斯、吉他、钢琴及其他",
+      "kind": "bs_roformer",
+      "stems": [
+        "bass",
+        "drums",
+        "other",
+        "vocals",
+        "guitar",
+        "piano"
+      ],
+      "weights": {
+        "name": "BS-Roformer-SW.ckpt",
+        "sha256": "24e7d35ee9c64415673d3fd33e06a67cac2c103c5df6267ba1576459c775916e",
+        "bytes": 699412152
+      },
+      "config": {
+        "name": "BS-Roformer-SW.yaml",
+        "sha256": "f76111edc8ffa6fdf4f7f777b0826a052e551b855d976086d7f20bcecde73c89",
+        "bytes": 4658
+      },
+      "recipe": "63728148fca62c4aa7847a53cbff4d6323855e53eb0a3f8eda103cab0be89698",
+      "default": true,
+      "note": "钢琴与吉他可能存在串音，可切回原曲对照。",
+      "provenance": "https://huggingface.co/baicai1145/pymss/tree/f02318ef92c43472777ed7aeeded3d2b29a68b58",
+      "distribution": "local-evaluation-only; original SW checkpoint license unresolved"
+    },
+    {
+      "id": "four",
+      "label": "四轨 · 人声、鼓、贝斯及其他",
+      "kind": "scnet",
+      "stems": [
+        "drums",
+        "bass",
+        "other",
+        "vocals"
+      ],
+      "weights": {
+        "name": "model_scnet_ep_36_sdr_10.0891.ckpt",
+        "sha256": "ac25975f0f5704f3d1a3c3c251505b7a0f417a22eafe82773440ee4f7e14b74f",
+        "bytes": 214063778
+      },
+      "config": {
+        "name": "model_scnet_ep_36_sdr_10.0891.yaml",
+        "sha256": "7640c30cfc9f8a1047561b4188278453405b5c36e71ce370e35879672604d1e9",
+        "bytes": 5727
+      },
+      "recipe": "a480ebf14edcb7fcbce29628d5a9dcd8d317cc7558b55837500bd6b2a58f9fdb",
+      "default": false,
+      "note": "",
+      "provenance": "https://huggingface.co/baicai1145/pymss/tree/f02318ef92c43472777ed7aeeded3d2b29a68b58",
+      "distribution": "weight-license-review-required"
+    }
+  ],
+  "runtime": {
+    "directory": "runtime",
+    "pymss": "2.1.9",
+    "core": "0.1.11",
+    "packages": [
+      {
+        "name": "pymss",
+        "version": "2.1.9",
+        "sha256": "d1b28ec05ed716657ff38302ca9633208ce9ac60b2e4012da4e2b134e9011fb2",
+        "url": "https://files.pythonhosted.org/packages/fd/49/05651446e20c4c25eae25f79e64b7461268bcb9a14aa5803cdbfd695378f/pymss-2.1.9-py3-none-any.whl"
+      },
+      {
+        "name": "pymss-core",
+        "version": "0.1.11",
+        "sha256": "04822a78f768b344538a0aeaccecb3dcf6d191dba39fd0eda2acbf833fa5039a",
+        "url": "https://files.pythonhosted.org/packages/e4/ca/86a5822f3dcbfbb01e1c2d357ce57c34d865626baa70d62704aabef738e6/pymss_core-0.1.11-py3-none-any.whl"
+      }
+    ]
+  },
+  "encoder": {
+    "name": "ffmpeg.exe",
+    "sha256": "2ce797a0f88d7f067180338fb227f7b1928ea727bd9a4d7a1d022f7c52af71a3",
+    "source": "imageio-ffmpeg bundled executable"
+  }
+}

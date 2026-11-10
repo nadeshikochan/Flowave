@@ -42,13 +42,17 @@
     "appId": "app.flowave.desktop",
     "productName": "Flowave",
     "asar": true,
-    "asarUnpack": ["tools/audio-output/**/*"],
+    "asarUnpack": [
+      "tools/audio-output/**/*"
+    ],
     "directories": {
       "output": "dist"
     },
     "files": [
       "main.js",
       "audio-output-monitor.js",
+      "audio-output-safety.js",
+      "media-input.js",
       "tools/audio-output/**/*",
       "preload.js",
       "overlay-preload.js",
@@ -71,6 +75,7 @@
       "history-feature-view.js",
       "history-persistence.js",
       "trace-persistence.js",
+      "trace-archive.js",
       "lyrics/**/*",
       "song-info/**/*",
       "online/**/*",
@@ -89,9 +94,9 @@
       "!renderer/sound-map.js",
       "!renderer/sound-map-worker.js",
       "!renderer/music-analysis.js",
-
       "package.json",
-      "node_modules/**/*"
+      "node_modules/**/*",
+      "resource-manager.js"
     ],
     "extraFiles": [
       {
@@ -117,6 +122,18 @@
       {
         "from": "../release-template/THIRD_PARTY_NOTICES.txt",
         "to": "THIRD_PARTY_NOTICES.txt"
+      },
+      {
+        "from": "../resources",
+        "to": "resources"
+      },
+      {
+        "from": "../build/backend-source",
+        "to": "backend/source"
+      },
+      {
+        "from": "../release-template/distribution.json",
+        "to": "distribution.json"
       }
     ],
     "win": {

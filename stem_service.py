@@ -9,6 +9,7 @@ import time
 import uuid
 from music_analysis_store import source_version
 from stem_store import StemStore, safe_id, fingerprint, NAMES
+from resource_runtime import asset_path, runtime_python, worker_command, worker_environment
 
 
 class StemService:
@@ -23,7 +24,7 @@ class StemService:
         self.verified_files = {}
 
     def assets(self):
-        folder = self.root / 'models/stem-separation'
+        folder = asset_path(self.root, 'models/stem-separation')
         try:
             manifest = json.loads((folder / 'manifest.json').read_text(encoding='utf-8'))
             for model in manifest['models']:
@@ -129,7 +130,7 @@ class StemService:
             if not row or row['source'] == 'unavailable':
                 raise ValueError('请先选择音乐库中可读取的本地歌曲。')
             folder, manifest, model = self.assets()
-            python = self.root / '.venv-index/Scripts/python.exe'
+            python = runtime_python(self.root, 'practice')
             if not python.is_file():
                 raise ValueError('当前分轨组件尚未安装，无法开始分离。')
             generation = uuid.uuid4().hex
@@ -172,9 +173,9 @@ class StemService:
         success = False
         try:
             flags = (getattr(subprocess, 'CREATE_NO_WINDOW', 0) | getattr(subprocess, 'BELOW_NORMAL_PRIORITY_CLASS', 0)) if os.name == 'nt' else 0
-            env = dict(os.environ, PYTHONIOENCODING='utf-8', OMP_NUM_THREADS='2', MKL_NUM_THREADS='2', OPENBLAS_NUM_THREADS='2')
+            env = worker_environment(self.root)
             with (folder / 'worker.log').open('w', encoding='utf-8') as log:
-                proc = subprocess.Popen([str(python), str(self.root / 'stem_worker.py'), str(folder / 'job.json')], cwd=self.root,
+                proc = subprocess.Popen(worker_command(self.root, 'practice', 'stem_worker.py', folder / 'job.json'), cwd=self.root,
                                         env=env, creationflags=flags, stdout=subprocess.PIPE, stderr=log,
                                         text=True, encoding='utf-8', errors='replace')
                 with self.lock:

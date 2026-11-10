@@ -4,7 +4,8 @@ for key in ('OMP_NUM_THREADS','MKL_NUM_THREADS','OPENBLAS_NUM_THREADS','NUMEXPR_
 os.environ['HF_HUB_OFFLINE']='1';os.environ['TRANSFORMERS_OFFLINE']='1'
 import hashlib,json,sys,time,traceback
 from pathlib import Path
-ROOT=Path(__file__).resolve().parent
+from resource_runtime import asset_path
+ROOT=Path(os.environ.get('KUMIKO_APP_HOME') or Path(__file__).resolve().parent)
 if hasattr(sys.stdout,'reconfigure'):sys.stdout.reconfigure(encoding='utf-8',errors='replace')
 def emit(**event):print(json.dumps(event,ensure_ascii=False,allow_nan=False),flush=True)
 
@@ -27,7 +28,7 @@ def main(jobfile):
     emit(stage='loading',phase='checking',device='正在确认')
     manifest=json.loads((component_path(ROOT)/'manifest.json').read_text(encoding='utf-8'))
     for file in manifest['files']:
-        checkpoint();path=ROOT/file['file']
+        checkpoint();path=asset_path(ROOT,file['file'])
         with path.open('rb') as handle:digest=hashlib.file_digest(handle,'sha256').hexdigest()
         if digest!=file['sha256']:raise ValueError('段落分析组件校验失败，请重新准备组件。')
     from music_structure_engine import ModelPool
