@@ -76,10 +76,20 @@ def adjacent_candidates(index, current, config, prepared=None):
     return dict(rows=[dict(path=paths[i],sim=float(scores[i])) for i in ids],missing=False,floor=floor)
 
 
+def recommend_with_reserve(index, current, context, recent, history, protected, blocked, config, **kwargs):
+    """Share numerical work within one request; both candidate limits keep their own selection/probabilities."""
+    memo = {}
+    rows, details = recommend(index,current,context,recent,history,protected,blocked,config,**kwargs,_memo=memo)
+    reserve_config = {**config, 'recommendation': {**(config.get('recommendation') or {}), 'candidate_limit': 200}}
+    reserve_rows, reserve_details = recommend(index,current,context,recent,history,protected,blocked,reserve_config,**kwargs,_memo=memo)
+    return rows, details, reserve_rows, reserve_details
+
+
 def recommend(index, current, context, recent, history, protected, blocked, config,
-              semantic=None, mode='continue', correction=None, prepared=None, excluded=None, session=None, tags=None, unavailable=(), recording_groups=None, explain=False):
+              semantic=None, mode='continue', correction=None, prepared=None, excluded=None, session=None, tags=None, unavailable=(), recording_groups=None, explain=False, _memo=None):
     """Evaluate the unchanged policy in descending adjacency tiers, with emergency fallback last."""
     base = settings(config)['adjacent_mert_floor']
+    memo = {} if _memo is None else _memo
     view = prepared if prepared is not None else prepare(index)
     if session is not None and recording_groups:
         grouped=collapse_recordings(index,current,context,recent,history,protected,blocked,excluded,session,unavailable,recording_groups,view,semantic or {})
@@ -98,7 +108,7 @@ def recommend(index, current, context, recent, history, protected, blocked, conf
                         uncertain.update(grouped['members'][grouped['keymap'][query]])
             rows,details=recommend(grouped['index'],grouped['current'],grouped['context'],grouped['recent'],grouped['history'],
                 grouped['protected'],grouped['blocked'],config,{k:v for k,v in (semantic or {}).items() if k in grouped['index'] and k not in uncertain},
-                mode,correction,grouped['prepared'],grouped['excluded'],grouped['session'],tags,grouped['unavailable'],explain=explain)
+                mode,correction,grouped['prepared'],grouped['excluded'],grouped['session'],tags,grouped['unavailable'],explain=explain,_memo=memo)
             by_path={path:k for k,(path,_) in grouped['index'].items()}
             for row in rows:
                 key=by_path[row['path']]
@@ -147,7 +157,7 @@ def recommend(index, current, context, recent, history, protected, blocked, conf
         evaluated.append(floor)
         effective = {**config, 'recommendation': {**(config.get('recommendation') or {}), 'adjacent_mert_floor': floor}}
         rows, details = _recommend_at_floor(index,current,context,recent,history,protected,blocked,effective,
-            semantic,mode,correction,view,excluded,session,tags,unavailable,reserve_allowed=not natural,semantic_peaks=semantic_peaks)
+            semantic,mode,correction,view,excluded,session,tags,unavailable,reserve_allowed=not natural,semantic_peaks=semantic_peaks,memo=memo)
         if rows:
             break
     if natural and not rows:
@@ -155,7 +165,7 @@ def recommend(index, current, context, recent, history, protected, blocked, conf
         floor = base
         effective = {**config, 'recommendation': {**(config.get('recommendation') or {}), 'adjacent_mert_floor': floor}}
         rows, details = _recommend_at_floor(index,current,context,recent,history,protected,blocked,effective,
-            semantic,mode,correction,view,excluded,session,tags,unavailable,semantic_peaks=semantic_peaks)
+            semantic,mode,correction,view,excluded,session,tags,unavailable,semantic_peaks=semantic_peaks,memo=memo)
         floor=details.get('adjacent_mert_floor',base)
     if natural:
         details.update(adjacent_mert_base_floor=base, adjacent_mert_floor=floor,
@@ -173,7 +183,13 @@ def recommend(index, current, context, recent, history, protected, blocked, conf
 
 
 def _recommend_at_floor(index, current, context, recent, history, protected, blocked, config,
-              semantic=None, mode='continue', correction=None, prepared=None, excluded=None, session=None, tags=None, unavailable=(), reserve_allowed=True, semantic_peaks=None):
+              semantic=None, mode='continue', correction=None, prepared=None, excluded=None, session=None, tags=None, unavailable=(), reserve_allowed=True, semantic_peaks=None, memo=None):
+    # Only adjacency floor / candidate limit vary in this request. Cached arrays stay read-only.
+    memo = {} if memo is None else memo
+    def shared(name, compute):
+        if name not in memo:
+            memo[name] = compute()
+        return memo[name]
     opts = settings(config)
     keys, paths, matrix, positions = prepared if prepared is not None else prepare(index)
     modern = session is not None
@@ -209,7 +225,7 @@ def _recommend_at_floor(index, current, context, recent, history, protected, blo
     if current not in positions:
         return reserve('missing_index') if modern else ([], dict(reason='missing_index', mode=mode))
     q = positions[current]
-    local = matrix @ matrix[q]
+    local = shared('local', lambda: matrix @ matrix[q])
     adjacent_gate = local >= opts['adjacent_mert_floor'] if modern and mode=='continue' else np.ones(len(keys),dtype=bool)
     rejected_paths = set(blocked)
     context = list(dict.fromkeys(key for key in context if key in positions and (mode == 'change' or index[key][0] not in rejected_paths)))[-64:]
@@ -232,15 +248,15 @@ def _recommend_at_floor(index, current, context, recent, history, protected, blo
     mert_adjustment=np.zeros(len(keys));bridge_penalty=np.zeros(len(keys))
     old_admissible = np.ones(len(keys), dtype=bool)
     if use_semantic:
-        sem_matrix = np.stack([semantic[keys[i]] for i in sem_positions])
-        support[sem_positions] = sem_matrix @ semantic[query_key]
-        ref_scores = sem_matrix @ np.stack([semantic[key] for key in sem_refs]).T
+        sem_matrix = shared('semantic_matrix', lambda: np.stack([semantic[keys[i]] for i in sem_positions]))
+        support[sem_positions] = shared('semantic_support', lambda: sem_matrix @ semantic[query_key])
+        ref_scores = shared('semantic_references', lambda: sem_matrix @ np.stack([semantic[key] for key in sem_refs]).T)
         intent[sem_positions] = np.max(ref_scores, axis=1)
         if mode == 'recover':
             # The rejected current song contributes no positive score or gate.
             weights = np.power(.7, np.arange(len(sem_refs)-1, -1, -1)); weights /= weights.sum()
             score[sem_positions] = ref_scores @ weights
-            mert_reference = np.max(matrix @ matrix[[positions[key] for key in context]].T, axis=1)
+            mert_reference = shared('mert_reference', lambda: np.max(matrix @ matrix[[positions[key] for key in context]].T, axis=1))
             mert_adjustment=.01*np.clip((mert_reference-.85)/.15, 0, 1)
             score += mert_adjustment
             eligible = intent >= opts['semantic_floor']
@@ -264,7 +280,7 @@ def _recommend_at_floor(index, current, context, recent, history, protected, blo
     else:
         # Missing analysis is explicitly single-model, with no guessed MuQ scores.
         refs = matrix[[positions[key] for key in context]]
-        intent = np.max(matrix @ refs.T, axis=1)
+        intent = shared('mert_intent', lambda: np.max(matrix @ refs.T, axis=1))
         if mode == 'recover':
             low = float((config.get('similarity') or {}).get('like_min', .975))
             eligible = intent >= low
@@ -359,7 +375,7 @@ def _recommend_at_floor(index, current, context, recent, history, protected, blo
     signals = {}
     audio_base=score.copy()
     if modern:
-        adjustment_delta, signals = adjustments(keys, paths, matrix, semantic, tags or {}, context, recent, session, mode,semantic_audio_used=use_semantic)
+        adjustment_delta, signals = shared('adjustments', lambda: adjustments(keys, paths, matrix, semantic, tags or {}, context, recent, session, mode,semantic_audio_used=use_semantic))
         score += adjustment_delta
     strict = np.zeros(len(keys), dtype=bool)
     fallback, expansion = 'strict', 0.

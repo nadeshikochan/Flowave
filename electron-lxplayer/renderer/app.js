@@ -412,9 +412,14 @@ async function tryPlayRecommendWithFallback(vm, key, withPrefetch = true, trigge
   const intent = key === 'dislike_next' ? 'change' : trigger === 'like_button' ? 'recover' : vm.getDefaultRecommendationIntent();
   ready ||= vm.takePreparedRecommendation?.(intent);
   const guarded=intent==='continue';
-  // The click path consumes a prepared decision/reserve. It never starts a recommendation request.
+  // Consume prepared decisions first; unfinished input queues this action for background preparation.
   let data = ready?.recommendationContext || (vm.hasFreshRecCache(intent) ? vm.recCache : null)
     || vm.getRecommendationReserve?.(intent);
+  if(ready?.promise&&!ready.ready){
+    const prepared=await ready.promise;
+    if(!current()){vm.releasePreparedRecommendation?.(ready);return {candidateFound:true,result:{ok:false,canceled:true}};}
+    if(!prepared?.ready){vm.releasePreparedRecommendation?.(ready);ready=null;}
+  }
   const listKey=key==='dislike_next'?'dislike_list':'like_list';
   const computedEmpty=data?.diagnostic?.policy==='session-intent-v5'&&!data?.missing
     &&!recommendationPacketPending(data)&&!(data[listKey]||[]).length;
@@ -441,7 +446,10 @@ async function tryPlayRecommendWithFallback(vm, key, withPrefetch = true, trigge
     if(trigger!=='natural')vm.cancelNaturalCrossfade?.(false);
     vm.recommendationResume={intent,origin,generation,action,stamp:vm.getRecommendationPolicyStamp(),key,trigger,previousEvidence};
     // Preserve the requested action while preparation finishes; never choose an unreviewed stand-in.
-    if(!vm.recommendationJobs?.jobs?.size&&!vm._recommendPrefetchTimer)void vm.scheduleRecommendPrefetch?.(0);
+    // A rejection can invalidate every in-flight job. Replace the old refresh timer
+    // even when jobs still exist, so the requested action cannot wait on stale work.
+    if(!vm.recommendationJobs?.jobs?.has(JSON.stringify([origin,vm.recommendationResume.stamp,intent])))
+      void vm.scheduleRecommendPrefetch?.(0);
     vm.showNotice('推荐正在准备，完成后自动切换。');
     return {candidateFound:true,result:{ok:false,preparing:true}};
   }
@@ -526,11 +534,11 @@ const audioEffectsMethods = {
       }
     }
   },
-  async prepareSafeAudioOutput(resume = false, allowOutputChange = false) {
+  async prepareSafeAudioOutput(resume = false, allowOutputChange = false, wearToken = null) {
     if (this.outputSafetyBlocked && !resume) throw new PlaybackTransitionUtils.StalePlaybackTransitionError("耳机输出变化后已停止播放");
     if (!window.lxEnv?.prepareAudioOutput) return;
     const revision = this.outputSafetyRevision;
-    const result = await window.lxEnv.prepareAudioOutput({playing:true,resume,allowOutputChange});
+    const result = await window.lxEnv.prepareAudioOutput({playing:true,resume,allowOutputChange,wearToken});
     if (revision !== this.outputSafetyRevision || !result?.ok) {
       if (revision === this.outputSafetyRevision && result?.blocked) {
         this.outputSafetyBlocked = true;
@@ -544,16 +552,59 @@ const audioEffectsMethods = {
       this.showNotice("暂时无法确认输出设备，耳机断连保护尚未就绪。", "error");
     }
   },
+  isWearResumeCurrent(saved) {
+    return !!saved && !this.pendingPlaybackTransition && saved.path === this.currentPath
+      && saved.generation === this.playbackGeneration && saved.revision === this.outputSafetyRevision;
+  },
+  cancelWearResume() {
+    if (!this.outputSafetyWearResume) return;
+    this.outputSafetyWearResume = null;
+    this.outputSafetyRevision++;
+    window.lxEnv?.prepareAudioOutput?.({playing:false})?.catch?.(() => {});
+  },
+  async resumeByHeadphoneWear(event) {
+    const saved = this.outputSafetyWearResume;
+    if (!saved || saved.token !== event.wearToken || saved.resuming) return false;
+    if (!this.isWearResumeCurrent(saved) || this.playbackIntent !== 'pause') { this.cancelWearResume(); return false; }
+    saved.resuming = true;
+    saved.revision = ++this.outputSafetyRevision;
+    this.playbackIntent = 'play';
+    const current = () => this.outputSafetyWearResume === saved && this.isWearResumeCurrent(saved) && this.playbackIntent === 'play';
+    try {
+      await this.prepareSafeAudioOutput(true, false, saved.token);
+      if (!current()) return false;
+      await this.resumeCurrentPathPlayback();
+      if (!current()) return false;
+      this.outputSafetyWearResume = null;
+      this.lastPlaybackError = '';
+      this.setPauseState('none', 'headphones-worn');
+      return true;
+    } catch (error) {
+      if (!current()) return false;
+      this.pauseByManual('headphones-resume-failed');
+      if (!this.isStalePlaybackTransitionError(error)) {
+        this.lastPlaybackError = this.getPlaybackUserMessage(error);
+        this.showNotice(this.lastPlaybackError, 'error');
+      }
+      return false;
+    }
+  },
   handleAudioOutputSafety(event = {}) {
+    if (event.reason === 'headphones-worn') return this.resumeByHeadphoneWear(event);
+    const canResume = event.reason === 'headphones-removed' && Number.isSafeInteger(event.wearToken)
+      && ((this.isPlaying && this.playbackIntent === 'play' && this.currentPath && !this.pendingPlaybackTransition)
+        || this.isWearResumeCurrent(this.outputSafetyWearResume));
     this.outputSafetyBlocked = true;
-    this.pauseByManual("output-safety:" + String(event.reason || "changed"));
+    this.pauseByManual("output-safety:" + String(event.reason || "changed"), canResume ? event.wearToken : null);
     this.playbackGeneration = playbackTransitionCoordinator.invalidate();
     this.pendingPlaybackTransition = null;
+    if (canResume) this.outputSafetyWearResume = { token: event.wearToken, path: this.currentPath,
+      generation: this.playbackGeneration, revision: this.outputSafetyRevision, resuming: false };
     for (const slot of audioSlots) if (!slot.paused) slot.pause();
     practicePlayer?.pause();
     audioEngine?.context?.suspend()?.catch?.(() => {});
     this.showNotice(event.reason === 'headphones-removed'
-      ? "已摘下耳机，播放已暂停。"
+      ? "双耳均已摘下，播放已暂停。"
       : "耳机输出已变化，播放已暂停。确认设备后点击播放继续。", "error");
   },
   async resumeEffectsEngine() {
@@ -688,6 +739,12 @@ const audioEffectsMethods = {
     if(this.useRecommend&&this.getDefaultRecommendationIntent()!=='continue')return;
     const revision = ++naturalFadeRevision;
     let ready=this.useRecommend?this.takePreparedRecommendation(this.getDefaultRecommendationIntent()):null;
+    if(ready?.promise&&!ready.ready){
+      await ready.promise;
+      if(!ready.ready||naturalFadeRevision!==revision||stamp!==this.naturalQueueStamp()||!this.audioEffects.crossfade){
+        this.releasePreparedRecommendation(ready);return;
+      }
+    }
     if(ready&&this.getAdjacentMertSimilarity(ready.path,ready.recommendationContext)<this.getEffectiveAdjacentMertFloor(ready.recommendationContext)){
       this.releasePreparedRecommendation(ready);ready=null;
     }
@@ -848,17 +905,20 @@ const playbackMethods = {
     }
     assertResumeStillCurrent();
     await this.resumeEffectsEngine();
+    assertResumeStillCurrent();
     await audio.play();
     assertResumeStillCurrent();
     this._committedAudioSource = String(audio.currentSrc || audio.src || "");
     this._committedPlaybackGeneration = expectedGeneration;
     this.isPlaying = true;
   },
-  pauseByManual(source = "manual") {
+  pauseByManual(source = "manual", wearToken = null) {
+    this.outputSafetyWearResume = null;
     this.outputSafetyRevision = Number(this.outputSafetyRevision || 0) + 1;
-    window.lxEnv?.prepareAudioOutput?.({playing:false})?.catch?.(() => {});
+    window.lxEnv?.prepareAudioOutput?.({playing:false,wearToken})?.catch?.(() => {});
     this.recommendationActionId = Number(this.recommendationActionId || 0) + 1;
     this.cancelRecommendPrefetch();
+    for(const ticket of [...this.recommendationJobs?.claimed||[]]){ticket.canceled=true;this.releasePreparedRecommendation(ticket);}
     this.cancelNaturalCrossfade();
     audioEngine?.stopTail(audio);
     if (this.pendingPlaybackTransition) {
@@ -873,6 +933,7 @@ const playbackMethods = {
     this.isPlaying = false;
   },
   pauseByInternal(source = "internal") {
+    this.cancelWearResume();
     this.cancelNaturalCrossfade();
     audioEngine?.stopTail(audio);
     this.setPauseState("internal", source);
@@ -888,6 +949,7 @@ const playbackMethods = {
     this.setPauseState("interruption", source);
   },
   async resumeByUserAction(source = "user") {
+    this.cancelWearResume();
     const revision = this.outputSafetyRevision = Number(this.outputSafetyRevision || 0) + 1;
     this.playbackIntent = "play";
     this.clearAudioInterruptSchedule(true);
@@ -1014,6 +1076,7 @@ const playbackMethods = {
     };
   },
   beginPlaybackTransition(targetPath, source, rollbackSnapshot) {
+    this.cancelWearResume();
     const transition = playbackTransitionCoordinator.begin({
       targetPath,
       source,
@@ -4308,24 +4371,10 @@ const dataMethods = {
     }
   },
   async launchRecommendationInstaller() {
-    if (!window.lxEnv || typeof window.lxEnv.installRecommendationEngine !== "function") return;
-    try {
-      const result = await window.lxEnv.installRecommendationEngine();
-      this.applyInstallerProgress(result);
-    } catch (e) {
-      console.warn("无法启动推荐组件安装", e);
-      this.setInstallerFailure("recommendation", this.getOperationUserMessage(e, "无法启动推荐组件安装"));
-    }
+    this.openSettingsSection('features');
   },
   async launchModelInstaller() {
-    if (!window.lxEnv || typeof window.lxEnv.installModel !== "function") return;
-    try {
-      const result = await window.lxEnv.installModel();
-      this.applyInstallerProgress(result);
-    } catch (e) {
-      console.warn("无法启动模型安装", e);
-      this.setInstallerFailure("model", this.getOperationUserMessage(e, "无法启动模型下载"));
-    }
+    this.openSettingsSection('features');
   },
   applyInstallerProgress(payload) {
     const task = String(payload?.task || "");
@@ -5560,7 +5609,8 @@ const dataMethods = {
   },
   clearAdjacentRecommendations(){const rt=this.recommendationJobs;if(!rt)return;for(const job of rt.adjacentJobs?.values()||[])job.controller.abort();rt.adjacentJobs?.clear();rt.adjacency?.clear();},
   getRecommendationPreparationStamp() {
-    return JSON.stringify([this.currentPath,this.playbackGeneration,this._trackLoadGeneration,this._localMetadataRevision,this.recommendFullMode,
+    // Display metadata does not change the prepared audio or its recommendation.
+    return JSON.stringify([this.currentPath,this.playbackGeneration,this._trackLoadGeneration,this.recommendFullMode,
       this.recommendationContext?.revision,this.params?.recommendation,this.params?.similarity,this.params?.dislike,
       this.params?.audio_dir,this.params?.audio_dirs]);
   },
@@ -5606,16 +5656,25 @@ const dataMethods = {
     rt.reservesStamp='';
   },
   takePreparedRecommendation(intent) {
-    const rt=this.recommendationJobs,ticket=rt?.media?.get(intent),base=this.getRecommendationPreparationStamp();
+    const rt=this.recommendationJobs,base=this.getRecommendationPreparationStamp();
     const cached=rt?.caches?.get(intent);
-    const data=cached?.stamp===this.getRecommendationPolicyStamp() && Date.now()-cached.at<120000
-      && recommendationPacketQuality(cached.data,intent)>=0 ? cached.data
-      : rt?.reservesStamp===base?rt.reserves?.get(intent):null;
-    if(ticket?.ready&&ticket.from===audio&&ticket.base===base&&Date.now()-ticket.at<120000&&!rt.failed?.has(ticket.path)
-        && recommendationPacketQuality(ticket.recommendationContext,intent)>=0
-        && recommendationPacketQuality(ticket.recommendationContext,intent)>=recommendationPacketQuality(data,intent)){
-      rt.media.delete(intent);rt.claimed.add(ticket);return ticket;
+    const reserve=rt?.reservesStamp===base?rt.reserves?.get(intent):null;
+    const data=cached?.stamp===this.getRecommendationPolicyStamp() && Date.now()-cached.at<120000 ? cached.data
+      : recommendationPacketQuality(reserve,intent)>=0?reserve:null;
+    const dataQuality=recommendationPacketQuality(data,intent),listKey=intent==='change'?'dislike_list':'like_list';
+    for(const ticket of [rt?.media?.get(intent),rt?.preparing?.get(intent)]){
+      if(ticket&&ticket.from===audio&&ticket.base===base&&(!ticket.ready||Date.now()-ticket.at<120000)&&!rt.failed?.has(ticket.path)
+          && recommendationPacketQuality(ticket.recommendationContext,intent)>=0
+          &&(!data||dataQuality>=0&&recommendationPacketQuality(ticket.recommendationContext,intent)>dataQuality
+            ||(data[listKey]||[]).some(row=>row.path===ticket.path))){
+        if(dataQuality>=recommendationPacketQuality(ticket.recommendationContext,intent))ticket.recommendationContext=data;
+        const old=rt.media.get(intent);if(old&&old!==ticket){rt.media.delete(intent);this.releasePreparedRecommendation(old);}
+        if(rt.media.get(intent)===ticket)rt.media.delete(intent);
+        if(rt.preparing.get(intent)===ticket)rt.preparing.delete(intent);
+        rt.claimed.add(ticket);return ticket;
+      }
     }
+    const ticket=rt?.media?.get(intent);
     if(ticket){rt.media.delete(intent);this.releasePreparedRecommendation(ticket);}
     const path=data&&recommendationPacketQuality(data,intent)>=0?pickRecommendPathByPolicy({recCache:data},intent==='change'?'dislike_next':'like_next'):'';
     return path?{path,recommendationContext:data,ready:false,actionTicket:true,base}:null;
@@ -5633,9 +5692,12 @@ const dataMethods = {
     }
     if(existing?.base===base&&existing.ready&&Date.now()-existing.at<120000&&!rt.failed.has(existing.path)
         && recommendationPacketQuality(existing.recommendationContext,intent)>recommendationPacketQuality(data,intent))return existing;
-    if(existing?.base===base&&existing.ready&&Date.now()-existing.at<45000&&existing.recommendationContext===data)return existing;
+    const reusable=ticket=>ticket?.base===base&&!rt.failed.has(ticket.path)
+      &&(!ticket.ready||Date.now()-ticket.at<120000)&&(data[key==='dislike_next'?'dislike_list':'like_list']||[]).some(row=>row.path===ticket.path);
+    if(existing?.ready&&reusable(existing)){existing.recommendationContext=data;return existing;}
+    const pending=rt.preparing.get(intent);
+    if(reusable(pending)){pending.recommendationContext=data;return pending.promise;}
     const path=pickRecommendPathByPolicy({recCache:data},key);if(!path||rt.failed.has(path))return null;
-    const pending=rt.preparing.get(intent);if(pending?.base===base&&pending.path===path)return pending.promise;
     if(pending){pending.canceled=true;rt.preparing.delete(intent);this.releasePreparedRecommendation(pending);}
     const occupied=new Set([audio,naturalFade?.element,audioEngine?.tail,audioEngine?.releasingTail,
       ...[...rt.media.values(),...rt.preparing.values(),...rt.claimed].map(t=>t.element)]);
@@ -5652,14 +5714,18 @@ const dataMethods = {
     const ticket={element,path,from:audio,origin:this.currentPath,playbackGeneration:this.playbackGeneration,
       base,ready:false,actionTicket:true,seconds:0,recommendationContext:data,source:key};
     rt.preparing.set(intent,ticket);rt.owners.set(element,ticket);
-    const valid=()=>!ticket.canceled&&rt.preparing.get(intent)===ticket&&this.useRecommend&&base===this.getRecommendationPreparationStamp()&&audio===ticket.from;
+    const valid=()=>!ticket.canceled&&this.useRecommend&&audio===ticket.from
+      &&(rt.claimed.has(ticket)?ticket.origin===this.currentPath&&ticket.playbackGeneration===this.playbackGeneration
+        :rt.preparing.get(intent)===ticket&&base===this.getRecommendationPreparationStamp());
     const guard=()=>{if(!valid()){const e=new Error('预备歌曲已更新');e.code='STALE_PLAYBACK_TRANSITION';throw e;}};
     ticket.promise=(async()=>{
       try{
         element.playbackRate=audio.playbackRate||1;audioEngine?.gain(element,0);
         ticket.started=await this.startTargetAudio(path,guard,element,true);guard();
         ticket.ready=true;ticket.at=Date.now();
-        const prior=rt.media.get(intent);rt.media.set(intent,ticket);if(prior)this.releasePreparedRecommendation(prior);
+        if(!rt.claimed.has(ticket)){
+          const prior=rt.media.get(intent);rt.media.set(intent,ticket);if(prior)this.releasePreparedRecommendation(prior);
+        }
         return ticket;
       }catch(error){
         if(valid()&&error.code!=='STALE_PLAYBACK_TRANSITION'){
@@ -5749,6 +5815,7 @@ const dataMethods = {
       return cached.data;
     }
     const jobKey = JSON.stringify([path, stamp, intent]);
+    for(const [key,pending]of runtime.jobs)if(pending.stamp!==stamp){pending.controller.abort();runtime.jobs.delete(key);}
     if (runtime.jobs.has(jobKey)) {
       const pending=runtime.jobs.get(jobKey), joinEpoch=runtime.epoch;
       if(!options.background) { runtime.foreground=(runtime.foreground||0)+1; this.loadingRec=true; }
@@ -5778,7 +5845,7 @@ const dataMethods = {
     const payload = {track_path:path,history,history_fallback:this.getRecommendHistoryPolicy().allowDuplicates?"relax":"strict",
       scope,...this.getRecommendationRequestContext(intent)};
     const signal = controller.signal;
-    const job = {controller, promise:null};
+    const job = {controller, promise:null, stamp};
     runtime.jobs.set(jobKey,job);
     job.promise = Promise.resolve().then(async () => {
       if (!options.background) { runtime.foreground=(runtime.foreground||0)+1; this.loadingRec=true; }
@@ -8677,7 +8744,8 @@ const utilityMethods = {
     this.syncMediaSessionPlaybackState();
   },
   syncMediaSessionPlaybackState() {
-    if (!this.isPlaying) window.lxEnv?.prepareAudioOutput?.({playing:false})?.catch?.(() => {});
+    if (!this.isPlaying && !this.pendingPlaybackTransition && !this.recommendationResume && !this.outputSafetyWearResume?.resuming)
+      window.lxEnv?.prepareAudioOutput?.({playing:false,wearToken:this.outputSafetyWearResume?.token})?.catch?.(() => {});
     if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
     try {
       navigator.mediaSession.playbackState = this.isPlaying ? "playing" : "paused";
@@ -10046,6 +10114,7 @@ function mountedHook() {
   if (window.lxEnv?.onOfficialModuleProgress) {
     rememberIpcUnsubscribe(window.lxEnv.onOfficialModuleProgress(value => {
       this.featurePackageProgress = value || {};
+      if(value?.selection){this.featureSelection=value.selection;this.featureSaving=false;}else{this.featureSaving=true;}
     }));
   }
   if(window.lxEnv?.onResourceProgress){rememberIpcUnsubscribe(window.lxEnv.onResourceProgress(value=>{if(value?.status)this.featureSelection.resources=value.status;}));}
@@ -10089,7 +10158,7 @@ function mountedHook() {
     this.handleEnded();
   });
   bindSlotEvent("play", () => {
-    if (this.outputSafetyBlocked) { for (const slot of audioSlots) if (!slot.paused) slot.pause(); this.isPlaying=false; return; }
+    if (this.outputSafetyBlocked || this.playbackIntent === 'pause') { for (const slot of audioSlots) if (!slot.paused) slot.pause(); this.isPlaying=false; return; }
     if (audio.paused || !this.isAudioEventForCommittedSource()) return;
     const pausedAt = Number(this._lastPausedAt || 0);
     const resetMinutes = Number(this.getDislikeCorrectionConfig().long_pause_reset_minutes || 0);
@@ -10874,6 +10943,7 @@ const kumikoVueApp = createApp({
       outputSafetyBlocked: false,
       outputSafetyWarningShown: false,
       outputSafetyRevision: 0,
+      outputSafetyWearResume: null,
       playbackIntent: "pause", // play | pause
       lastPauseSource: "",
       audioInterrupt: {
@@ -10892,8 +10962,8 @@ const kumikoVueApp = createApp({
       featureCatalog: window.FlowaveFeatureModules?.catalog || [],
       moduleFailures: window.FlowaveFeatureModules?.failures || {},
       featureDataLocations: [],
-      featurePackageProgress: {},
-      featureSaving: false,
+      featurePackageProgress: window.FlowaveFeatureModules?.initial?.installation || {},
+      featureSaving: !!window.FlowaveFeatureModules?.initial?.installation,
       featureMessage: '',
       useRecommend: window.FlowaveFeatureModules?.enabled('recommendation')===false ? false : readStoredBool(STORAGE_KEYS.USE_RECOMMEND, true),
       recommendFullMode: readStoredBool(STORAGE_KEYS.RECOMMEND_FULL_MODE, false),

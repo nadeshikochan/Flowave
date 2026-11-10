@@ -17,3 +17,5 @@
 *.mp4 binary
 
 *.fwm binary
+*.whl binary
+*.in text eol=lf

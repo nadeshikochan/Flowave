@@ -343,7 +343,7 @@ def get_song_key(path: Path) -> str:
 def load_wave(path: Path) -> Tuple[torch.Tensor, int]:
     """
     读音频 -> 单声道 Tensor[time], 返回 (wav, sr)
-    优先 soundfile；若格式不支持，再用 pydub+ffmpeg；不再走 torchaudio/torchcodec。
+    优先 soundfile；若格式不支持，使用随资源安装的 FFmpeg，保持相同截取长度。
     """
     try:
         import soundfile as sf
@@ -358,26 +358,16 @@ def load_wave(path: Path) -> Tuple[torch.Tensor, int]:
             data = data.T  # [C, T]
         wav = torch.as_tensor(data, dtype=torch.float32)
     except Exception:
-        # soundfile 不支持的格式（如某些 mp3），尝试 pydub+ffmpeg
         try:
-            from pydub import AudioSegment
-            import numpy as np
-
-            audio = AudioSegment.from_file(str(path), duration=MAX_SECONDS + 1)
-            sr = audio.frame_rate
-            samples = audio.get_array_of_samples()
-            arr = np.array(samples).astype("float32")
-            # 归一化到 [-1,1]
-            max_val = float(1 << (8 * audio.sample_width - 1))
-            arr = arr / max_val
-            if audio.channels > 1:
-                arr = arr.reshape((-1, audio.channels)).T  # [C, T]
-            else:
-                arr = arr[None, :]
+            from analysis_audio import open_audio
+            from runtime_paths import CACHE_DIR
+            with open_audio(path, CACHE_DIR/'index-audio', force_decoder=True, duration=MAX_SECONDS+1) as audio:
+                sr = audio.samplerate
+                arr = audio.read(frames=int((MAX_SECONDS+1)*sr),dtype='float32',always_2d=True).T
             wav = torch.from_numpy(arr)
         except Exception as e_pd:
             raise RuntimeError(
-                "音频读取失败：soundfile 和 pydub 都不支持该格式。请安装 pydub+ffmpeg，或先把文件转成 wav/flac。"
+                "音频读取失败，请在功能选装完成推荐插件安装后重试。"
             ) from e_pd
     wav = wav.mean(dim=0)  # mono
     if sr != TARGET_SR:

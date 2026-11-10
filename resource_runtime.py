@@ -31,7 +31,9 @@ def revision(item):
 
 
 def managed_dir(root, kind, name, item):
-    return Path(root) / 'data/components/resources' / kind / name / revision(item)
+    # Keep Windows DLL paths below MAX_PATH in ordinary portable locations.
+    # The readiness marker still verifies the full SHA256, including collisions.
+    return Path(root) / 'data/components/resources' / kind / name / revision(item)[:16]
 
 
 def ready(directory, item):
@@ -39,6 +41,12 @@ def ready(directory, item):
         return json.loads((directory / '.ready.json').read_text(encoding='utf-8')).get('revision') == revision(item)
     except (OSError, ValueError, TypeError):
         return False
+
+
+def ensure_runtime_path(directory):
+    dll = Path(directory) / 'python/Lib/site-packages/torch/lib/cudnn_engines_runtime_compiled64_9.dll'
+    if os.name == 'nt' and len(str(dll.resolve())) >= 260:
+        raise ValueError('程序目录过深，Windows无法加载计算环境。请退出并将整个便携目录移到较短的位置后重试。')
 
 
 def asset_path(root, relative):
@@ -65,6 +73,7 @@ def runtime_python(root, profile, required=True):
         directory = managed_dir(root, 'runtimes', profile, item)
         exe = directory / 'python/python.exe'
         if ready(directory, item) and exe.is_file():
+            ensure_runtime_path(directory)
             return exe
     legacy = Path(root) / '.venv-index/Scripts/python.exe'
     if legacy.is_file():
@@ -97,6 +106,10 @@ def status(root):
 
 
 def worker_environment(root):
-    return {**os.environ, 'KUMIKO_APP_HOME': str(Path(root).resolve()), 'PYTHONIOENCODING': 'utf-8',
+    root=Path(root).resolve()
+    cache=root/'data/cache'
+    return {**os.environ, 'KUMIKO_APP_HOME': str(root), 'PYTHONIOENCODING': 'utf-8',
             'PYTHONUNBUFFERED': '1', 'HF_HUB_OFFLINE': '1', 'TRANSFORMERS_OFFLINE': '1',
+            'HF_HOME':str(cache/'huggingface'),'HF_HUB_CACHE':str(cache/'huggingface/hub'),
+            'HF_MODULES_CACHE':str(cache/'huggingface/modules'),'TORCH_HOME':str(cache/'torch'),
             'OMP_NUM_THREADS': '2', 'MKL_NUM_THREADS': '2', 'OPENBLAS_NUM_THREADS': '2'}

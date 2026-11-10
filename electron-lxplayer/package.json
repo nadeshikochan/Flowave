@@ -108,14 +108,6 @@
         "to": "data"
       },
       {
-        "from": "../scripts/install-model.ps1",
-        "to": "Install-Model.ps1"
-      },
-      {
-        "from": "../scripts/install-recommendation-engine.ps1",
-        "to": "Install-Recommendation-Engine.ps1"
-      },
-      {
         "from": "../release-template/README-开始使用.txt",
         "to": "README-开始使用.txt"
       },

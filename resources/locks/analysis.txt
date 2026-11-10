@@ -675,6 +675,7 @@ msgpack==1.2.4 \
     --hash=sha256:fb811ac3d463a75013b234d2aae56b9f0bdb0105caf4dd2ee65305b6a8a6078d \
     --hash=sha256:fb9ddbf23b8c6e89752af399fcf4daed60055e239cda44c6acfaa76d19331e8c
 muq==0.1.0 \
+    --hash=sha256:b728d108bd69fa940dfaabdc6de112edae462a6d5e5984bd6835d1383dafcac0 \
     --hash=sha256:67ebb47d238e702151253d08e83e2dbbbe89d24c414b5b410d9b3db55c4a6fa8
 narwhals==2.28.0 \
     --hash=sha256:1f69d6385ec30e2fa6e1fdeb37c562ecabd0f713f6f3e3b58a668c5c9df9567f \
@@ -1453,3 +1454,6 @@ x-clip==0.14.4 \
 x-transformers==2.3.9 \
     --hash=sha256:4ad3ca47bb46d6df1ea757ec5eb88f62cb6c2a3548caa066eb9db6aa2fb4b76e \
     --hash=sha256:9e8d7d4b8122c8ae48e4c395821677163652631579bf233ef933e24093e85c29
+mutagen==1.47.0 \
+    --hash=sha256:719fadef0a978c31b4cf3c956261b3c58b6948b32023078a2117b1de09f0fc99 \
+    --hash=sha256:edd96f50c5907a9539d8e5bba7245f62c9f520aef333d13392a79a4f70aca719

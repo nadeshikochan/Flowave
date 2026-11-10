@@ -497,28 +497,28 @@
             <div v-if="settingsOverviewQuery.trim()" class="settings-search-results"><header class="settings-panel-header"><div><h2>搜索设置</h2><p>{{settingsSearchResults.length}} 个结果</p></div><button class="mini" @click="settingsOverviewQuery=''">清除</button></header><button v-for="item in settingsSearchResults" :key="item.id" class="settings-search-result" @click="openSettingsResult(item)"><strong>{{item.title}}</strong><small>{{item.path}}</small></button><p v-if="!settingsSearchResults.length" class="settings-no-match">未找到设置。试试“歌词字号”或“下载目录”。</p></div>
             <div v-show="!settingsOverviewQuery.trim()" class="settings-page-content">
             <section v-if="settingsTab==='features'" class="settings-panel feature-selection-panel" aria-labelledby="feature-selection-title">
-              <header class="settings-panel-header"><div><h2 id="feature-selection-title">功能选装</h2><p>选择需要的功能，下次启动生效。已有歌曲和处理结果保留。</p></div></header>
+              <header class="settings-panel-header"><div><h2 id="feature-selection-title">功能选装</h2><p>安装会自动准备插件、模型和运行环境，完成后重新打开软件生效。</p></div></header>
               <p v-if="featureSelection.error || featureMessage" class="error" role="alert">{{featureSelection.error || featureMessage}}</p>
               <p v-if="featureSelection.restartRequired" class="feature-restart-notice" role="status">选择已保存，完全退出并重新打开软件后生效。</p>
               <section class="feature-install-item" v-for="item in featureCatalog" :key="item.id">
-                <div class="feature-install-header"><div><h3>{{item.name}}</h3><p>{{item.description}}</p><small v-if="packageState(item.id)">{{packageState(item.id).installed ? '已安装 '+packageState(item.id).installed.version : '未安装'}}<template v-if="!packageState(item.id).installed"> · {{packageSize(packageState(item.id).bytes)}}<template v-if="packageState(item.id).source==='github'"> · GitHub Releases</template><template v-else> · 随附官方包</template></template><template v-if="packageState(item.id).active"> · 启动版本 {{packageState(item.id).active.version}}</template></small></div>
-                  <button class="mini" v-if="packageState(item.id) && !packageState(item.id).installed" :disabled="featureSaving || !!featureSelection.packages.error" @click="manageFeaturePackage(item.id,'install')">安装{{item.name}}</button>
+                <div class="feature-install-header"><div><h3>{{item.name}}</h3><p>{{item.description}}</p><small v-if="packageState(item.id)">{{packageState(item.id).installed ? (item.id==='history'||resourceState(item.id).ready?'已安装 ':'代码已安装，资源未齐全 · ')+packageState(item.id).installed.version : '未安装'}}<template v-if="!packageState(item.id).installed"> · {{packageSize(packageState(item.id).bytes)}}<template v-if="packageState(item.id).source==='github'"> · GitHub Releases</template><template v-else> · 随附官方包</template></template><template v-if="packageState(item.id).active"> · 启动版本 {{packageState(item.id).active.version}}</template></small></div>
+                  <button class="mini" v-if="packageState(item.id) && (!packageState(item.id).installed || item.id!=='history'&&!resourceState(item.id).ready)" :disabled="featureSaving || !!featureSelection.packages.error" @click="manageFeaturePackage(item.id,'install')">{{packageState(item.id).installed?'完成安装':'安装'+item.name}}</button>
                   <label v-else class="quiet-switch"><input class="ui-toggle" type="checkbox" :checked="featureSelected(item.id)" :disabled="featureSaving || !!featureSelection.error" @change="selectFeature(item.id,$event.target.checked,$event)" :aria-label="'下次启动启用'+item.name" /></label>
                 </div>
                 <p v-if="moduleFailures[item.id] || packageState(item.id)?.error || packageState(item.id)?.warning" class="error" role="alert">{{moduleFailures[item.id] || packageState(item.id)?.error || packageState(item.id)?.warning}}</p>
+                <p class="hint" v-if="item.id!=='history' && !resourceState(item.id).ready">模型与工具约 {{packageSize(resourceState(item.id).downloadBytes)}}，运行环境自动安装；需要 NVIDIA 显卡。已下载内容会复用。</p>
                 <div v-if="packageState(item.id) && !packageState(item.id).installed" class="feature-installed-actions"><small>安装后下次启动启用</small><button class="mini ghost" :disabled="featureSaving || !!featureSelection.packages.error" @click="manageFeaturePackage(item.id,'import')">从文件安装…</button></div>
                 <div v-if="packageState(item.id)?.installed" class="feature-installed-actions"><small>当前{{featureEnabled(item.id)?'已启用':'已停用'}}<template v-if="featureSelected(item.id)!==featureEnabled(item.id)"> · 下次启动{{featureSelected(item.id)?'启用':'停用'}}</template></small><div class="btns"><button class="mini" v-if="packageState(item.id).installed.version!==packageState(item.id).latest" :disabled="featureSaving" @click="manageFeaturePackage(item.id,'install')">更新至 {{packageState(item.id).latest}}</button><button class="mini ghost" :disabled="featureSaving" @click="manageFeaturePackage(item.id,'import')">从文件安装…</button><button class="mini ghost" :disabled="featureSaving" @click="manageFeaturePackage(item.id,'remove')">移除{{item.name}}</button></div></div>
-                <div class="feature-progress" v-if="featureSaving && featurePackageProgress.id===item.id" role="status"><span>{{({prepare:'正在准备安装…',download:'正在下载…',verify:'正在校验并安装…',complete:'已完成',error:'未完成'})[featurePackageProgress.phase] || '正在处理…'}}</span><progress :value="featurePackageProgress.total ? featurePackageProgress.done : null" :max="featurePackageProgress.total || 1"></progress><button class="mini" v-if="featurePackageProgress.phase==='download'" @click="cancelModuleInstall(item.id)">取消</button></div>
+                <div class="feature-progress" v-if="featureSaving && featurePackageProgress.id===item.id" role="status"><span>{{featurePackageProgress.file || ({prepare:'正在准备安装…',download:'正在下载插件…',verify:'正在校验插件…',resources:'正在安装模型与运行环境…',commit:'正在完成安装…',complete:'已完成',error:'未完成'})[featurePackageProgress.phase] || '正在处理…'}}</span><progress :value="featurePackageProgress.total ? featurePackageProgress.done : null" :max="featurePackageProgress.total || 1"></progress><small v-if="featurePackageProgress.total">{{packageSize(featurePackageProgress.done)}} / {{packageSize(featurePackageProgress.total)}}</small><button class="mini" v-if="['prepare','download','verify','resources'].includes(featurePackageProgress.phase)" @click="cancelModuleInstall(item.id)">取消安装</button></div>
                 <details class="feature-resources" v-if="item.id!=='history'" @toggle="$event.target.open && loadResourceStatus()"><summary>计算环境与模型 · {{resourceState(item.id).ready?'已就绪':'需要准备'}}</summary>
                   <div v-for="resource in resourceState(item.id).items" :key="resource.id" class="form-row"><span>{{resource.name}}</span><small>{{resource.ready?'已准备':resource.bytes?packageSize(resource.bytes):'需要下载'}}</small></div>
                   <p>资源保存在本机，移除插件后仍保留。处理音乐需要兼容的 NVIDIA 显卡；已有结果无需重新处理。</p>
-                  <div class="btns"><button class="mini" :disabled="!packageState(item.id)?.installed || resourceState(item.id).running || resourceState(item.id).ready" @click="prepareFeatureResources(item.id)">{{resourceState(item.id).ready?'资源已就绪':'准备所需资源'}}</button><button class="mini ghost" v-if="resourceState(item.id).running" @click="prepareFeatureResources(item.id,'cancel')">取消准备</button><button class="mini ghost" @click="openFeatureData('models')">打开资源目录</button></div>
-                  <div v-if="resourceState(item.id).running" role="status"><p>{{resourceState(item.id).file || ({prepare:'正在准备…',install:'正在安装计算环境…',download:'正在下载…',verify:'正在校验…',ready:'正在准备下一项…'})[resourceState(item.id).phase] || '正在准备…'}}</p><progress :value="resourceState(item.id).total?resourceState(item.id).done:null" :max="resourceState(item.id).total||1"></progress><small v-if="resourceState(item.id).total"> {{packageSize(resourceState(item.id).done)}} / {{packageSize(resourceState(item.id).total)}}</small></div>
+                  <div class="btns"><button class="mini ghost" @click="openFeatureData('models')">打开资源目录</button></div>
                   <p v-if="resourceState(item.id).message" role="status" :class="{error:resourceState(item.id).phase==='error'}">{{resourceState(item.id).message}}</p>
                 </details>
               </section>
               <details class="feature-storage" @toggle="$event.target.open && loadDataLocations()"><summary>数据与存储位置</summary><p>移除功能包保留以下数据。手动整理重要文件前，请完全退出软件及后台；数据库不能只复制正在写入的主文件。</p><div v-for="location in featureDataLocations" :key="location.id" class="feature-storage-row"><div><strong>{{location.name}}</strong><small>{{location.note}}</small><code>{{location.path}}</code></div><button class="mini" @click="openFeatureData(location.id)">打开目录</button></div></details>
-              <p class="feature-data-note">安装后自动选为下次启动启用；移除仅处理功能代码。大型模型与计算组件按需单独准备。</p>
+              <p class="feature-data-note">安装自动包含所需资源；下载失败可再次点击继续。移除保留模型、索引、处理结果和记录。</p>
               <p class="feature-data-note">基础播放、搜索、歌单、歌词与音效始终保留。推荐可继续读取已有分析；停用听歌记录后停止累计长期时长与次数。</p>
             </section>
             <div v-if="settingsTab==='library-settings'" class="settings-panel"><header class="settings-panel-header"><div><h2>本地音乐</h2></div><button class="mini" @click="refreshSongList" :disabled="loading || audioDirectoryChanged">刷新音乐库</button></header><section class="settings-card" data-setting-id="setting-library-settings-17de1ed2d9">
@@ -813,26 +813,8 @@
                     <p>推荐功能所需的组件与模型。</p>
                   </div>
                 </div>
-                <div class="setup-steps">
-                  <div class="installer-step">
-                    <div><strong>推荐组件</strong><small>下载约 188 MB，安装后约 500 MB。</small></div>
-                    <button class="mini" @click="launchRecommendationInstaller" :disabled="installerTasks.recommendation.running">{{ installerTasks.recommendation.running ? '安装中' : '安装' }}</button>
-                    <div class="installer-detail" v-if="installerTasks.recommendation.phase !== 'idle'">
-                      <div class="installer-progress" :class="{indeterminate: installerTasks.recommendation.percent === null, error: installerTasks.recommendation.phase === 'error'}" :style="installerProgressStyle(installerTasks.recommendation)"><i></i></div>
-                      <div class="installer-status"><span>{{ installerTasks.recommendation.message }}</span><span v-if="installerTasks.recommendation.percent !== null">{{ Math.round(installerTasks.recommendation.percent) }}%</span></div>
-                      <small>位置：{{ installerTasks.recommendation.target }}</small>
-                    </div>
-                  </div>
-                  <div class="installer-step">
-                    <div><strong>推荐模型</strong><small>约 1.18 GB，下载后自动校验。</small></div>
-                    <button class="mini" @click="launchModelInstaller" :disabled="installerTasks.model.running">{{ installerTasks.model.running ? '下载中' : '下载模型' }}</button>
-                    <div class="installer-detail" v-if="installerTasks.model.phase !== 'idle'">
-                      <div class="installer-progress" :class="{indeterminate: installerTasks.model.percent === null, error: installerTasks.model.phase === 'error'}" :style="installerProgressStyle(installerTasks.model)"><i></i></div>
-                      <div class="installer-status"><span>{{ installerTasks.model.message }}</span><span v-if="installerTasks.model.percent !== null">{{ Math.round(installerTasks.model.percent) }}%</span></div>
-                      <small>位置：{{ installerTasks.model.target }}</small>
-                    </div>
-                  </div>
-                </div>
+                <p>推荐插件会自动安装匹配的模型和运行环境。</p>
+                <button class="mini" @click="launchRecommendationInstaller">前往功能选装</button>
                 <label class="form-row" data-setting-id="setting-advanced-params-model-local-dir">
                   <span>模型目录</span>
                   <input v-model="params.model.local_dir" placeholder="选择推荐模型文件夹" />

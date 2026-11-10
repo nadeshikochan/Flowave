@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import stat
 import subprocess
@@ -17,9 +18,10 @@ import sys
 import time
 import urllib.parse
 import urllib.request
+import urllib.error
 import zipfile
 
-from resource_runtime import catalog, managed_dir, ready, revision
+from resource_runtime import catalog, ensure_runtime_path, managed_dir, ready, revision, worker_environment
 
 _last_progress = 0.0
 
@@ -46,7 +48,7 @@ def within(root, relative):
 def validate_url(url):
     p = urllib.parse.urlsplit(url)
     hosts = {'www.python.org', 'python.org', 'huggingface.co', 'files.pythonhosted.org',
-             'download-r2.pytorch.org', 'download.pytorch.org', 'raw.githubusercontent.com', 'github.com', 'release-assets.githubusercontent.com',
+             'download-r2.pytorch.org', 'download.pytorch.org', 'essentia.upf.edu', 'raw.githubusercontent.com', 'github.com', 'release-assets.githubusercontent.com',
              'cdn-lfs.huggingface.co', 'cdn-lfs-us-1.huggingface.co'}
     if p.scheme != 'https' or p.username or p.password or not (p.hostname in hosts or (p.hostname or '').endswith(('.hf.co', '.huggingface.co', '.amazonaws.com'))):
         raise ValueError('资源下载来源不受信任。')
@@ -67,7 +69,7 @@ def request(url, headers=None):
 def download(item, cache, group):
     global _last_progress
     expected, size = item['sha256'], int(item['bytes'])
-    if len(expected) != 64 or not 0 < size <= 8 * 1024**3:
+    if len(expected) != 64 or any(c not in '0123456789abcdef' for c in expected) or not 0 <= size <= 8 * 1024**3:
         raise ValueError('资源校验清单无效。')
     target = within(cache, expected)
     if target.is_file() and target.stat().st_size == size and digest(target) == expected:
@@ -103,9 +105,12 @@ def download(item, cache, group):
                     if attempt == 3:
                         raise
                     time.sleep(min(3, attempt + 1))
-        done = 0
+        done = sum(within(pieces,str(start)).stat().st_size for start in range(0,size,block)
+                   if within(pieces,str(start)).is_file() and within(pieces,str(start)).stat().st_size==min(block,size-start))
+        emit(phase='download', group=group, file=Path(item['path']).name, done=done, total=size)
         with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
-            futures = [pool.submit(fetch_range, start) for start in range(0, size, block)]
+            futures = [pool.submit(fetch_range, start) for start in range(0, size, block)
+                       if not within(pieces,str(start)).is_file() or within(pieces,str(start)).stat().st_size!=min(block,size-start)]
             for future in concurrent.futures.as_completed(futures):
                 done += future.result()
                 if time.monotonic() - _last_progress > .4 or done == size:
@@ -140,6 +145,10 @@ def download(item, cache, group):
                 within(pieces, str(start)).unlink(missing_ok=True)
         raise ValueError('资源校验失败，原有版本保留。重新点击可重试。')
     part.replace(target)
+    if size > 32 * 1024**2:
+        for start in range(0,size,block):within(pieces,str(start)).unlink(missing_ok=True)
+        try:pieces.rmdir()
+        except OSError:pass  # Preserve any unknown files.
     return target
 
 
@@ -194,7 +203,11 @@ def install_group(root, name, item, cache):
                 raise ValueError('资源适配结果校验失败。')
         else:
             if not out.is_file() or out.stat().st_size != row['bytes'] or digest(out) != row['sha256']:
-                shutil.copyfile(file, out)
+                out.unlink(missing_ok=True)
+                # Immutable verified downloads can share storage. Removing the
+                # cache entry later does not remove the published asset.
+                try:os.link(file,out)
+                except OSError:shutil.copyfile(file,out)
         if row.get('extract_to'):
             unpack(file, within(tree, row['extract_to']))
         if row.get('extract_member_suffix'):
@@ -231,12 +244,33 @@ def install_group(root, name, item, cache):
     emit(phase='ready', group=name)
 
 
+def bind_downloaded_wheels(lock, wheels, wheel_cache, output):
+    """Bind bootstrap wheels to verified local bytes; keep every pinned hash."""
+    text = lock.read_text(encoding='utf-8')
+    for wheel in wheels:
+        package, version = Path(wheel['path']).name.split('-')[:2]
+        pattern = re.compile(r'(?m)^' + re.escape(package + '==' + version) + r'(?=\s|$)')
+        matches = list(pattern.finditer(text))
+        if len(matches) != 1:
+            raise ValueError('已下载依赖与锁文件不匹配。')
+        start = matches[0].start()
+        end = re.search(r'\n(?=\S)', text[matches[0].end():])
+        block = text[start:matches[0].end() + end.start() if end else len(text)]
+        if '--hash=sha256:' + wheel['sha256'] not in block:
+            raise ValueError('锁文件未包含已下载依赖的校验值。')
+        uri = within(wheel_cache, wheel['path']).resolve().as_uri()
+        text = pattern.sub(lambda _: package + ' @ ' + uri, text, count=1)
+    output.write_text(text, encoding='utf-8', newline='\n')
+    return output
+
+
 def install_profile(root, name, item, cache):
     final = managed_dir(root, 'runtimes', name, item)
     if ready(final, item):
         emit(phase='ready', group=name)
         return
     work = final.with_name(final.name + '.preparing')
+    ensure_runtime_path(work)
     work.mkdir(parents=True, exist_ok=True)
     python_archive = download(item['python'], cache, name)
     python = work / 'python'
@@ -259,12 +293,15 @@ def install_profile(root, name, item, cache):
             except OSError:shutil.copyfile(file,dest)
     for wheel in item.get('bundled_wheels',[]):
         if digest(within(root,wheel['file']))!=wheel['sha256']:raise ValueError('随附计算依赖校验失败。')
+    # Index resolution can prefer a remote wheel over --find-links. Direct local
+    # references prevent downloading the same multi-GB engine a second time.
+    local_lock = bind_downloaded_wheels(lock, item.get('bootstrap_wheels', []), wheel_cache, work / 'requirements-local.txt')
     emit(phase='install', group=name, file='正在安装已校验计算依赖')
-    env = {**os.environ, 'UV_CACHE_DIR': str(cache / 'uv-cache'), 'UV_LINK_MODE': 'hardlink',
+    env = {**worker_environment(root), 'UV_CACHE_DIR': str(cache / 'uv-cache'), 'UV_LINK_MODE': 'hardlink',
            'UV_NATIVE_TLS': 'true', 'UV_PYTHON_DOWNLOADS': 'never', 'PYTHONIOENCODING': 'utf-8',
            'PYTHONNOUSERSITE': '1', 'PYTHONPATH': ''}
     cmd = [str(uv), 'pip', 'install', '--python', str(python / 'python.exe'), '--target',
-           str(python / 'Lib/site-packages'), '--find-links',str(wheel_cache),'--find-links',str(root/'resources/wheels'),'--require-hashes', '--index-strategy','unsafe-best-match', '--only-binary', ':all:', '-r', str(lock)]
+           str(python / 'Lib/site-packages'), '--reinstall', '--find-links',str(wheel_cache),'--find-links',str(root/'resources/wheels'),'--require-hashes', '--index-strategy','unsafe-best-match', '--only-binary', ':all:', '-r', str(local_lock)]
     flags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace', env=env, creationflags=flags)
     lines = []
@@ -275,7 +312,9 @@ def install_profile(root, name, item, cache):
         emit(phase='install', group=name, file=line.strip()[:220])
     if proc.wait() != 0:
         raise RuntimeError('计算依赖安装失败：' + '\n'.join(lines[-10:]))
+    local_lock.unlink()
     # Probe before publication. It runs in the embedded, isolated interpreter.
+    emit(phase='probe',group=name,file='正在检查运行环境…')
     probe = ';'.join('import ' + module for module in item['probe'])
     probe += ';import json;assert torch.cuda.is_available(),"需要可用的NVIDIA显卡驱动";print(json.dumps({"python":list(__import__("sys").version_info[:3]),"torch":torch.__version__,"cuda":torch.version.cuda,"transformers":transformers.__version__}))'
     result = subprocess.run([str(python / 'python.exe'), '-I', '-c', probe], capture_output=True, text=True, encoding='utf-8', errors='replace', env=env, creationflags=flags, timeout=120)
@@ -319,12 +358,20 @@ def install(root, module):
 
 
 def main(root, module):
-    try:
-        install(root, module)
-        return 0
-    except Exception as exc:
-        emit(phase='error', module=module, message=str(exc)[:2400])
-        return 1
+    for attempt in range(3):
+        try:
+            install(root, module)
+            return 0
+        except Exception as exc:
+            transient = isinstance(exc, (urllib.error.URLError, TimeoutError, ConnectionError))
+            if isinstance(exc, urllib.error.HTTPError):
+                transient = exc.code in (408, 429) or exc.code >= 500
+            if transient and attempt < 2:
+                emit(phase='retry', module=module, file='连接中断，正在继续下载…')
+                time.sleep(2 * (attempt + 1))
+                continue
+            emit(phase='error', module=module, message=str(exc)[:2400])
+            return 1
 
 
 if __name__ == '__main__':

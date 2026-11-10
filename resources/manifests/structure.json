@@ -229,8 +229,8 @@
     },
     {
       "file": "data/components/music-structure/runtime/model.py",
-      "bytes": 19068,
-      "sha256": "390e640e092ae6f6fb6edb2acac976cb9dfb19ca2943f853bf83f3b165d17a71"
+      "bytes": 18541,
+      "sha256": "13125a1ff7997a4cbe71b7df517f0cbad948fac39b57cd9e2ef1a1546cb5ef23"
     },
     {
       "file": "models/MuQ-large-msd-iter/config.json",

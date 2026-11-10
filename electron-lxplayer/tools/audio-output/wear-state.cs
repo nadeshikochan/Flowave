@@ -18,11 +18,13 @@ namespace FlowaveWear {
     // bounded TLVs, CRC16/XMODEM. 2B03 uses 08/09; 2B25 uses 01/02.
     public sealed class WearFrames {
         readonly List<byte> pending = new List<byte>();
+        // Legacy notifications can update one ear at a time. Unknown is kept
+        // until that ear reports; a single removed ear cannot imply both out.
+        bool? firstEar, secondEar;
         public bool? DetectionEnabled { get; private set; }
         public int FrameCount { get; private set; }
         public int InvalidChecksums { get; private set; }
         public string LastCommand { get; private set; }
-        public string LastSchema { get; private set; }
         static ushort Checksum(byte[] bytes, int count) {
             ushort crc = 0;
             for (int i = 0; i < count; i++) {
@@ -58,14 +60,6 @@ namespace FlowaveWear {
                 pending.RemoveRange(0, size);
                 FrameCount++;
                 LastCommand = frame[4].ToString("X2") + frame[5].ToString("X2");
-                var schema = new List<string>();
-                for (int offset = 6; offset + 2 <= size - 2; ) {
-                    int fieldSize = frame[offset + 1];
-                    if (offset + 2 + fieldSize > size - 2) break;
-                    schema.Add(frame[offset].ToString("X2") + ":" + fieldSize);
-                    offset += 2 + fieldSize;
-                }
-                LastSchema = String.Join(",", schema.ToArray());
                 bool isLegacyWear = frame[4] == 0x2B && frame[5] == 0x03;
                 bool isModernWear = frame[4] == 0x2B && frame[5] == 0x25;
                 bool isWear = isLegacyWear || isModernWear;
@@ -74,6 +68,7 @@ namespace FlowaveWear {
                 int at = 6, end = size - 2;
                 bool valid = true, found = false;
                 bool? state = null;
+                bool? nextFirst = firstEar, nextSecond = secondEar;
                 var tags = new HashSet<int>();
                 while (at < end) {
                     if (at + 2 > end || at + 2 + frame[at + 1] > end) { valid = false; break; }
@@ -82,17 +77,20 @@ namespace FlowaveWear {
                         (isModernWear && (tag == 1 || tag == 2)) || (isSetting && tag == 1)) {
                         if (!tags.Add(tag)) { valid = false; break; }
                         bool? next = sizeOfValue == 1 && frame[at + 2] <= 1 ? (bool?)(frame[at + 2] == 1) : null;
-                        // These are separate ears. Either explicit removal
-                        // must pause, even when the other ear remains worn.
-                        if (!found) state = next;
-                        else if (state == false || next == false) state = false;
-                        else if (state != true || next != true) state = null;
+                        if (isSetting) state = next;
+                        else if (tag == 1 || tag == 8) nextFirst = next;
+                        else nextSecond = next;
                         found = true;
                     }
                     at += 2 + sizeOfValue;
                 }
                 if (valid && found) {
-                    if (isWear) states.Add(state);
+                    if (isWear) {
+                        firstEar = nextFirst; secondEar = nextSecond;
+                        // true: at least one worn; false: both explicitly out.
+                        states.Add(firstEar == true || secondEar == true ? (bool?)true
+                            : firstEar == false && secondEar == false ? (bool?)false : null);
+                    }
                     else DetectionEnabled = state;
                 }
             }
@@ -191,7 +189,7 @@ namespace FlowaveWear {
                         foreach (bool? state in decoder.Feed(buffer, count)) Publish(current, "reported", state);
                         if (previousSetting != decoder.DetectionEnabled && decoder.DetectionEnabled.HasValue)
                             Publish(current, decoder.DetectionEnabled.Value ? "detection-enabled" : "detection-disabled", null);
-                        if (diagnostic) Publish(current, "rx=" + count + ",frames=" + decoder.FrameCount + ",crc=" + decoder.InvalidChecksums + ",cmd=" + decoder.LastCommand + ",fields=" + decoder.LastSchema, null);
+                        if (diagnostic) Publish(current, "rx=" + count + ",frames=" + decoder.FrameCount + ",crc=" + decoder.InvalidChecksums + ",cmd=" + decoder.LastCommand, null);
                     }
                 } catch (Exception error) {
                     if (!(error is SocketException || error is ObjectDisposedException || error is TimeoutException || error is NotSupportedException || error is ArgumentException))

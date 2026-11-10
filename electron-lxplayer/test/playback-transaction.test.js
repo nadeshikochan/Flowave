@@ -3,6 +3,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 const nodeVm = require("node:vm");
+const { EventEmitter } = require('node:events');
+const { AudioOutputSafety } = require('../audio-output-safety');
 
 const PlaybackTransitionUtils = require("../renderer/playback-transition");
 const ListeningHistoryOps = require("../listening-history-ops");
@@ -25,7 +27,7 @@ test("headphone safety latches through real Vue and invalidates pending playback
     app.beginPlaybackTransition('C:/Fixture/next.mp3', 'next', {});
     const before = app.playbackGeneration;
     app.handleAudioOutputSafety({ reason: 'headphones-removed' });
-    assert.match(notices.at(-1), /已摘下耳机/);
+    assert.match(notices.at(-1), /双耳均已摘下/);
     assert.equal(app.outputSafetyBlocked, true);
     assert.equal(app.isPlaying, false);
     assert.equal(fakeAudio.paused, true);
@@ -55,6 +57,155 @@ test("media session mapping uses the common bridge for recover and change", asyn
   bindings.get('nexttrack')(); bindings.get('previoustrack')(); bindings.get('pause')();
   await Promise.resolve();
   assert.deepEqual(sent, ['next_like', 'dislike_next', 'pause']);
+});
+
+async function createWearPlaybackFixture() {
+  const vueContext = { console };
+  nodeVm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'renderer', 'vendor', 'vue.global.prod.js'), 'utf8'), vueContext);
+  const monitor = new EventEmitter(), effects = [];
+  monitor.leases = new Set();
+  monitor.acquire = id => monitor.leases.add(id);
+  monitor.release = id => monitor.leases.delete(id);
+  monitor.get = async () => (monitor.state = {id:'headphones',transport:'bluetooth',route:'session',confirmed:true,sampledAt:Date.now()});
+  let app;
+  const owner = {isDestroyed:()=>false, setAudioMuted:value=>effects.push(value),
+    send:(_channel,event)=>{ void Promise.resolve().then(()=>app.handleAudioOutputSafety(event)); }};
+  const safety = new AudioOutputSafety(monitor);
+  const { capturedConfig, fakeAudio } = createRendererHarness({markRaw:vueContext.Vue.markRaw,lxEnv:{prepareAudioOutput:async value=>{
+    if (value.playing) return safety.prepare(owner,value);
+    safety.pause(owner,value); return {ok:true};
+  }}});
+  const renderer = vueContext.Vue.createRenderer({createComment:()=>({}),insert(){},remove(){},parentNode:()=>null,nextSibling:()=>null});
+  const instance = renderer.createApp({data:capturedConfig.data,render:()=>null,
+    watch:{isPlaying:capturedConfig.watch.isPlaying},
+    methods:{...capturedConfig.methods,showNotice(){},appendMediaDiagEvent(){},cancelRecommendPrefetch(){},cancelNaturalCrossfade(){},
+      syncOutputCalibrationConsumers(){},syncLyricAmbient(){},sendLyricOverlay(){}}});
+  app = instance.mount({});
+  app.currentPath = 'C:/Music/A.mp3'; app.isPlaying = true; app.playbackIntent = 'play';
+  await safety.prepare(owner);
+  const settle = () => new Promise(resolve=>setImmediate(resolve));
+  await settle();
+  return {app,fakeAudio,monitor,safety,effects,settle,
+    async wear(worn) {monitor.wearState={id:'headphones',status:'reported',worn};monitor.emit('wear-state',monitor.wearState);await settle();},
+    dispose(){safety.dispose();instance.unmount();}};
+}
+
+test('real Vue wear pause retains its watcher and rewear resumes the same song and position', async () => {
+  const fixture = await createWearPlaybackFixture();
+  const { app, fakeAudio, monitor, safety } = fixture;
+  try {
+    await fixture.wear(false);
+    assert.equal(app.playbackIntent,'pause'); assert.equal(fakeAudio.paused,true);
+    assert(app.outputSafetyWearResume); assert.equal(monitor.leases.size,1);
+    app.syncMediaSessionPlaybackState(); // Paused-state publication must retain the wear lease.
+    await fixture.wear(true);
+    assert.equal(app.isPlaying,true); assert.equal(fakeAudio.paused,false);
+    assert.equal(app.currentPath,'C:/Music/A.mp3'); assert.equal(fakeAudio.currentTime,12);
+    assert.equal(app.outputSafetyWearResume,null); assert.equal(safety.blocked,false);
+    // Main-process wear reports may both arrive before the renderer publishes its pause.
+    for (const worn of [false,true]) {
+      monitor.wearState={id:'headphones',status:'reported',worn};
+      monitor.emit('wear-state',monitor.wearState);
+    }
+    await fixture.settle();
+    assert.equal(app.isPlaying,true); assert.equal(safety.blocked,false);
+  } finally {fixture.dispose();}
+});
+
+test('manual pause, track replacement and disconnection revoke real Vue wear recovery', async () => {
+  for (const interrupt of ['already-paused','manual','track','disconnect']) {
+    const fixture = await createWearPlaybackFixture();
+    const { app, fakeAudio, monitor } = fixture;
+    try {
+      if (interrupt === 'already-paused') app.pauseByManual('user');
+      await fixture.wear(false);
+      const old = app.outputSafetyWearResume?.token;
+      if (interrupt === 'manual') app.pauseByManual('user');
+      if (interrupt === 'track') app.beginPlaybackTransition('C:/Music/B.mp3','manual',{});
+      if (interrupt === 'disconnect') {monitor.emit('device-event',{kind:'removed',id:'headphones'});await fixture.settle();}
+      await fixture.wear(true);
+      await app.handleAudioOutputSafety({reason:'headphones-worn',wearToken:old});
+      assert.equal(app.isPlaying,false,interrupt); assert.equal(fakeAudio.paused,true,interrupt);
+      assert.equal(app.outputSafetyWearResume,null,interrupt);
+    } finally {fixture.dispose();}
+  }
+});
+
+test('manual pause wins while wear recovery is waiting for the effects engine', async () => {
+  const fixture = await createWearPlaybackFixture();
+  const { app, fakeAudio } = fixture;
+  try {
+    await fixture.wear(false);
+    let release;
+    app.resumeEffectsEngine = () => new Promise(resolve=>{release=resolve;});
+    await fixture.wear(true);
+    assert.equal(typeof release,'function');
+    app.pauseByManual('user'); release(); await fixture.settle();
+    assert.equal(fakeAudio.paused,true); assert.equal(app.isPlaying,false);
+    assert.equal(app.playbackIntent,'pause'); assert.equal(app.outputSafetyWearResume,null);
+  } finally {fixture.dispose();}
+});
+
+test('removing both again during wear recovery invalidates the old resume and rearms the new pause', async () => {
+  const fixture = await createWearPlaybackFixture();
+  const { app, fakeAudio } = fixture;
+  try {
+    await fixture.wear(false);
+    const firstToken = app.outputSafetyWearResume.token;
+    const resumeEffects = app.resumeEffectsEngine;
+    let release;
+    app.resumeEffectsEngine = () => new Promise(resolve=>{release=resolve;});
+    await fixture.wear(true);
+    await fixture.wear(false);
+    assert.notEqual(app.outputSafetyWearResume.token,firstToken);
+    app.resumeEffectsEngine = resumeEffects;
+    release(); await fixture.settle();
+    assert.equal(fakeAudio.paused,true); assert.equal(app.playbackIntent,'pause');
+    await fixture.wear(true);
+    assert.equal(fakeAudio.paused,false); assert.equal(app.isPlaying,true);
+    assert.equal(app.outputSafetyWearResume,null);
+  } finally {fixture.dispose();}
+});
+
+test('a switch gap retains the output monitor; manual pause still releases it immediately', async () => {
+  const fixture = await createWearPlaybackFixture();
+  const { app, monitor, safety } = fixture;
+  try {
+    app.beginPlaybackTransition('C:/Music/B.mp3','manual',{});
+    app.isPlaying = false;
+    await fixture.settle();
+    assert.equal(safety.active,true);
+    assert.equal(monitor.leases.size,1);
+    app.pendingPlaybackTransition = null;
+    app.recommendationResume = {origin:app.currentPath,generation:app.playbackGeneration};
+    app.syncMediaSessionPlaybackState();
+    assert.equal(safety.active,true);
+    app.pauseByManual('user'); await fixture.settle();
+    assert.equal(safety.active,false);
+    assert.equal(monitor.leases.size,0);
+  } finally {fixture.dispose();}
+});
+
+test('display metadata does not discard preloaded change audio; a library reload still invalidates it', async () => {
+  const fixture = await createWearPlaybackFixture();
+  const { app, fakeAudio } = fixture;
+  try {
+    app.useRecommend = true;
+    const runtime = app.ensureRecommendationRuntime(), element = new FakeAudio();
+    const data = {dislike_list:[{path:'C:/Music/B.mp3',probability:1}],
+      diagnostic:{intent:'change',details:{model:'muq+mert'}}};
+    runtime.caches.set('change',{stamp:app.getRecommendationPolicyStamp(),at:Date.now(),data});
+    const ticket = {path:'C:/Music/B.mp3',element,from:fakeAudio,ready:true,at:Date.now(),
+      base:app.getRecommendationPreparationStamp(),recommendationContext:data};
+    runtime.media.set('change',ticket); runtime.owners.set(element,ticket);
+    app._localMetadataRevision++;
+    const ready = app.takePreparedRecommendation('change');
+    assert.equal(ready,ticket);
+    assert.equal(ready.ready,true);
+    runtime.claimed.delete(ticket); runtime.media.set('change',ticket);
+    app._trackLoadGeneration++;
+    assert.equal(app.takePreparedRecommendation('change')?.ready,undefined);
+  } finally {fixture.dispose();}
 });
 
 test("performance UI snapshots reuse the library during selection and restore both snapshot formats", () => {
@@ -270,6 +421,7 @@ function createRendererHarness(options = {}) {
     TextEncoder,
     LyricModelAdapter,
     Vue: {
+      markRaw: options.markRaw || (value => value),
       createApp(config) {
         capturedConfig = config;
         return { mount: () => config };

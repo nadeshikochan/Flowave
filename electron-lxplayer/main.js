@@ -42,7 +42,14 @@ function setOutputLease(event,consumer,enabled){
   if(enabled){let owned=outputLeaseOwners.get(contents.id);if(!owned)outputLeaseOwners.set(contents.id,owned=new Set());owned.add(id);audioOutputMonitor.acquire(id);return audioOutputMonitor.get();}
   outputLeaseOwners.get(contents.id)?.delete(id);audioOutputMonitor.release(id);return {ok:true};
 }
-audioOutputMonitor.on('change',value=>{for(const window of BrowserWindow.getAllWindows())if(!window.isDestroyed()&&secureProtocols.isTrustedRendererUrl(window.webContents.getURL()))window.webContents.send('lx-audio-output-changed',value)});
+audioOutputMonitor.on('change',value=>{
+  for(const window of BrowserWindow.getAllWindows()){
+    if(window.isDestroyed())continue;
+    const contents=window.webContents;
+    if(contents&&!contents.isDestroyed()&&secureProtocols.isTrustedRendererUrl(contents.getURL()))
+      contents.send('lx-audio-output-changed',value);
+  }
+});
 const { SongInfoProviderRegistry } = require("./song-info/provider-registry");
 const { SongInfoQueryCache } = require("./song-info/query-cache");
 const { SongInfoCacheMaintenance } = require("./song-info/cache-maintenance");
@@ -109,7 +116,7 @@ const featureSelection = require('./feature-selection').createFeatureSelection(p
 const resourceManager=new (require('./resource-manager').ResourceManager)(APP_HOME);
 function featureSnapshot(){
   const selection=featureSelection.snapshot(),packages=officialPackages.snapshot();
-  return {...selection,packages,resources:resourceManager.snapshot(),restartRequired:selection.restartRequired||Object.values(packages).some(value=>value?.restartRequired)};
+  return {...selection,packages,resources:resourceManager.snapshot(),installation:officialModuleOperation?.progress||null,restartRequired:selection.restartRequired||Object.values(packages).some(value=>value?.restartRequired)};
 }
 let officialModuleOperation = null;
 const startupBackground = new (require('./startup-background').StartupBackgroundStore)(path.join(CONFIG_DIR, 'appearance'));
@@ -420,7 +427,6 @@ const mediaInput = new MediaInputCoordinator({ deliver(action, source) {
 } });
 let audioFocusWatcherProc = null;
 let audioFocusWatcherAvailable = false;
-const installerProcesses = new Map();
 lyricOverlayState = { ...lyricOverlayState, ...loadLyricOverlayConfig() };
 let mainWindowState = loadMainWindowConfig();
 metadata.setExternalLyricRoot(lyricSourceConfig.externalLyricDir);
@@ -849,122 +855,6 @@ function showBackendFailure(message) {
   }
 }
 
-function launchBundledInstaller(scriptName, sender) {
-  const definitions = {
-    "Install-Model.ps1": {
-      task: "model",
-      sourceName: "install-model.ps1",
-      target: "models\\MERT-v1-330M",
-      startMessage: "准备下载模型…",
-      failureMessage: "模型安装失败，请检查网络后重试。",
-    },
-    "Install-Recommendation-Engine.ps1": {
-      task: "recommendation",
-      sourceName: "install-recommendation-engine.ps1",
-      target: "backend\\index-worker",
-      startMessage: "准备下载推荐组件…",
-      failureMessage: "推荐组件安装失败，请检查网络后重试。",
-    },
-  };
-  const definition = definitions[scriptName];
-  if (!definition) {
-    throw new Error("不允许启动未知安装脚本");
-  }
-  const packagedPath = path.join(APP_HOME, scriptName);
-  const developmentPath = path.join(APP_HOME, "scripts", definition.sourceName);
-  const scriptPath = fs.existsSync(packagedPath) ? packagedPath : developmentPath;
-  if (!fs.existsSync(scriptPath) || !fs.statSync(scriptPath).isFile()) {
-    throw new Error(`安装脚本不存在：${scriptName}`);
-  }
-  const current = installerProcesses.get(definition.task);
-  if (current && current.exitCode === null && !current.killed) {
-    return {
-      ok: true,
-      task: definition.task,
-      phase: "running",
-      running: true,
-      percent: null,
-      message: "任务正在进行…",
-      target: definition.target,
-    };
-  }
-  const sendProgress = (payload) => {
-    if (!sender || sender.isDestroyed()) return;
-    sender.send("lx-installer-progress", {
-      ...payload,
-      task: definition.task,
-      target: definition.target,
-    });
-  };
-  const child = spawn(
-    "powershell.exe",
-    ["-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath, "-AppHome", APP_HOME, "-ProgressJson"],
-    {
-      cwd: APP_HOME,
-      env: { ...process.env },
-      windowsHide: true,
-      detached: false,
-      stdio: ["ignore", "pipe", "pipe"],
-    },
-  );
-  installerProcesses.set(definition.task, child);
-  let stdoutBuffer = "";
-  let stderrTail = "";
-  let terminalReported = false;
-  const consumeStdout = (chunk) => {
-    stdoutBuffer += String(chunk || "");
-    const lines = stdoutBuffer.split(/\r?\n/);
-    stdoutBuffer = lines.pop() || "";
-    lines.forEach((line) => {
-      const marker = "FLOWAVE_PROGRESS ";
-      const index = line.indexOf(marker);
-      if (index < 0) return;
-      try {
-        const payload = JSON.parse(line.slice(index + marker.length));
-        const phase = String(payload?.phase || "");
-        if (phase === "complete" || phase === "error") terminalReported = true;
-        sendProgress(payload);
-      } catch (error) {
-        console.warn("[installer] 无法解析进度", error?.message || error);
-      }
-    });
-  };
-  child.stdout.setEncoding("utf8");
-  child.stderr.setEncoding("utf8");
-  child.stdout.on("data", consumeStdout);
-  child.stderr.on("data", (chunk) => {
-    stderrTail = `${stderrTail}${String(chunk || "")}`.slice(-4096);
-  });
-  child.on("error", (error) => {
-    installerProcesses.delete(definition.task);
-    terminalReported = true;
-    console.error(`[installer][${definition.task}] start failed`, error?.message || error);
-    sendProgress({ phase: "error", running: false, percent: null, message: definition.failureMessage });
-  });
-  child.on("close", (code) => {
-    if (stdoutBuffer) consumeStdout("\n");
-    installerProcesses.delete(definition.task);
-    if (terminalReported) return;
-    if (Number(code) === 0) {
-      sendProgress({ phase: "complete", running: false, percent: 100, message: "安装完成。" });
-      return;
-    }
-    console.error(`[installer][${definition.task}] exited code=${code}`, stderrTail);
-    sendProgress({ phase: "error", running: false, percent: null, message: definition.failureMessage });
-  });
-  const started = {
-    ok: true,
-    task: definition.task,
-    phase: "starting",
-    running: true,
-    percent: 0,
-    message: definition.startMessage,
-    target: definition.target,
-  };
-  sendProgress(started);
-  return started;
-}
-
 function schedulePackagedSmokeTest() {
   if (!IS_PACKAGED_SMOKE_TEST) return;
   const resultPath = PACKAGED_SMOKE_RESULT_PATH;
@@ -1137,14 +1027,15 @@ const win = new BrowserWindow({
   win.on("maximize", scheduleSaveMainWindowConfig);
   win.on("unmaximize", scheduleSaveMainWindowConfig);
   win.on("close", event => {
+    saveMainWindowConfig();
     if (!quitCleanupFinished) { event.preventDefault(); app.quit(); }
   });
   win.on("closed", () => {
-    saveMainWindowConfig();
+    // The native window is already closed; do not query bounds here.
+    mainWindow = null;
     if (lyricOverlayWindow && !lyricOverlayWindow.isDestroyed()) {
       lyricOverlayWindow.close();
     }
-    mainWindow = null;
   });
   mainWindow = win;
   registerAllShortcuts(win);
@@ -1414,6 +1305,7 @@ app.on("before-quit", (event) => {
   }
   quitCleanupPromise = (async () => {
     await resourceManager.close();
+    await officialModuleOperation?.closed;
     if (mainWindow && !mainWindow.isDestroyed()) {
       let timeout;
       try {
@@ -1425,7 +1317,7 @@ app.on("before-quit", (event) => {
       } catch (error) { console.warn("[history] final renderer snapshot unavailable", { code: String(error?.code || "") }); }
       finally { clearTimeout(timeout); }
     }
-    return Promise.allSettled([traceArchive.flush(), metadata.flushMetadataCache(), listeningHistoryPersistence.flush(), startupBackground.pending, featureSelection.flush(),officialPackages.flush()]);
+    return Promise.allSettled([traceArchive.flush(), metadata.flushMetadataCache(), listeningHistoryPersistence.flush(), startupBackground.pending, featureSelection.flush(), officialPackages.flush()]);
   })().then((results) => {
     for (const result of results) {
       if (result.status === "rejected") console.warn("[state] shutdown save failed", { code: String(result.reason?.code || "") });
@@ -1565,17 +1457,25 @@ function registerIpc() {
     if(!location)return {ok:false,error:'未知数据目录。'};
     try{await fs.promises.mkdir(location.path,{recursive:true});const error=await shell.openPath(location.path);return error?{ok:false,error:'目录无法打开。'}:{ok:true};}catch{return {ok:false,error:'目录无法打开。'};}
   });
-  ipcMain.handle('lx-module-manage',async(event,value)=>{
+  const manageOfficialModule=async(event,value)=>{
     if(!secureProtocols.isTrustedRendererUrl(event.senderFrame?.url)||event.sender!==mainWindow?.webContents)return {ok:false,error:'当前页面无权管理功能包。'};
     if(appIsQuitting)return {ok:false,error:'软件正在退出，原版本保留。'};
     const id=value?.id||'history';
     if(!Object.hasOwn(officialCatalog.packages,id))return {ok:false,error:'未知功能包。'};
-    if(value?.action==='cancel'){if(officialModuleOperation?.id===id&&officialModuleOperation.phase==='download')officialModuleOperation.control.abort();return {ok:true,selection:featureSnapshot()};}
+    if(value?.action==='cancel'){
+      if(officialModuleOperation?.id===id&&officialModuleOperation.phase!=='commit'){
+        officialModuleOperation.control.abort();
+        await resourceManager.cancel(id);
+      }
+      return {ok:true,selection:featureSnapshot()};
+    }
     if(officialModuleOperation)return {ok:false,error:'另一个功能包操作正在进行。'};
-    const operation={id,control:new AbortController(),phase:'prepare'};officialModuleOperation=operation;
-    const progress=payload=>{operation.phase=payload.phase;if(!event.sender.isDestroyed())event.sender.send('lx-module-progress',{id,...payload});};
+    let finishOperation;
+    const operation={id,control:new AbortController(),phase:'prepare',progress:{id,phase:'prepare'},closed:new Promise(resolve=>{finishOperation=resolve;})};officialModuleOperation=operation;
+    const progress=payload=>{operation.phase=payload.phase;operation.progress={id,...payload};if(!event.sender.isDestroyed())event.sender.send('lx-module-progress',operation.progress);};
     try{
-      if(value?.action==='remove')await officialPackages.remove(value.revision,id);
+      if(value.revision!==officialPackages.snapshot().revision)throw Error('功能包状态已变化，请刷新后重试。');
+      if(value?.action==='remove'){progress({phase:'commit'});await officialPackages.remove(value.revision,id);}
       else{
         let bytes;
         if(value?.action==='import'){
@@ -1589,37 +1489,47 @@ function registerIpc() {
           else bytes=await fs.promises.readFile(path.join(__dirname,'official-modules','packages',release.bundle));
         }else throw Error('未知功能包操作。');
         if(appIsQuitting||operation.control.signal.aborted)throw Error('安装已取消，原版本保留。');
-        progress({phase:'verify',done:bytes.length,total:bytes.length});await officialPackages.install(bytes,value.revision,id);
+        progress({phase:'verify',done:bytes.length,total:bytes.length});
+        const verified=require('./official-package-store').decode(bytes,officialCatalog);
+        if(verified.id!==id)throw Error('所选功能包与目标不一致。');
+        progress({phase:'resources'});
+        await resourceManager.prepare(id,event.sender,{signal:operation.control.signal,
+          onProgress:resource=>progress({phase:'resources',resourcePhase:resource.phase,file:resource.phase==='install'?'正在安装运行环境…':resource.file,done:resource.done,total:resource.total})});
+        if(appIsQuitting||operation.control.signal.aborted)throw Error('安装已取消，原版本保留。');
+        progress({phase:'commit'});
+        await officialPackages.install(bytes,value.revision,id);
       }
       // Installation and preference are separate atomic files. On partial failure
       // return the actual installation state so the UI cannot claim rollback.
       await featureSelection.select(id,value.action!=='remove',featureSelection.snapshot().selected.revision);
       progress({phase:'complete'});return {ok:true,selection:featureSnapshot()};
     }catch(error){progress({phase:'error'});return {ok:false,error:operation.control.signal.aborted?'安装已取消，原版本保留。':String(error.message||error),selection:featureSnapshot()};}
-    finally{if(officialModuleOperation===operation)officialModuleOperation=null;}
-  });
+    finally{
+      if(officialModuleOperation===operation)officialModuleOperation=null;
+      finishOperation();
+      if(!event.sender.isDestroyed())event.sender.send('lx-module-progress',{id,phase:'settled',selection:featureSnapshot()});
+    }
+  };
+  ipcMain.handle('lx-module-manage',manageOfficialModule);
   ipcMain.handle('lx-resource-status',event=>secureProtocols.isTrustedRendererUrl(event.senderFrame?.url)&&event.sender===mainWindow?.webContents?resourceManager.snapshot():{});
   ipcMain.handle('lx-resource-prepare',async(event,value)=>{
     if(!secureProtocols.isTrustedRendererUrl(event.senderFrame?.url)||event.sender!==mainWindow?.webContents)return {ok:false,error:'当前页面无权准备资源。'};
     if(appIsQuitting)return {ok:false,error:'软件正在退出。'};
-    try{
-      const id=value?.id;
-      if(value?.action==='cancel'){await resourceManager.cancel(id);return {ok:true,status:resourceManager.snapshot()};}
-      if(!officialPackages.snapshot()[id]?.installed)throw Error('请先安装对应功能包。');
-      return resourceManager.start(id,event.sender);
-    }catch(error){return {ok:false,error:String(error.message||error),status:resourceManager.snapshot()};}
+    const result=await manageOfficialModule(event,{id:value?.id,action:value?.action==='cancel'?'cancel':'install',revision:officialPackages.snapshot().revision});
+    return {...result,status:resourceManager.snapshot()};
   });
   ipcMain.handle('lx-features-select', async (event, value) => {
     if (!secureProtocols.isTrustedRendererUrl(event.senderFrame?.url) || event.sender !== mainWindow?.webContents)
       return {ok:false,error:'当前页面无权更改功能。'};
+    if(officialModuleOperation)return {ok:false,error:'功能安装正在进行，请完成或取消后再更改选择。'};
     try { await featureSelection.select(value?.id, value?.enabled, value?.revision);return {ok:true,selection:featureSnapshot()}; }
     catch (error) { return {ok:false,error:String(error.message || error)}; }
   });
   ipcMain.handle('lx-audio-output-playback', async (event, value) => {
     if (!secureProtocols.isTrustedRendererUrl(event.senderFrame?.url) || event.sender !== mainWindow?.webContents) return {ok:false};
-    if (value?.playing === false) { audioOutputSafety.pause(event.sender); return {ok:true}; }
+    if (value?.playing === false) { audioOutputSafety.pause(event.sender, {wearToken:value.wearToken}); return {ok:true}; }
     if (value?.playing !== true) return {ok:false};
-    return audioOutputSafety.prepare(event.sender, {resume:value.resume===true,allowOutputChange:value.allowOutputChange===true});
+    return audioOutputSafety.prepare(event.sender, {resume:value.resume===true,allowOutputChange:value.allowOutputChange===true,wearToken:value.wearToken});
   });
   ipcMain.handle('lx-audio-output-get',async event=>secureProtocols.isTrustedRendererUrl(event.senderFrame?.url)?audioOutputMonitor.get():{id:'',transport:'unknown',confirmed:false,reason:'untrusted-page'});
   ipcMain.handle('lx-audio-output-acquire',(event,id)=>setOutputLease(event,id,true));
@@ -1748,10 +1658,10 @@ function registerIpc() {
     }
     return { ok: false };
   });
-  ipcMain.handle("lx-install-model", async (event) => launchBundledInstaller("Install-Model.ps1", event.sender));
+  ipcMain.handle("lx-install-model", async (event) => manageOfficialModule(event,{id:'recommendation',action:'install',revision:officialPackages.snapshot().revision}));
   ipcMain.handle(
     "lx-install-recommendation-engine",
-    async (event) => launchBundledInstaller("Install-Recommendation-Engine.ps1", event.sender),
+    async (event) => manageOfficialModule(event,{id:'recommendation',action:'install',revision:officialPackages.snapshot().revision}),
   );
   ipcMain.handle("lx-lyric-source-get", async () => getLyricSourceConfigPayload());
   ipcMain.handle("lx-lyric-source-set", async (_event, payload) => {

@@ -14,15 +14,13 @@ def stop_process_tree(proc):
     except subprocess.TimeoutExpired:proc.kill();proc.wait(timeout=3)
 
 def decoder():
-    found=shutil.which('ffmpeg')
-    if found:return found
     root=Path(os.environ.get('KUMIKO_APP_HOME') or Path(__file__).resolve().parent)
-    for path in (asset_path(root,'models/stem-separation/ffmpeg.exe'),root/'data/components/ffmpeg/ffmpeg.exe',root/'ffmpeg/bin/ffmpeg.exe'):
+    for path in (asset_path(root,'models/audio-tools/ffmpeg.exe'),asset_path(root,'models/stem-separation/ffmpeg.exe'),root/'data/components/ffmpeg/ffmpeg.exe',root/'ffmpeg/bin/ffmpeg.exe'):
         if path.is_file():return str(path)
-    return None
+    return shutil.which('ffmpeg')
 
 @contextmanager
-def open_audio(path,workdir,checkpoint=lambda:None,force_decoder=False):
+def open_audio(path,workdir,checkpoint=lambda:None,force_decoder=False,duration=None):
     """Probe MP3 tails before expensive inference; retain the normal decoded samples."""
     import soundfile as sf
     audio=None
@@ -49,7 +47,7 @@ def open_audio(path,workdir,checkpoint=lambda:None,force_decoder=False):
         checkpoint()
         with tempfile.TemporaryFile() as errors:
             proc=subprocess.Popen([executable,'-nostdin','-hide_banner','-v','error','-threads','2','-i',str(path),
-                '-map','0:a:0','-vn','-c:a','pcm_f32le','-f','wav','-y',str(dest)],stdout=subprocess.DEVNULL,stderr=errors,
+                '-map','0:a:0','-vn',*(['-t',str(duration)] if duration else []),'-c:a','pcm_f32le','-f','wav','-y',str(dest)],stdout=subprocess.DEVNULL,stderr=errors,
                 creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
             started=time.monotonic()
             while proc.poll() is None:

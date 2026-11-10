@@ -16,13 +16,14 @@
         "sha256": "ecded4d21834b21002bc6e9a2628d21f5c8417fd77a5db14250f1101bcb69dac"
       },
       "lock": "resources/locks/recommendation.txt",
-      "lock_sha256": "2c910d17b83f1e0d9ae52388363918718524af6ed80a8198df42c6f5f500c5d6",
+      "lock_sha256": "54ce1a72ade6100fca92c84e97547f3023912bf3e3bd11d206ecef786b206eff",
       "probe": [
         "torch",
         "torchaudio",
         "transformers",
         "numpy",
-        "soundfile"
+        "soundfile",
+        "mutagen"
       ],
       "bootstrap_wheels": [
         {
@@ -58,13 +59,14 @@
         "sha256": "ecded4d21834b21002bc6e9a2628d21f5c8417fd77a5db14250f1101bcb69dac"
       },
       "lock": "resources/locks/analysis.txt",
-      "lock_sha256": "03dc11021a61446c200cde0ac6c7f479a7486a8ff7e3c164c3e8712824c9beba",
+      "lock_sha256": "c1c4ff65ed6f289759334465bddb5e5ad11d5d89f0ef173feced769dd4806d43",
       "probe": [
         "torch",
         "torchaudio",
         "transformers",
         "numpy",
-        "soundfile"
+        "soundfile",
+        "mutagen"
       ],
       "bootstrap_wheels": [
         {
@@ -82,6 +84,10 @@
         {
           "file": "resources/wheels/pretty_midi-0.2.11-py3-none-any.whl",
           "sha256": "a40c6248cdb613ddfac374d3f9b9cdf2fea261b4b6d1af65bd3fc27a7263f882"
+        },
+        {
+          "file": "resources/wheels/muq-0.1.0-py3-none-any.whl",
+          "sha256": "b728d108bd69fa940dfaabdc6de112edae462a6d5e5984bd6835d1383dafcac0"
         }
       ]
     },
@@ -100,13 +106,14 @@
         "sha256": "ecded4d21834b21002bc6e9a2628d21f5c8417fd77a5db14250f1101bcb69dac"
       },
       "lock": "resources/locks/practice.txt",
-      "lock_sha256": "f5b9527f329d6786648427ada1da35cf554ea3ea13d2e09a64ebea6c7d3c72e7",
+      "lock_sha256": "7dc35120a05de25533e52e90955ea9221063d2e92cf09a4cd27a18fa4f890f79",
       "probe": [
         "torch",
         "torchaudio",
         "transformers",
         "numpy",
-        "soundfile"
+        "soundfile",
+        "mutagen"
       ],
       "bootstrap_wheels": [
         {
@@ -303,15 +310,15 @@
       "metadata": {
         "models/MuQ-MuLan-download.json": {
           "file": "resources/manifests/muq-download.json",
-          "sha256": "dbfc456afedfbf032ebe01ac576d7e30a7d6d10c927af0a013d2a32659cb36f9"
+          "sha256": "471014f34a1cabf4062700f2a6fbb3d1a2a729ba808d88d8ef64c4338f45cdd0"
         },
         "models/Essentia-tagging/download-manifest.json": {
           "file": "resources/manifests/essentia-download.json",
-          "sha256": "18685197a9193ced31455eaf9d8095bc9053c7cda836fce70a8be3c86fd31d30"
+          "sha256": "f3415856d40d63e7891c02e82c7b7f60d9b1f66875de4583e782fea158770e31"
         },
         "data/components/music-analysis/manifest.json": {
           "file": "resources/manifests/analysis-runtime.json",
-          "sha256": "8264a1a7c8cecab051387e2eece53d8be9e8ee54f7a62533240a28d417bdc29b"
+          "sha256": "02d2cf272b7ec00f35255f477c2f95d79a583c1e8eefa188aa097fc88618a7bb"
         }
       }
     },
@@ -452,21 +459,21 @@
               ""
             ]
           ],
-          "output_sha256": "390e640e092ae6f6fb6edb2acac976cb9dfb19ca2943f853bf83f3b165d17a71"
+          "output_sha256": "13125a1ff7997a4cbe71b7df517f0cbad948fac39b57cd9e2ef1a1546cb5ef23"
         }
       ],
       "metadata": {
         "data/components/music-structure/wav2vec-config/config.json": {
           "file": "resources/manifests/structure-wav2vec.json",
-          "sha256": "be066c248382ce4af121445dae5537b5a77146688471057e270abea9a709d671"
+          "sha256": "7a63cb5706c9a37483f1973a3c226d54eb504ce15cf62cb52637019540c8a75d"
         },
         "data/components/music-structure/SOURCE-NOTICE.txt": {
           "file": "resources/manifests/structure-notice.txt",
-          "sha256": "4d35a0f74536a42006babc1a66a9604902cf23c373c923c921c6cb5c451ac37e"
+          "sha256": "2069de54b8304d79d0e5bb5b14ec090a75668c94aadc33ebfa59f6bf79e4aa2a"
         },
         "data/components/music-structure/manifest.json": {
           "file": "resources/manifests/structure.json",
-          "sha256": "5fbdbfc2b6ebc92ae9b71fa2852b7983ddd17f5310cb8f0854284cd57f02073b"
+          "sha256": "bf4e246e757ecb86e0db0c4ccf899dd570796c559e3daa4a409e4f81ea834222"
         }
       }
     },
@@ -527,7 +534,7 @@
       "metadata": {
         "models/stem-separation/manifest.json": {
           "file": "resources/manifests/stems.json",
-          "sha256": "90ba626ae7c46cc86b8f8c45cad5c80bd0314e8fbb62c220874eec9cd7244755"
+          "sha256": "785a5a74ce970286fd8eff5d2f75541d0aa87cd7ea976e7e2d9052e9ab73305b"
         }
       }
     },
@@ -1311,14 +1318,33 @@
       "metadata": {
         "models/practice-analysis/manifest.json": {
           "file": "resources/manifests/practice.json",
-          "sha256": "efb555221c7c8d18305cbe9cc017be566c2b5716c3d79a046a3d94ff3ad56cc1"
+          "sha256": "b106cb35fdcaa7fdfba6bb54629d2c32f70c21ab98fc033c44d77b894c1d7d4b"
         }
       }
+    },
+    "audio-tools": {
+      "name": "音频解码工具",
+      "prefixes": [
+        "models/audio-tools"
+      ],
+      "files": [
+        {
+          "path": "models/audio-tools/wheels/imageio_ffmpeg-0.6.0-py3-none-win_amd64.whl",
+          "url": "https://files.pythonhosted.org/packages/2c/c6/fa760e12a2483469e2bf5058c5faff664acf66cadb4df2ad6205b016a73d/imageio_ffmpeg-0.6.0-py3-none-win_amd64.whl",
+          "bytes": 31246824,
+          "sha256": "02fa47c83703c37df6bfe4896aab339013f62bf02c5ebf2dce6da56af04ffc0a",
+          "extract_member_suffix": "ffmpeg-win-x86_64-v7.1.exe",
+          "extract_target": "models/audio-tools/ffmpeg.exe",
+          "output_sha256": "2ce797a0f88d7f067180338fb227f7b1928ea727bd9a4d7a1d022f7c52af71a3"
+        }
+      ],
+      "metadata": {}
     }
   },
   "modules": {
     "recommendation": {
       "groups": [
+        "audio-tools",
         "mert"
       ],
       "profiles": [
@@ -1328,6 +1354,7 @@
     },
     "analysis": {
       "groups": [
+        "audio-tools",
         "analysis-models",
         "structure"
       ],
@@ -1338,6 +1365,7 @@
     },
     "practice": {
       "groups": [
+        "audio-tools",
         "stems",
         "practice-models"
       ],

@@ -3180,20 +3180,12 @@ def _recommend_session_policy(body, song_key, index, resource_map, path_to_resou
             preparation_status='index_building' if index_preparing else 'analysis_inputs_pending' if analysis_inputs_pending else 'analysis_building')
         reserve_details=dict(details)
     else:
-        rows, details = recommendation_engine.recommend(active, song_key, contexts, recent, history,
-            protected, body.blocked_paths[-64:], cfg, semantics, body.intent, correction,
+        rows, details, reserve_rows, reserve_details = recommendation_engine.recommend_with_reserve(active, song_key, contexts, recent, history,
+            protected, body.blocked_paths[-64:], cfg, semantic=semantics, mode=body.intent, correction=correction,
             prepared=RECOMMEND_VECTOR_CACHE.get(active),
             excluded=excluded_keys,
             session=session, tags=RECOMMEND_SEMANTIC_LIBRARY.features(semantics),
             unavailable=getattr(body, "unavailable_paths", []),recording_groups=cache.get('recording_groups'),explain=True)
-        # Prepare a larger reserve with exactly the same policy/context snapshot, never metadata ranking.
-        reserve_cfg={**cfg,'recommendation':{**(cfg.get('recommendation') or {}),'candidate_limit':200}}
-        reserve_rows,reserve_details=recommendation_engine.recommend(active,song_key,contexts,recent,history,
-            protected,body.blocked_paths[-64:],reserve_cfg,semantics,body.intent,correction,
-            prepared=RECOMMEND_VECTOR_CACHE.get(active),
-            excluded=excluded_keys,
-            session=session,tags=RECOMMEND_SEMANTIC_LIBRARY.features(semantics),
-            unavailable=getattr(body,'unavailable_paths',[]),recording_groups=cache.get('recording_groups'),explain=True)
         # Defense in depth: exact in-direction rejections never enter the enlarged reserve.
         if body.intent!='change':reserve_rows=[r for r in reserve_rows if r['path'] not in set(body.blocked_paths)]
         total=sum(r['probability'] for r in reserve_rows)

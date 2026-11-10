@@ -17,22 +17,10 @@ root.FlowaveFeatureModules = {catalog, initial,failures,
     featureEnabled(id){return !id || this.featureSelection.active?.enabled?.[id] === true && !failures[id];},
     featureSelected(id){return this.featureSelection.selected.enabled[id] && (!this.featureSelection.packages||!!this.featureSelection.packages[id]?.installed);},
     packageState(id){return this.featureSelection.packages?.[id]||null;},
-    packageSize(bytes){if(!bytes)return '';return bytes<1024*1024?`${Math.ceil(bytes/1024)} KB`:`${(bytes/1024/1024).toFixed(2)} MB`;},
+    packageSize(bytes){if(!bytes)return '0 B';return bytes>=1024**3?`${(bytes/1024**3).toFixed(2)} GB`:bytes<1024*1024?`${Math.ceil(bytes/1024)} KB`:`${(bytes/1024/1024).toFixed(2)} MB`;},
     resourceState(id){return this.featureSelection.resources?.[id]||{ready:false,items:[],running:false};},
     async loadResourceStatus(){try{const status=await root.lxEnv?.getResourceStatus?.();if(status)this.featureSelection.resources=status;}catch{this.featureMessage='资源状态暂时无法读取。';}},
-    async prepareFeatureResources(id,action='install'){
-      if(!root.lxEnv?.prepareResources)return;
-      this.featureMessage='';
-      try{
-        if(action!=='cancel'&&!this.resourceState(id).ready){
-          const state=this.resourceState(id),name=catalog.find(row=>row.id===id)?.name||'此功能';
-          const ok=await this.requestConfirmation({title:`准备${name}所需资源？`,message:`将下载模型和独立计算环境。模型约${this.packageSize(state.downloadBytes)}，计算环境还需要数GB空间；处理音乐需要NVIDIA显卡。`,detail:state.license||'资源从原发布者获取，仅在你需要时下载。',confirmLabel:'开始准备'});
-          if(!ok)return;
-        }
-        const result=await root.lxEnv.prepareResources({id,action});if(result?.status)this.featureSelection.resources=result.status;
-        if(!result?.ok)throw Error(result?.error||'资源准备未开始。');
-      }catch(error){this.featureMessage=error.message||'资源准备失败，原数据保留。';}
-    },
+    async prepareFeatureResources(id,action='install'){return action==='cancel'?this.cancelModuleInstall(id):this.manageFeaturePackage(id,'install');},
     async loadDataLocations(){try{this.featureDataLocations=await root.lxEnv?.getDataLocations?.()||[];}catch{this.featureMessage='数据位置暂时无法读取。';}},
     async openFeatureData(id){try{const result=await root.lxEnv?.openDataLocation?.(id);if(!result?.ok)this.featureMessage=result?.error||'目录无法打开。';}catch{this.featureMessage='目录无法打开。';}},
     async cancelModuleInstall(id){await root.lxEnv?.manageOfficialModule?.({action:'cancel',id});},
