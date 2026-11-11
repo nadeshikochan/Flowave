@@ -43,7 +43,7 @@ import numpy as np
 import vector_store
 from music_library_roots import configured_roots, normalize_roots, roots_key, scan_roots, contains as root_contains
 from lazy_service import DeferredService
-from resource_runtime import worker_command, runtime_python, source_path
+from resource_runtime import worker_command, runtime_python, source_path, worker_environment
 from listening_trace_service import ListeningTraceService
 from listening_trace_store import TraceConflict
 import sqlite3
@@ -69,6 +69,7 @@ from runtime_paths import (
     DATA_DIR,
     DOWNLOAD_DIR,
     LIBRARY_DIR,
+    LOG_DIR,
     LEGACY_LOCAL_INDEX_PATH,
     LEGACY_ONLINE_INDEX_PATH,
     LOCAL_EMBEDDINGS_PATH,
@@ -320,7 +321,7 @@ def _run_worker(args: List[str]) -> Dict[str, Any]:
             stderr=subprocess.STDOUT,
             encoding="utf-8",
             errors="replace",
-            env={**os.environ, "KUMIKO_APP_HOME": str(APP_HOME), "PYTHONUNBUFFERED": "1",
+            env={**worker_environment(APP_HOME), "KUMIKO_APP_HOME": str(APP_HOME), "PYTHONUNBUFFERED": "1",
                  "PYTHONIOENCODING": "utf-8", "OMP_NUM_THREADS": "2", "MKL_NUM_THREADS": "2",
                  "OPENBLAS_NUM_THREADS": "2", "TOKENIZERS_PARALLELISM": "false",
                  "KUMIKO_REQUIRE_CUDA": "1" if use_gpu_environment else "0"},
@@ -379,9 +380,17 @@ def _run_worker(args: List[str]) -> Dict[str, Any]:
             WORKER_STATUS.update({
                 "running": False,
                 "last_ok": False,
-                "last_error": str(exc),
+                "last_error": str(exc)[-8000:],
                 "last_finished_at": time.time(),
             })
+            failure = dict(WORKER_STATUS)
+        try:
+            LOG_DIR.mkdir(parents=True, exist_ok=True)
+            temporary = LOG_DIR / "index-worker-error.json.tmp"
+            temporary.write_text(json.dumps(failure, ensure_ascii=False), encoding="utf-8")
+            temporary.replace(LOG_DIR / "index-worker-error.json")
+        except OSError as log_error:
+            print(f"[index] error log could not be saved: {log_error}", file=sys.stderr)
         raise
     finally:
         if proc.stdout:

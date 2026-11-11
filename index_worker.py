@@ -7,6 +7,12 @@ import sys
 from pathlib import Path
 from typing import Any, Dict
 
+# Isolated embedded Python ignores PYTHONIOENCODING on Windows.
+# Configure the pipe before model imports and song-name diagnostics can write.
+for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+        stream.reconfigure(encoding="utf-8", errors="replace")
+
 import numpy as np
 import torch
 from index_progress import report_progress

@@ -89,7 +89,7 @@ def worker_command(root, profile, name, *arguments):
     source = source_root(root)
     # Embedded Python deliberately ignores host PYTHONPATH and installed Python.
     # This small audited launcher adds only our shipped source directory.
-    return [str(python), '-I', '-c',
+    return [str(python), '-I', '-X', 'utf8', '-c',
             'import runpy,sys;sys.path.insert(0,sys.argv[1]);sys.argv=sys.argv[2:];runpy.run_path(sys.argv[0],run_name="__main__")',
             str(source), str(source / name), *map(str, arguments)]
 

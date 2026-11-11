@@ -972,6 +972,7 @@
                 </div>
                 <small class="hint library-refresh-message" v-if="libraryRefreshMessage">{{ libraryRefreshMessage }}</small>
                 <p class="hint" role="status" v-if="indexTaskStatus.last_started_at">{{ indexTaskProgressText() }}</p>
+                <p class="hint" role="alert" v-if="!indexTaskRunning && indexTaskStatus.last_ok === false && indexTaskStatus.last_error">{{ indexTaskStatus.last_error }}</p>
                 <progress class="index-task-progress" v-if="indexTaskRunning" aria-label="当前阶段索引进度" :max="indexTaskStatus.progress?.total || 1" :value="indexTaskStatus.progress?.total > 0 ? indexTaskStatus.progress.done : null"></progress>
               </section>
             </div>
