@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from runtime_paths import resolve_data_dir
 
 
 def source_root(root):
@@ -33,7 +34,7 @@ def revision(item):
 def managed_dir(root, kind, name, item):
     # Keep Windows DLL paths below MAX_PATH in ordinary portable locations.
     # The readiness marker still verifies the full SHA256, including collisions.
-    return Path(root) / 'data/components/resources' / kind / name / revision(item)[:16]
+    return resolve_data_dir(root) / 'components/resources' / kind / name / revision(item)[:16]
 
 
 def ready(directory, item):
@@ -107,8 +108,9 @@ def status(root):
 
 def worker_environment(root):
     root=Path(root).resolve()
-    cache=root/'data/cache'
-    return {**os.environ, 'KUMIKO_APP_HOME': str(root), 'PYTHONIOENCODING': 'utf-8',
+    data = resolve_data_dir(root)
+    cache = data / 'cache'
+    return {**os.environ, 'KUMIKO_APP_HOME': str(root), 'KUMIKO_DATA_DIR': str(data), 'PYTHONIOENCODING': 'utf-8',
             'PYTHONUNBUFFERED': '1', 'HF_HUB_OFFLINE': '1', 'TRANSFORMERS_OFFLINE': '1',
             'HF_HOME':str(cache/'huggingface'),'HF_HUB_CACHE':str(cache/'huggingface/hub'),
             'HF_MODULES_CACHE':str(cache/'huggingface/modules'),'TORCH_HOME':str(cache/'torch'),

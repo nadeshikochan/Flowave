@@ -22,6 +22,7 @@ import urllib.error
 import zipfile
 
 from resource_runtime import catalog, ensure_runtime_path, managed_dir, ready, revision, worker_environment
+from runtime_paths import resolve_data_dir
 
 _last_progress = 0.0
 
@@ -332,7 +333,7 @@ def install(root, module):
     data = catalog(root)
     if module not in data.get('modules', {}):
         raise ValueError('未知的功能资源。')
-    cache = root / 'data/cache/resource-downloads'
+    cache = resolve_data_dir(root) / 'cache/resource-downloads'
     cache.mkdir(parents=True, exist_ok=True)
     import msvcrt
     with (cache / 'install.lock').open('a+b') as lock:

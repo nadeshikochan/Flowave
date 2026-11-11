@@ -92,10 +92,10 @@ const PACKAGED_SMOKE_RESULT_PATH = String(
 ).trim();
 const IS_PACKAGED_SMOKE_TEST = process.env.KUMIKO_PACKAGED_SMOKE_TEST === "1" || !!packagedSmokeArg;
 const APP_HOME = path.resolve(process.env.KUMIKO_APP_HOME || (isDev ? path.join(__dirname, "..") : path.dirname(process.execPath)));
-const DATA_DIR = resolvePortableDataDir(process.env.KUMIKO_DATA_DIR);
+let distribution={};try{distribution=JSON.parse(fs.readFileSync(path.join(APP_HOME,'distribution.json'),'utf8'));}catch{}
+const DATA_DIR = require('./data-layout').resolveDataDir(APP_HOME, {mode:distribution.mode, raw:process.env.KUMIKO_DATA_DIR});
 const tracePersistence = require("./trace-persistence").createTracePersistence(path.join(DATA_DIR, "library", "listening-traces"));
 const CONFIG_DIR = path.join(DATA_DIR, "config");
-let distribution={};try{distribution=JSON.parse(fs.readFileSync(path.join(APP_HOME,'distribution.json'),'utf8'));}catch{}
 const officialCatalog = JSON.parse(JSON.stringify(require('./official-modules/catalog.json')));
 if(distribution.officialPackages==='bundled')for(const item of Object.values(officialCatalog.packages))for(const release of item.releases)delete release.url;
 const dataLayout = require('./data-layout').dataLayout(DATA_DIR);
@@ -113,7 +113,7 @@ const featureSelection = require('./feature-selection').createFeatureSelection(p
   initialEnabled:existingFeatureProfile,
   available:id=>officialPackages.hasActive(id),
 });
-const resourceManager=new (require('./resource-manager').ResourceManager)(APP_HOME);
+const resourceManager=new (require('./resource-manager').ResourceManager)(APP_HOME,{dataDir:DATA_DIR});
 function featureSnapshot(){
   const selection=featureSelection.snapshot(),packages=officialPackages.snapshot();
   return {...selection,packages,resources:resourceManager.snapshot(),installation:officialModuleOperation?.progress||null,restartRequired:selection.restartRequired||Object.values(packages).some(value=>value?.restartRequired)};
@@ -493,16 +493,6 @@ function readJsonFile(filePath, fallback) {
   } catch {
     return fallback === null ? null : cloneJson(fallback);
   }
-}
-
-function resolvePortableDataDir(raw) {
-  const fallback = path.join(APP_HOME, "data");
-  const candidate = path.resolve(String(raw || "").trim() || fallback);
-  const rel = path.relative(APP_HOME, candidate);
-  if (!rel || (!rel.startsWith("..") && !path.isAbsolute(rel))) {
-    return candidate;
-  }
-  return fallback;
 }
 
 function resolvePackagePathOrDefault(raw, fallback) {

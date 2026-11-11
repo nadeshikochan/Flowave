@@ -1,0 +1,2 @@
+﻿param([switch]$SkipNpmInstall)
+& (Join-Path $PSScriptRoot 'build-desktop.ps1') -Mode installed -SkipNpmInstall:$SkipNpmInstall

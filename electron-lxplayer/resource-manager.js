@@ -9,13 +9,13 @@ const revision = value => crypto.createHash('sha256').update(JSON.stringify(orde
 
 // The module installer owns the transaction; this object owns only its child.
 class ResourceManager {
-  constructor(root, {spawnProcess = spawn} = {}) {
-    this.root = root; this.spawnProcess = spawnProcess; this.operation = null; this.last = {};
+  constructor(root, {spawnProcess = spawn, dataDir = path.join(root, 'data')} = {}) {
+    this.root = root; this.dataDir = dataDir; this.spawnProcess = spawnProcess; this.operation = null; this.last = {};
   }
   catalog() { return JSON.parse(fs.readFileSync(path.join(this.root, 'resources/catalog.json'), 'utf8')); }
   ready(kind, id, item) {
     try {
-      const folder = path.join(this.root, 'data/components/resources', kind, id, revision(item).slice(0,16));
+      const folder = path.join(this.dataDir, 'components/resources', kind, id, revision(item).slice(0,16));
       return JSON.parse(fs.readFileSync(path.join(folder, '.ready.json'), 'utf8')).revision === revision(item);
     } catch { return false; }
   }
@@ -53,7 +53,7 @@ class ResourceManager {
     try {
       const child = op.child = this.spawnProcess(exe, ['--install-resources', id], {
         cwd: this.root, windowsHide: true,
-        env: {...process.env, KUMIKO_APP_HOME: this.root, KUMIKO_DATA_DIR: path.join(this.root, 'data'), PYTHONIOENCODING: 'utf-8'},
+        env: {...process.env, KUMIKO_APP_HOME: this.root, KUMIKO_DATA_DIR: this.dataDir, PYTHONIOENCODING: 'utf-8'},
         stdio: ['ignore', 'pipe', 'pipe'],
       });
       op.closed = new Promise(resolve => {

@@ -6,7 +6,7 @@ Model page: https://huggingface.co/m-a-p/MERT-v1-330M
 License: Creative Commons Attribution-NonCommercial 4.0 International
 License text: https://creativecommons.org/licenses/by-nc/4.0/
 
-MERT-v1-330M 不随主安装包分发，由用户主动运行下载脚本取得。
+MERT-v1-330M 由功能选装入口从原发布者下载。
 该模型要求署名且限制非商业用途。任何商业使用都需要另行取得权利人授权，
 或改用明确允许相应用途的模型。
 
@@ -17,3 +17,9 @@ package-lock.json、requirements-public-backend.txt 和
 requirements-recommendation-engine.txt 为准。
 
 本说明用于汇总第三方来源，不替代各许可证原文，也不构成法律意见。
+
+Windows 安装包使用 Inno Setup 7.1.1 制作。
+Copyright (C) 1997-2026 Jordan Russell.
+Portions Copyright (C) 2000-2026 Martijn Laan.
+https://jrsoftware.org/
+https://github.com/jrsoftware/issrc/blob/is-7_1_1/license.txt

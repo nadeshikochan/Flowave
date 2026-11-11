@@ -12,20 +12,27 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 APP_HOME = Path(os.getenv("KUMIKO_APP_HOME") or PROJECT_ROOT).expanduser().resolve()
 
 
-def _resolve_portable_data_dir() -> Path:
-    default = (APP_HOME / "data").resolve()
-    raw = str(os.getenv("KUMIKO_DATA_DIR") or "").strip()
-    if not raw:
+def resolve_data_dir(app_home: Path, raw: str | None = None, local_app_data: str | None = None) -> Path:
+    app_home = Path(app_home).resolve()
+    try:
+        installed = json.loads((app_home / 'distribution.json').read_text(encoding='utf-8')).get('mode') == 'installed'
+    except (OSError, ValueError, AttributeError):
+        installed = False
+    local = local_app_data or os.getenv('LOCALAPPDATA') or str(Path.home() / 'AppData/Local')
+    default = (Path(local) / 'Flowave/data' if installed else app_home / 'data').resolve()
+    raw = str((os.getenv('KUMIKO_DATA_DIR') or '') if raw is None else raw).strip()
+    if not raw or not Path(raw).expanduser().is_absolute():
         return default
     candidate = Path(raw).expanduser().resolve()
-    try:
-        candidate.relative_to(APP_HOME)
+    contained = candidate == app_home or app_home in candidate.parents
+    if installed:
+        if contained:
+            raise ValueError('安装版数据目录必须位于程序安装目录之外。')
         return candidate
-    except ValueError:
-        return default
+    return candidate if contained else default
 
 
-DATA_DIR = _resolve_portable_data_dir()
+DATA_DIR = resolve_data_dir(APP_HOME)
 CONFIG_DIR = DATA_DIR / "config"
 LIBRARY_DIR = DATA_DIR / "library"
 CACHE_DIR = DATA_DIR / "cache"
