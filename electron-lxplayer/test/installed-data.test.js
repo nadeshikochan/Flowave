@@ -8,7 +8,7 @@ const {execFileSync} = require('node:child_process');
 const {resolveDataDir} = require('../data-layout');
 const {ResourceManager, revision} = require('../resource-manager');
 
-test('installed data uses the chosen directory and portable overrides remain contained', t => {
+test('installed and portable data use explicitly selected workspace roots', t => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'flowave-selection-'));
   t.after(() => fs.rmSync(temp, {recursive:true, force:true}));
   const root = path.join(temp, 'program');
@@ -21,7 +21,7 @@ test('installed data uses the chosen directory and portable overrides remain con
   assert.equal(resolveDataDir(root, {mode:'installed', localAppData:local}), external);
   assert.equal(resolveDataDir(root, {mode:'installed', raw:external}), external);
   assert.throws(() => resolveDataDir(root, {mode:'installed', raw:path.join(root,'data')}), /安装目录之外/);
-  assert.equal(resolveDataDir(root, {mode:'portable', raw:external}), path.join(root,'data'));
+  assert.equal(resolveDataDir(root, {mode:'portable', raw:external}), external);
   assert.equal(resolveDataDir(root, {mode:'portable', raw:path.join(root,'..cache')}), path.join(root,'..cache'));
   fs.renameSync(external, external + '-offline');
   assert.throws(() => resolveDataDir(root, {mode:'installed', localAppData:local}), /不可用/);
@@ -43,6 +43,10 @@ test('Python and Electron resolve the same installed, portable and explicit data
   fs.writeFileSync(path.join(local, 'Flowave/data-location.txt'), '\ufeff' + external, 'utf8');
   for (const mode of ['portable','installed']) {
     fs.writeFileSync(path.join(root,'distribution.json'),JSON.stringify({mode}));
+    if (mode === 'portable') {
+      fs.mkdirSync(path.join(root, 'workspace'));
+      fs.writeFileSync(path.join(root, 'workspace-location.txt'), './workspace');
+    }
     for (const raw of ['', external, 'relative', path.join(root,'data')]) {
       let expected;
       try { expected=resolveDataDir(root,{mode,raw,localAppData:local}); } catch { expected='rejected'; }

@@ -69,7 +69,6 @@ const { LyricLookupService } = require("./lyrics/lookup-service");
 const { createLocalLibraryLyricProvider } = require("./lyrics/local-library-provider");
 const { createLddcStrategyLyricProvider } = require("./lyrics/lddc-strategy-provider");
 const { createMusicTagStrategyLyricProvider } = require("./lyrics/music-tag-strategy-provider");
-secureProtocols.registerPrivilegedSchemes(protocol);
 const lyricSidecarRecovery = createLyricSidecarRecoveryGate();
 const CONTROL_HOST = "127.0.0.1";
 const CONTROL_PORT = 3901;
@@ -102,6 +101,9 @@ try {
 }
 const tracePersistence = require("./trace-persistence").createTracePersistence(path.join(DATA_DIR, "library", "listening-traces"));
 const CONFIG_DIR = path.join(DATA_DIR, "config");
+const {WorkspaceStore, restartArguments} = require('./workspaces');
+const workspaces = new WorkspaceStore({appHome:APP_HOME, mode:distribution.mode, version:app.getVersion()});
+let workspaceTransition = null;
 const officialCatalog = JSON.parse(JSON.stringify(require('./official-modules/catalog.json')));
 if(distribution.officialPackages==='bundled')for(const item of Object.values(officialCatalog.packages))for(const release of item.releases)delete release.url;
 const dataLayout = require('./data-layout').dataLayout(DATA_DIR);
@@ -1210,20 +1212,15 @@ function pushLyricOverlayUpdate(payload) {
   lyricOverlayWindow.webContents.send("lx-lyric-overlay-update", payload || {});
 }
 
-const hasSingleInstanceLock = app.requestSingleInstanceLock();
-if (!hasSingleInstanceLock) {
-  app.quit();
-}
-
 app.on("second-instance", () => {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();
   mainWindow.focus();
+  publishCurrentWorkspace().catch(error => console.warn('[workspace] could not save active location', error.message));
 });
 
 app.whenReady().then(async () => {
-  if (!hasSingleInstanceLock) return;
   try{await featureSelection.initialize();}catch(error){console.warn('[features] initial selection save deferred',error.code||'unavailable');}
   try{officialPackages.bootstrapLegacy();}catch(error){console.warn('[modules] registry initialization deferred',error.code||'unavailable');}
   try{officialPackages.collectUnused();}catch(error){console.warn('[modules] old package cleanup deferred',error.code||'unavailable');}
@@ -1289,6 +1286,7 @@ app.on("before-quit", (event) => {
   event.preventDefault();
   appIsQuitting = true;
   if (quitCleanupPromise) return;
+  const saveFailures = [];
   officialModuleOperation?.control.abort();
   tagEditor.close();
   batchSongInfoTasks.close();
@@ -1309,26 +1307,39 @@ app.on("before-quit", (event) => {
           mainWindow.webContents.executeJavaScript("window.__kumikoApp?.prepareListeningHistoryQuit()"),
           new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error("renderer history flush timed out")), 5000); }),
         ]);
-        if (finalHistory?.ok === false) console.warn("[history] final save failed; previous file retained");
-      } catch (error) { console.warn("[history] final renderer snapshot unavailable", { code: String(error?.code || "") }); }
+        if (finalHistory?.ok === false) {
+          saveFailures.push(Error('听歌记录保存失败。'));
+          console.warn("[history] final save failed; previous file retained");
+        }
+      } catch (error) { saveFailures.push(error); console.warn("[history] final renderer snapshot unavailable", { code: String(error?.code || "") }); }
       finally { clearTimeout(timeout); }
     }
     return Promise.allSettled([traceArchive.flush(), metadata.flushMetadataCache(), listeningHistoryPersistence.flush(), startupBackground.pending, featureSelection.flush(), officialPackages.flush()]);
   })().then((results) => {
     for (const result of results) {
-      if (result.status === "rejected") console.warn("[state] shutdown save failed", { code: String(result.reason?.code || "") });
+      if (result.status === "rejected") {
+        saveFailures.push(result.reason);
+        console.warn("[state] shutdown save failed", { code: String(result.reason?.code || "") });
+      }
     }
   }).then(() => tagEditor.drain()).then(() => lyricSaveService.drain({ timeoutMs: 15000 }))
     .then((result) => {
       if (!result.drained) {
+        saveFailures.push(Error('歌词保存尚未完成。'));
         console.warn("[lyrics] timed out waiting for sidecar save", { pending: result.pending });
       }
     })
     .catch((error) => {
+      saveFailures.push(error);
       console.warn("[lyrics] sidecar shutdown wait failed", { code: String(error?.code || "") });
     })
     .finally(() => {
       lyricSaveService.close();
+      if (workspaceTransition?.restart) {
+        if (saveFailures.length) dialog.showErrorBox('工作区切换未完成', '部分保存未完成，将重新打开当前工作区。\n' + String(saveFailures[0]?.message || saveFailures[0]));
+        const target = saveFailures.length ? DATA_DIR : workspaceTransition.target.path;
+        app.relaunch({args:restartArguments(process.argv, target)});
+      }
       quitCleanupFinished = true;
       quitCleanupPromise = null;
       app.quit();
@@ -1433,9 +1444,99 @@ app.on("will-quit", () => {
 // 先声明，再注册，避免暂未初始化访问
 let ipcRegistered = false;
 // 确保主进程启动时即注册 IPC（避免 preload 报“无 handler”）
+async function publishCurrentWorkspace() {
+  const ready = await mainWindow.webContents.executeJavaScript('window.__flowaveMounted === true && !window.__flowaveStartupError');
+  if (ready !== true) return {ok:false, error:'工作区界面尚未初始化完成。'};
+  workspaces.activate(DATA_DIR, {persist:process.env.FLOWAVE_WORKSPACE_PERSIST !== '0'});
+  return {ok:true, state:workspaces.snapshot(DATA_DIR)};
+}
+
+async function assertWorkspaceIdle() {
+  if (appIsQuitting) throw Error('软件正在退出，工作区选择保持原样。');
+  if (officialModuleOperation || resourceManager.operation) throw Error('请先完成或取消功能包安装，再切换工作区。');
+  if (startupBackgroundBusy) throw Error('启动图片正在保存，请稍后再切换。');
+  const status = await readBackendHealth();
+  if (appIsQuitting) throw Error('软件正在退出，工作区选择保持原样。');
+  if (!status.valid || !Array.isArray(status.health?.active_tasks))
+    throw Error('无法确认后台任务状态，请完整重启软件后再切换工作区。');
+  if (status.health.active_tasks.length) throw Error(status.health.active_tasks.join('、') + '正在进行，请先完成或取消任务。');
+}
+
+async function changeWorkspace(event, value) {
+  if (!secureProtocols.isTrustedRendererUrl(event.senderFrame?.url) || event.sender !== mainWindow?.webContents)
+    return {ok:false, error:'当前页面无权切换工作区。'};
+  if (workspaceTransition || appIsQuitting) return {ok:false, error:'工作区正在切换，请稍候。'};
+  const operation = {};
+  workspaceTransition = operation;
+  try {
+    await assertWorkspaceIdle();
+    let target;
+    if (value?.action === 'recent') {
+      const recent = workspaces.recent().find(item => item.id === value.id);
+      if (!recent) throw Error('最近工作区列表已变化，请刷新后重试。');
+      target = workspaces.describe(recent.path);
+    } else {
+      if (!['create', 'open'].includes(value?.action)) throw Error('未知工作区操作。');
+      const picked = await dialog.showOpenDialog(mainWindow, {
+        title:value.action === 'create' ? '为新工作区选择空文件夹' : '打开 Flowave 工作区数据文件夹',
+        properties:value.action === 'create' ? ['openDirectory', 'createDirectory'] : ['openDirectory'],
+      });
+      if (picked.canceled) return {ok:true, canceled:true};
+      target = value.action === 'create' ? workspaces.create(picked.filePaths[0], DATA_DIR) : workspaces.describe(picked.filePaths[0]);
+    }
+    if (target.id === workspaces.key(DATA_DIR)) return {ok:true, current:true};
+    workspaces.assertSeparate(target.path, DATA_DIR);
+    const confirmed = await dialog.showMessageBox(mainWindow, {type:'question', title:'切换工作区',
+      message:`保存当前工作区并打开“${target.name}”？`, detail:target.path + '\n\n软件将停止当前播放并重新启动。新建工作区从基础播放器起步，各工作区独立保存内容和功能选择。',
+      buttons:['保存并切换', '取消'], defaultId:1, cancelId:1});
+    if (confirmed.response !== 0) return {ok:true, canceled:true};
+    operation.saving = true;
+    operation.target = target;
+    mainWindow.setEnabled(false);
+    await assertWorkspaceIdle();
+    let timer;
+    try {
+      const saved = await Promise.race([
+        mainWindow.webContents.executeJavaScript('window.__kumikoApp?.prepareWorkspaceSwitch()'),
+        new Promise((_, reject) => { timer = setTimeout(() => reject(Error('保存工作区超时，请稍后重试。')), 10000); }),
+      ]);
+      if (!saved?.ok) throw Error(saved?.error || '当前工作区尚未保存完成。');
+    } finally { clearTimeout(timer); }
+    const results = await Promise.allSettled([traceArchive.flush(), rendererStateWriter.flush(), listeningHistoryPersistence.flush(),
+      metadata.flushMetadataCache(), startupBackground.pending, featureSelection.flush(), officialPackages.flush()]);
+    const failed = results.find(result => result.status === 'rejected');
+    if (failed) throw failed.reason;
+    await tagEditor.drain();
+    const lyrics = await lyricSaveService.drain({timeoutMs:15000});
+    if (!lyrics.drained) throw Error('歌词仍在保存，请稍后切换。');
+    await assertWorkspaceIdle();
+    workspaces.describe(target.path);
+    operation.restart = true;
+    setImmediate(() => app.quit());
+    return {ok:true, restarting:true};
+  } catch (error) {
+    if (operation.saving && !appIsQuitting && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setEnabled(true);
+      await mainWindow.webContents.executeJavaScript('window.__kumikoApp?.cancelWorkspaceSwitch()').catch(() => {});
+    }
+    return {ok:false, error:String(error.message || error)};
+  } finally {
+    if (!operation.restart) workspaceTransition = null;
+  }
+}
+
 registerIpc();
 
 function registerIpc() {
+  ipcMain.handle('lx-workspace-ready', event => {
+    if (!secureProtocols.isTrustedRendererUrl(event.senderFrame?.url) || event.sender !== mainWindow?.webContents) return {ok:false};
+    return publishCurrentWorkspace();
+  });
+  ipcMain.handle('lx-workspace-state', event => {
+    if (!secureProtocols.isTrustedRendererUrl(event.senderFrame?.url) || event.sender !== mainWindow?.webContents) return null;
+    return workspaces.snapshot(DATA_DIR);
+  });
+  ipcMain.handle('lx-workspace-change', changeWorkspace);
   if (ipcRegistered) return;
   ipcRegistered = true;
   ipcMain.on('lx-features-get-sync', event => {
@@ -1456,6 +1557,7 @@ function registerIpc() {
   const manageOfficialModule=async(event,value)=>{
     if(!secureProtocols.isTrustedRendererUrl(event.senderFrame?.url)||event.sender!==mainWindow?.webContents)return {ok:false,error:'当前页面无权管理功能包。'};
     if(appIsQuitting)return {ok:false,error:'软件正在退出，原版本保留。'};
+    if(workspaceTransition?.saving)return {ok:false,error:'正在保存工作区，请稍候。'};
     const id=value?.id||'history';
     if(!Object.hasOwn(officialCatalog.packages,id))return {ok:false,error:'未知功能包。'};
     if(value?.action==='cancel'){
@@ -2258,6 +2360,7 @@ function bindWindowShortcutEvents(win) {
 }
 
 function dispatchHotkeyAction(win, action, source = "unknown", raw = "") {
+  if (workspaceTransition?.saving) return false;
   const act = String(action || "").trim();
   const req = nextMediaDiagRequestId();
   if (!act || !HOTKEY_ACTION_WHITELIST.has(act)) {

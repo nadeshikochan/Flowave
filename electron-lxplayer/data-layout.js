@@ -1,5 +1,10 @@
 const fs=require('node:fs'),path=require('node:path');
 const historyNames=['listening_history.json','listening-history-backups','listening-history-snapshots'];
+function locatorFile(appHome, {mode, localAppData = process.env.LOCALAPPDATA} = {}) {
+  return mode === 'installed'
+    ? path.join(localAppData || path.join(require('node:os').homedir(), 'AppData/Local'), 'Flowave/data-location.txt')
+    : path.join(appHome, 'workspace-location.txt');
+}
 function resolveDataDir(appHome, {mode, raw = '', localAppData = process.env.LOCALAPPDATA} = {}) {
   const installed = mode === 'installed';
   const fallback = installed
@@ -7,17 +12,22 @@ function resolveDataDir(appHome, {mode, raw = '', localAppData = process.env.LOC
     : path.join(appHome, 'data');
   const requested = String(raw || '').trim();
   let selected = requested;
-  if (installed && !selected) {
-    const pointer = path.join(localAppData || path.join(require('node:os').homedir(), 'AppData/Local'), 'Flowave/data-location.txt');
+  if (!selected) {
+    const pointer = locatorFile(appHome, {mode, localAppData});
     if (fs.existsSync(pointer)) {
       selected = fs.readFileSync(pointer, 'utf8').replace(/^\uFEFF/, '').trim();
-      if (!path.isAbsolute(selected)) throw Error('数据目录记录损坏，请保留原文件并重新运行安装包选择数据目录。');
-      if (!fs.existsSync(selected)) throw Error('数据目录不可用，请连接原磁盘后重试。');
-    } else if (!fs.existsSync(fallback)) {
+      if (!selected) throw Error('数据目录记录为空，请保留原文件并恢复备份。');
+      if (!path.isAbsolute(selected)) {
+        if (installed) throw Error('数据目录记录损坏，请保留原文件并恢复备份。');
+        selected = path.resolve(appHome, selected);
+      }
+      if (!fs.existsSync(selected) || !fs.statSync(selected).isDirectory()) throw Error('数据目录不可用，请连接原磁盘后重试。');
+    } else if (installed && !fs.existsSync(fallback)) {
       throw Error('尚未选择数据目录，请重新运行安装包选择软件数据存储位置。');
     }
   }
-  if (!selected || !path.isAbsolute(selected)) return path.resolve(fallback);
+  if (!selected) return path.resolve(fallback);
+  if (!path.isAbsolute(selected)) throw Error('数据目录必须是完整路径。');
   const candidate = path.resolve(selected);
   const relative = path.relative(path.resolve(appHome), candidate);
   const contained = !relative || (relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative));
@@ -25,7 +35,7 @@ function resolveDataDir(appHome, {mode, raw = '', localAppData = process.env.LOC
     if (contained) throw Error('安装版数据目录必须位于程序安装目录之外。');
     return candidate;
   }
-  return contained ? candidate : path.resolve(fallback);
+  return candidate;
 }
 function dataLayout(data){
   const config=path.join(data,'config'),modern=path.join(data,'library','listening');
@@ -70,4 +80,4 @@ function locations(data,appHome,layout=dataLayout(data)){
   {id:'cache',name:'缓存与处理中间文件',path:path.join(data,'cache'),note:'含在途任务恢复材料；请退出软件后再整理。'},
  ];
 }
-module.exports={dataLayout,locations,resolveDataDir};
+module.exports={dataLayout,locations,resolveDataDir,locatorFile};

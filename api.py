@@ -84,6 +84,7 @@ from runtime_paths import (
     TAG_COMMIT_JOURNAL_PATH,
     ensure_runtime_dirs,
     migrate_legacy_files,
+    legacy_import_allowed,
     runtime_paths_payload,
 )
 
@@ -2120,7 +2121,7 @@ class RecommendationRateRebuildRequest(BaseModel):
 def startup_event():
     # 服务启动时，仅加载已有索引；不自动扫描/补算
     total_t0 = time.perf_counter()
-    need_legacy_migrate = (
+    need_legacy_migrate = legacy_import_allowed() and (
         ((not LOCAL_TRACKS_PATH.exists() or not LOCAL_EMBEDDINGS_PATH.exists()) and LEGACY_LOCAL_INDEX_PATH.exists())
         or ((not ONLINE_EMBEDDINGS_META_PATH.exists() or not ONLINE_EMBEDDINGS_PATH.exists()) and LEGACY_ONLINE_INDEX_PATH.exists())
     )
@@ -3678,6 +3679,13 @@ def health():
         "local_index_count": len(state.get("resource_index") or {}),
         "online_index_count": len(state.get("online_index") or {}),
         "worker_status": WORKER_STATUS.copy(),
+        "active_tasks": [name for name, active in (
+            ("推荐索引", bool(WORKER_STATUS.get("running"))),
+            ("歌曲分析", MUSIC_ANALYSIS_SERVICE.running),
+            ("分轨", STEM_SERVICE.running),
+            ("演奏分析", PRACTICE_SERVICE.running),
+            ("音乐库刷新", bool(state.get("library_refresh_in_progress"))),
+        ) if active],
         "startup_sync": {
             "ready": bool(state.get("startup_sync_ready")),
             "error": str(state.get("startup_sync_error") or ""),

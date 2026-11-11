@@ -26,6 +26,8 @@ yarn-error.log*
 pnpm-debug.log*
 
 # Runtime data and user state
+/workspace-location.txt
+/workspace-history.json
 /data/
 /config.json
 /composite_seeds.json

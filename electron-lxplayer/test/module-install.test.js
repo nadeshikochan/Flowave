@@ -40,7 +40,7 @@ async function fixture(t) {
   const resources = {prepare: async () => {}, cancel: async () => {}};
   const scope = {require: createRequire(path.join(dir, 'main.js')), __dirname: dir, fs, path, Buffer, AbortController,
     officialCatalog: catalog, officialPackages: store, featureSelection: selection, resourceManager: resources,
-    officialModuleOperation: null, appIsQuitting: false, mainWindow: {webContents: sender},
+    officialModuleOperation: null, workspaceTransition: null, appIsQuitting: false, mainWindow: {webContents: sender},
     secureProtocols: require('../secure-protocols'), ipcMain: {handle: (name, fn) => handlers.set(name, fn)},
     featureSnapshot: () => ({...selection.snapshot(), packages: store.snapshot()}),
     dialog: {showOpenDialog: async () => { throw Error('Unexpected dialog'); }}};

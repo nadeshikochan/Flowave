@@ -10,10 +10,56 @@ let initial;
 try { initial=root.lxEnv?.getFeatureSelectionSync?.(); } catch {}
 initial=initial || {active:fallback,selected:fallback,error:''};
 const failures={};
+let workspacePreparation = null;
 root.FlowaveFeatureModules = {catalog, initial,failures,
   enabled(id){return initial.active?.enabled?.[id] === true && !failures[id];},
   viewModule(view){return ({seeds:'recommendation','sound-map':'recommendation',ranking:'recommendation',analysis:'analysis',insights:'analysis',practice:'practice',history:'history',recommendation:'recommendation'})[view] || '';},
   methods:{
+    async loadWorkspaces() {
+      try { this.workspaceState = await root.lxEnv?.getWorkspaces?.() || {recent:[]}; }
+      catch (error) { this.workspaceMessage = error.message || '工作区信息读取失败。'; }
+    },
+    async changeWorkspace(action, id) {
+      if (this.workspaceBusy || this.featureSaving) return;
+      this.workspaceBusy = true;
+      this.workspaceMessage = '';
+      try {
+        const result = await root.lxEnv.changeWorkspace({action, id});
+        if (!result?.ok) throw Error(result?.error || '工作区切换失败。');
+        if (result.restarting) return;
+        await this.loadWorkspaces();
+      } catch (error) { this.workspaceMessage = error.message || '工作区切换失败。'; }
+      finally { this.workspaceBusy = false; }
+    },
+    async prepareWorkspaceSwitch() {
+      if (!root.__flowaveMounted || root.__flowaveStartupError) return {ok:false, error:'界面尚未准备完成。'};
+      if (workspacePreparation) return {ok:false, error:'工作区正在保存，请稍候。'};
+      const preparation = {};
+      workspacePreparation = preparation;
+      try {
+        if (this._configSavePromise) await this._configSavePromise;
+        if (workspacePreparation !== preparation) return {ok:false, canceled:true};
+        clearTimeout(this._configAutoSaveTimer);
+        this._configAutoSaveTimer = null;
+        const config = await this.flushConfigAutoSave();
+        if (workspacePreparation !== preparation) return {ok:false, canceled:true};
+        if (!config?.ok) throw Error('设置保存失败，当前工作区保留。');
+        this.pauseByManual('workspace-switch');
+        const history = await this.prepareListeningHistoryQuit();
+        if (workspacePreparation !== preparation) return {ok:false, canceled:true};
+        if (!history?.ok) throw Error(history?.error || '听歌记录保存失败。');
+        return {ok:true};
+      } catch (error) {
+        if (workspacePreparation === preparation) this.listeningHistoryClosing = false;
+        return {ok:false, error:String(error.message || error)};
+      } finally {
+        if (workspacePreparation === preparation) workspacePreparation = null;
+      }
+    },
+    cancelWorkspaceSwitch() {
+      workspacePreparation = null;
+      this.listeningHistoryClosing = false;
+    },
     featureEnabled(id){return !id || this.featureSelection.active?.enabled?.[id] === true && !failures[id];},
     featureSelected(id){return this.featureSelection.selected.enabled[id] && (!this.featureSelection.packages||!!this.featureSelection.packages[id]?.installed);},
     packageState(id){return this.featureSelection.packages?.[id]||null;},

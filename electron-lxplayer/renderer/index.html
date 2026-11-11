@@ -125,6 +125,10 @@
         </section>
 
         <div class="nav-footer">
+          <button class="nav-btn" @click="openSettingsSection('features','setting-workspaces')" title="工作区">
+            <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M3 7V5h6l2 2h10v12H3Z" /></svg>
+            <span>工作区</span>
+          </button>
           <button class="nav-btn" :class="{active:view==='settings' || view==='insights' || (view==='library' && libraryBrowseMode==='folders')}" :aria-current="view==='settings' || view==='insights' || (view==='library' && libraryBrowseMode==='folders') ? 'page' : null" @click="openSettingsSection('overview')" title="设置">
             <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M4 12h4M12 12h8"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/><circle cx="10" cy="12" r="2"/></svg>
             <span>设置</span>
@@ -498,6 +502,13 @@
             <div v-show="!settingsOverviewQuery.trim()" class="settings-page-content">
             <section v-if="settingsTab==='features'" class="settings-panel feature-selection-panel" aria-labelledby="feature-selection-title">
               <header class="settings-panel-header"><div><h2 id="feature-selection-title">功能选装</h2><p>安装会自动准备插件、模型和运行环境，完成后重新打开软件生效。</p></div></header>
+              <section class="settings-card" data-setting-id="setting-workspaces">
+                <div class="settings-card-title"><div><h3>工作区</h3><p>切换会保存当前内容并重新启动软件。</p></div></div>
+                <div class="feature-storage-row" v-if="workspaceState.current"><div><strong>{{workspaceState.current.name}}</strong><code>{{workspaceState.current.path}}</code></div></div>
+                <div class="btns"><button class="mini" :disabled="workspaceBusy || featureSaving" @click="changeWorkspace('create')">新建工作区</button><button class="mini" :disabled="workspaceBusy || featureSaving" @click="changeWorkspace('open')">打开工作区</button></div>
+                <p class="error" role="alert" v-if="workspaceMessage || workspaceState.warning">{{workspaceMessage || workspaceState.warning}}</p>
+                <details class="feature-storage" v-if="workspaceState.recent?.length"><summary>最近打开</summary><div class="feature-storage-row" v-for="space in workspaceState.recent" :key="space.id"><div><strong>{{space.name}}</strong><code>{{space.path}}</code></div><button class="mini" :disabled="workspaceBusy || featureSaving || space.id===workspaceState.current?.id" @click="changeWorkspace('recent',space.id)">{{space.id===workspaceState.current?.id?'当前':'打开'}}</button></div></details>
+              </section>
               <p v-if="featureSelection.error || featureMessage" class="error" role="alert">{{featureSelection.error || featureMessage}}</p>
               <p v-if="featureSelection.restartRequired" class="feature-restart-notice" role="status">选择已保存，完全退出并重新打开软件后生效。</p>
               <section class="feature-install-item" v-for="item in featureCatalog" :key="item.id">

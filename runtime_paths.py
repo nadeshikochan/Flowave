@@ -21,25 +21,31 @@ def resolve_data_dir(app_home: Path, raw: str | None = None, local_app_data: str
     local = local_app_data or os.getenv('LOCALAPPDATA') or str(Path.home() / 'AppData/Local')
     default = (Path(local) / 'Flowave/data' if installed else app_home / 'data').resolve()
     raw = str((os.getenv('KUMIKO_DATA_DIR') or '') if raw is None else raw).strip()
-    if installed and not raw:
-        pointer = Path(local) / 'Flowave/data-location.txt'
+    if not raw:
+        pointer = Path(local) / 'Flowave/data-location.txt' if installed else app_home / 'workspace-location.txt'
         if pointer.exists():
             raw = pointer.read_text(encoding='utf-8-sig').strip()
+            if not raw:
+                raise ValueError('数据目录记录为空，请保留原文件并恢复备份。')
             if not Path(raw).is_absolute():
-                raise ValueError('数据目录记录损坏，请保留原文件并重新运行安装包选择数据目录。')
+                if installed:
+                    raise ValueError('数据目录记录损坏，请保留原文件并恢复备份。')
+                raw = str(app_home / raw)
             if not Path(raw).is_dir():
                 raise ValueError('数据目录不可用，请连接原磁盘后重试。')
-        elif not default.exists():
+        elif installed and not default.exists():
             raise ValueError('尚未选择数据目录，请重新运行安装包选择软件数据存储位置。')
-    if not raw or not Path(raw).expanduser().is_absolute():
+    if not raw:
         return default
+    if not Path(raw).expanduser().is_absolute():
+        raise ValueError('数据目录必须是完整路径。')
     candidate = Path(raw).expanduser().resolve()
     contained = candidate == app_home or app_home in candidate.parents
     if installed:
         if contained:
             raise ValueError('安装版数据目录必须位于程序安装目录之外。')
         return candidate
-    return candidate if contained else default
+    return candidate
 
 
 DATA_DIR = resolve_data_dir(APP_HOME)
@@ -116,6 +122,13 @@ def _copy_if_needed(src: Path, dst: Path, backup_dir: Path, migrated: list[str])
     migrated.append(f"{src.name} -> {dst.relative_to(DATA_DIR)}")
 
 
+def legacy_import_allowed() -> bool:
+    if DATA_DIR != (APP_HOME / 'data').resolve():
+        return False
+    workspace = _read_json(DATA_DIR / '.flowave-workspace.json', {})
+    return workspace.get('legacyImport') is not False
+
+
 def migrate_legacy_files() -> Dict[str, Any]:
     """
     把开发期散落在项目根目录的数据复制到绿色版 data/ 结构。
@@ -124,6 +137,10 @@ def migrate_legacy_files() -> Dict[str, Any]:
     ensure_runtime_dirs()
     state = _read_json(MIGRATION_STATE_PATH, {})
     if state.get("done"):
+        return state
+    if not legacy_import_allowed():
+        state = {"done": True, "legacy_import": False, "items": []}
+        _write_json(MIGRATION_STATE_PATH, state)
         return state
 
     stamp = time.strftime("%Y%m%d-%H%M%S")

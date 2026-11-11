@@ -8560,6 +8560,7 @@ const utilityMethods = {
     if (id === "insights") { this.setView("insights"); return; }
     this.setView("settings");
     this.settingsTab = id;
+    if (id === 'features') this.loadWorkspaces();
     if (id === "song-info") this.openSongInfoBatchSettings();
     this.$nextTick(() => {
       if (generation !== this.settingsNavigationGeneration || this.view !== 'settings' || this.settingsTab !== id) return;
@@ -10425,6 +10426,12 @@ function mountedHook() {
   this.$nextTick(() => this.refreshVirtualViewport());
   this.sendLyricOverlay();
   window.__flowaveMounted = true;
+  const workspaceReady = window.lxEnv?.confirmWorkspaceReady?.();
+  if (workspaceReady) workspaceReady.then(result => {
+    if (result?.ok === false) this.workspaceMessage = result.error || '默认工作区位置未保存。';
+    this.loadWorkspaces();
+  }).catch(error => { this.workspaceMessage = error.message || '默认工作区位置未保存。'; });
+  else this.loadWorkspaces();
 }
 
 function beforeUnmountHook() {
@@ -10962,6 +10969,9 @@ const kumikoVueApp = createApp({
       featureCatalog: window.FlowaveFeatureModules?.catalog || [],
       moduleFailures: window.FlowaveFeatureModules?.failures || {},
       featureDataLocations: [],
+      workspaceState: {recent:[]},
+      workspaceMessage: '',
+      workspaceBusy: false,
       featurePackageProgress: window.FlowaveFeatureModules?.initial?.installation || {},
       featureSaving: !!window.FlowaveFeatureModules?.initial?.installation,
       featureMessage: '',

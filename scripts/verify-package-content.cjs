@@ -20,6 +20,8 @@ const archive = process.argv[2];
 if (archive) {
   const asar = require(require.resolve('@electron/asar', {paths: [path.join(root, 'electron-lxplayer')]}));
   const names = new Set(asar.listPackage(archive).map(file => file.replaceAll('\\', '/').replace(/^\//, '')));
+  const entry = JSON.parse(asar.extractFile(archive, 'package.json').toString('utf8')).main;
+  if (typeof entry !== 'string' || !names.has(entry)) throw Error('Missing Electron entry point: ' + entry);
   for (const name of names) {
     if (!name.endsWith('.js') || name.startsWith('node_modules/') || name.startsWith('renderer/')) continue;
     const source = asar.extractFile(archive, name).toString('utf8');

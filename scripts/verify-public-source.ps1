@@ -38,6 +38,8 @@ if ($dataSource -ne "../release-template/data") {
 
 $sourceFiles = @(
   "main.js",
+  "workspace-bootstrap.js",
+  "workspaces.js",
   "preload.js",
   "overlay-preload.js",
   "listening-history-ops.js",
