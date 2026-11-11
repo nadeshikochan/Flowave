@@ -34,8 +34,9 @@ const port = () => new Promise((resolve, reject) => {
 async function open() {
   const debug = await port(), backend = await port();
   const out = fs.createWriteStream(path.join(repo, 'build/portable-delivery/app-check.log'), {flags: 'a'});
+  // A hidden native window can suspend the splash's CSS exit transition.
   const child = spawn(path.join(folder, 'Flowave.exe'), ['--remote-debugging-port=' + debug], {
-    cwd: folder, windowsHide: true, env: {...process.env, LOCALAPPDATA:localAppData, KUMIKO_APP_HOME: defaultData ? undefined : folder, KUMIKO_DATA_DIR:defaultData ? undefined : dataFolder, KUMIKO_BACKEND_PORT: String(backend)},
+    cwd: folder, windowsHide: false, env: {...process.env, LOCALAPPDATA:localAppData, KUMIKO_APP_HOME: defaultData ? undefined : folder, KUMIKO_DATA_DIR:defaultData ? undefined : dataFolder, KUMIKO_BACKEND_PORT: String(backend)},
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   owned.add(child);
@@ -109,9 +110,18 @@ async function open() {
   }
   if(process.argv.includes('--reopen')){
     try{
-      assert.equal(await app.evaluate('Object.values(window.lxEnv.getFeatureSelectionSync().active.enabled).every(Boolean)'),true);
-      assert.equal(await app.evaluate('(async()=>Object.values(await window.lxEnv.getResourceStatus()).every(row=>row.ready))()'),true);
-      console.log('PASS: relocated portable app loads all four plugins and their resource paths');
+      const historyOnly = process.argv.includes('--history-only');
+      const selectionCheck = historyOnly
+        ? 'window.lxEnv.getFeatureSelectionSync().active.enabled.history'
+        : 'Object.values(window.lxEnv.getFeatureSelectionSync().active.enabled).every(Boolean)';
+      const resourceCheck = historyOnly
+        ? '(async()=>(await window.lxEnv.getResourceStatus()).history.ready)()'
+        : '(async()=>Object.values(await window.lxEnv.getResourceStatus()).every(row=>row.ready))()';
+      assert.equal(await app.evaluate(selectionCheck), true);
+      assert.equal(await app.evaluate(resourceCheck), true);
+      console.log(historyOnly
+        ? 'PASS: normal default profile retains the installed history plugin'
+        : 'PASS: saved app loads all four plugins and their resource paths');
       assert.deepEqual(app.errors,[]);
     }finally{await app.close();}
     return;
