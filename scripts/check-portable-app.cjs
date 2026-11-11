@@ -9,8 +9,10 @@ const withResources = process.argv.includes('--resources');
 const installed = process.argv.includes('--installed');
 const fixtureRoot = path.join(repo, 'build/installer-check') + path.sep;
 const defaultData = installed && process.argv.includes('--default-data');
-const localAppData = defaultData ? path.join(path.dirname(folder),'local-app-data') : process.env.LOCALAPPDATA;
-const dataFolder = defaultData ? path.join(localAppData,'Flowave/data') : installed ? path.join(path.dirname(folder), 'profile') : path.join(folder,'data');
+const localAppData = installed ? path.join(path.dirname(folder),'local-app-data') : process.env.LOCALAPPDATA;
+const dataFolder = defaultData
+  ? fs.readFileSync(path.join(localAppData, 'Flowave/data-location.txt'), 'utf8').replace(/^\uFEFF/, '').trim()
+  : installed ? path.join(path.dirname(folder), 'profile') : path.join(folder,'data');
 const validFolder = installed
   ? folder.startsWith(fixtureRoot) && path.basename(folder) === 'Flowave'
   : folder.startsWith(path.join(repo, 'electron-lxplayer/dist/portable-')) && path.basename(folder) === 'win-unpacked';

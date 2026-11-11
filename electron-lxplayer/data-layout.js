@@ -6,8 +6,19 @@ function resolveDataDir(appHome, {mode, raw = '', localAppData = process.env.LOC
     ? path.join(localAppData || path.join(require('node:os').homedir(), 'AppData/Local'), 'Flowave/data')
     : path.join(appHome, 'data');
   const requested = String(raw || '').trim();
-  if (!requested || !path.isAbsolute(requested)) return path.resolve(fallback);
-  const candidate = path.resolve(requested);
+  let selected = requested;
+  if (installed && !selected) {
+    const pointer = path.join(localAppData || path.join(require('node:os').homedir(), 'AppData/Local'), 'Flowave/data-location.txt');
+    if (fs.existsSync(pointer)) {
+      selected = fs.readFileSync(pointer, 'utf8').replace(/^\uFEFF/, '').trim();
+      if (!path.isAbsolute(selected)) throw Error('数据目录记录损坏，请保留原文件并重新运行安装包选择数据目录。');
+      if (!fs.existsSync(selected)) throw Error('数据目录不可用，请连接原磁盘后重试。');
+    } else if (!fs.existsSync(fallback)) {
+      throw Error('尚未选择数据目录，请重新运行安装包选择软件数据存储位置。');
+    }
+  }
+  if (!selected || !path.isAbsolute(selected)) return path.resolve(fallback);
+  const candidate = path.resolve(selected);
   const relative = path.relative(path.resolve(appHome), candidate);
   const contained = !relative || (relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative));
   if (installed) {

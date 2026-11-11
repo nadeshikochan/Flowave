@@ -8,15 +8,24 @@ const {execFileSync} = require('node:child_process');
 const {resolveDataDir} = require('../data-layout');
 const {ResourceManager, revision} = require('../resource-manager');
 
-test('installed data stays outside program files and portable overrides remain contained', () => {
-  const root = path.resolve(os.tmpdir(), 'Flowave-program');
-  const local = path.resolve(os.tmpdir(), 'Flowave-local');
-  const external = path.resolve(os.tmpdir(), 'Flowave-saved-data');
-  assert.equal(resolveDataDir(root, {mode:'installed', localAppData:local}), path.join(local,'Flowave/data'));
+test('installed data uses the chosen directory and portable overrides remain contained', t => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'flowave-selection-'));
+  t.after(() => fs.rmSync(temp, {recursive:true, force:true}));
+  const root = path.join(temp, 'program');
+  const local = path.join(temp, 'local');
+  const external = path.join(temp, '自选数据目录');
+  assert.throws(() => resolveDataDir(root, {mode:'installed', localAppData:local}), /尚未选择/);
+  fs.mkdirSync(path.join(local, 'Flowave'), {recursive:true});
+  fs.mkdirSync(external);
+  fs.writeFileSync(path.join(local, 'Flowave/data-location.txt'), '\ufeff' + external, 'utf8');
+  assert.equal(resolveDataDir(root, {mode:'installed', localAppData:local}), external);
   assert.equal(resolveDataDir(root, {mode:'installed', raw:external}), external);
   assert.throws(() => resolveDataDir(root, {mode:'installed', raw:path.join(root,'data')}), /安装目录之外/);
   assert.equal(resolveDataDir(root, {mode:'portable', raw:external}), path.join(root,'data'));
   assert.equal(resolveDataDir(root, {mode:'portable', raw:path.join(root,'..cache')}), path.join(root,'..cache'));
+  fs.renameSync(external, external + '-offline');
+  assert.throws(() => resolveDataDir(root, {mode:'installed', localAppData:local}), /不可用/);
+  assert.equal(fs.existsSync(path.join(local,'Flowave/data')), false);
 });
 
 test('Python and Electron resolve the same installed, portable and explicit data roots', t => {
@@ -29,6 +38,9 @@ test('Python and Electron resolve the same installed, portable and explicit data
   const local = path.join(temp,'user-local');
   const external = path.join(temp,'user data');
   fs.mkdirSync(root);
+  fs.mkdirSync(path.join(local, 'Flowave'), {recursive:true});
+  fs.mkdirSync(external);
+  fs.writeFileSync(path.join(local, 'Flowave/data-location.txt'), '\ufeff' + external, 'utf8');
   for (const mode of ['portable','installed']) {
     fs.writeFileSync(path.join(root,'distribution.json'),JSON.stringify({mode}));
     for (const raw of ['', external, 'relative', path.join(root,'data')]) {
@@ -39,6 +51,39 @@ test('Python and Electron resolve the same installed, portable and explicit data
       assert.equal(actual, expected, mode + ' / ' + raw);
     }
   }
+});
+
+test('installer copies and verifies old data before publishing the location and refuses unknown contents', t => {
+  if (process.platform !== 'win32') return t.skip('Windows installer helper');
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'flowave-relocation-'));
+  t.after(() => fs.rmSync(temp, {recursive:true, force:true}));
+  const repo = path.resolve(__dirname, '../..');
+  const local = path.join(temp, 'local'), legacy = path.join(local, 'Flowave/data');
+  const target = path.join(temp, '新数据 with spaces'), program = path.join(temp, 'program');
+  fs.mkdirSync(path.join(legacy, 'config'), {recursive:true});
+  fs.mkdirSync(path.join(legacy, 'library/stems'), {recursive:true});
+  fs.writeFileSync(path.join(legacy, 'config/listening_history.json'), '{"listening":true}');
+  fs.writeFileSync(path.join(legacy, 'library/stems/track.bin'), Buffer.alloc(4000, 7));
+  const pointer = path.join(local, 'Flowave/data-location.txt');
+  const shell = path.join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe');
+  const run = (action, destination = target) => execFileSync(shell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+    '-File', path.join(repo, 'packaging/windows/data-location.ps1'), '-Action', action, '-DataDir', destination, '-InstallDir', program],
+  {env:{...process.env, LOCALAPPDATA:local}, windowsHide:true, stdio:'pipe', encoding:'utf8'});
+  run('Prepare');
+  assert.equal(fs.existsSync(pointer), false);
+  assert.deepEqual(fs.readFileSync(path.join(target, 'library/stems/track.bin')), fs.readFileSync(path.join(legacy, 'library/stems/track.bin')));
+  run('Commit');
+  assert.equal(resolveDataDir(program, {mode:'installed', localAppData:local}), target);
+  assert.equal(fs.readFileSync(path.join(legacy, 'config/listening_history.json'), 'utf8'), '{"listening":true}');
+  run('Prepare');
+  run('Commit');
+  const unknown = path.join(temp, 'unknown');
+  fs.mkdirSync(unknown);
+  fs.writeFileSync(path.join(unknown, 'keep.txt'), 'keep');
+  assert.throws(() => run('Prepare', unknown));
+  assert.equal(fs.readFileSync(path.join(unknown, 'keep.txt'), 'utf8'), 'keep');
+  assert.equal(resolveDataDir(program, {mode:'installed', localAppData:local}), target);
+  assert.throws(() => run('Prepare', path.join(program, 'data')));
 });
 
 test('installed resource readiness reads the external data root', t => {

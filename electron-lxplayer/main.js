@@ -93,7 +93,13 @@ const PACKAGED_SMOKE_RESULT_PATH = String(
 const IS_PACKAGED_SMOKE_TEST = process.env.KUMIKO_PACKAGED_SMOKE_TEST === "1" || !!packagedSmokeArg;
 const APP_HOME = path.resolve(process.env.KUMIKO_APP_HOME || (isDev ? path.join(__dirname, "..") : path.dirname(process.execPath)));
 let distribution={};try{distribution=JSON.parse(fs.readFileSync(path.join(APP_HOME,'distribution.json'),'utf8'));}catch{}
-const DATA_DIR = require('./data-layout').resolveDataDir(APP_HOME, {mode:distribution.mode, raw:process.env.KUMIKO_DATA_DIR});
+let DATA_DIR;
+try {
+  DATA_DIR = require('./data-layout').resolveDataDir(APP_HOME, {mode:distribution.mode, raw:process.env.KUMIKO_DATA_DIR});
+} catch (error) {
+  dialog.showErrorBox('无法打开软件数据目录', String(error.message || error));
+  app.exit(1);
+}
 const tracePersistence = require("./trace-persistence").createTracePersistence(path.join(DATA_DIR, "library", "listening-traces"));
 const CONFIG_DIR = path.join(DATA_DIR, "config");
 const officialCatalog = JSON.parse(JSON.stringify(require('./official-modules/catalog.json')));

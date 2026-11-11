@@ -130,6 +130,10 @@
       {
         "from": "../packaging/windows/installer-check.ps1",
         "to": "resources/installer-check.ps1"
+      },
+      {
+        "from": "../packaging/windows/data-location.ps1",
+        "to": "resources/data-location.ps1"
       }
     ],
     "win": {

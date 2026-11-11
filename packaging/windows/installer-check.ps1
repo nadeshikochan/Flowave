@@ -2,9 +2,15 @@ param([Parameter(Mandatory=$true)][string]$InstallDir, [string]$RegisteredDir = 
 $ErrorActionPreference = 'Stop'
 try {
   $dataRoot = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'Flowave'))
+  $pointer = Join-Path $dataRoot 'data-location.txt'
+  $selected = ''
+  if (Test-Path -LiteralPath $pointer) {
+    $selected = [IO.Path]::GetFullPath([IO.File]::ReadAllText($pointer).Trim()).TrimEnd('\')
+  }
   $targets = @($InstallDir, $RegisteredDir) | Where-Object { $_ } | ForEach-Object { [IO.Path]::GetFullPath($_).TrimEnd('\') } | Select-Object -Unique
   foreach ($target in $targets) {
     if ($target.Equals($dataRoot, [StringComparison]::OrdinalIgnoreCase) -or $target.StartsWith($dataRoot + '\', [StringComparison]::OrdinalIgnoreCase)) { exit 41 }
+    if ($selected -and ($target.Equals($selected, [StringComparison]::OrdinalIgnoreCase) -or $target.StartsWith($selected + '\', [StringComparison]::OrdinalIgnoreCase))) { exit 41 }
     if ((Test-Path -LiteralPath (Join-Path $target 'data')) -or (Test-Path -LiteralPath (Join-Path $target 'models'))) { exit 41 }
     if ((Test-Path -LiteralPath $target) -and @(Get-ChildItem -LiteralPath $target -Force).Count) {
       $marker = Join-Path $target 'distribution.json'

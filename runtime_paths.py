@@ -21,6 +21,16 @@ def resolve_data_dir(app_home: Path, raw: str | None = None, local_app_data: str
     local = local_app_data or os.getenv('LOCALAPPDATA') or str(Path.home() / 'AppData/Local')
     default = (Path(local) / 'Flowave/data' if installed else app_home / 'data').resolve()
     raw = str((os.getenv('KUMIKO_DATA_DIR') or '') if raw is None else raw).strip()
+    if installed and not raw:
+        pointer = Path(local) / 'Flowave/data-location.txt'
+        if pointer.exists():
+            raw = pointer.read_text(encoding='utf-8-sig').strip()
+            if not Path(raw).is_absolute():
+                raise ValueError('数据目录记录损坏，请保留原文件并重新运行安装包选择数据目录。')
+            if not Path(raw).is_dir():
+                raise ValueError('数据目录不可用，请连接原磁盘后重试。')
+        elif not default.exists():
+            raise ValueError('尚未选择数据目录，请重新运行安装包选择软件数据存储位置。')
     if not raw or not Path(raw).expanduser().is_absolute():
         return default
     candidate = Path(raw).expanduser().resolve()
