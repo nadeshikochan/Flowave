@@ -13,8 +13,22 @@ try {
   & (Join-Path $PSScriptRoot 'verify-public-source.ps1') -RepoRoot $repo
   & (Join-Path $PSScriptRoot 'verify-release-data.ps1') -DataDir (Join-Path $repo 'release-template/data')
   if (-not (Test-Path -LiteralPath $python)) { Run -exe uv -arguments @('venv', 'build/backend-venv', '--python', '3.11.14') }
-  Run -exe $python -arguments @('-c', 'import sys; assert sys.version_info[:3] == (3,11,14), "Use the pinned backend Python 3.11.14 environment"')
-  Run -exe $python -arguments @('-c', 'from pathlib import Path;from resource_runtime import catalog;from resource_installer import validate_url;c=catalog(Path("."));[validate_url(r["url"]) for g in c["groups"].values() for r in g["files"]];[validate_url(p[k]["url"]) for p in c["profiles"].values() for k in ("python","uv")]')
+  $verifyEnvironment = @'
+import sys
+from pathlib import Path
+from resource_runtime import catalog
+from resource_installer import validate_url
+assert sys.version_info[:3] == (3, 11, 14), 'Use the pinned backend Python 3.11.14 environment'
+resources = catalog(Path('.'))
+for group in resources['groups'].values():
+    for resource in group['files']:
+        validate_url(resource['url'])
+for profile in resources['profiles'].values():
+    for name in ('python', 'uv'):
+        validate_url(profile[name]['url'])
+'@
+  $verifyEnvironment | & $python -
+  if ($LASTEXITCODE -ne 0) { throw 'Backend environment or resource URL validation failed.' }
   Run -exe uv -arguments @('pip', 'sync', '--python', $python, '--require-hashes', 'packaging/backend-requirements.lock')
   $source = Join-Path $repo 'build/backend-source'
   [IO.Directory]::CreateDirectory($source) | Out-Null
