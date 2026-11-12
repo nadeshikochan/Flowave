@@ -196,6 +196,7 @@ def _recommend_at_floor(index, current, context, recent, history, protected, blo
     session = session or {}
     semantic_peaks = semantic_peaks or {}
     normal_semantic_min = max(.78, opts['semantic_floor']-.08)
+    context_mert_floor = max(.94, float((config.get('similarity') or {}).get('like_min', .975))-.035)
     sparse_current = sparse_reference(normal_semantic_min, semantic_peaks.get(current)) if modern and mode=='continue' else None
     current_semantic_floor = sparse_current['effective_floor'] if sparse_current else opts['semantic_floor']
     def semantic_admission_floor(delta=0.):
@@ -211,7 +212,7 @@ def _recommend_at_floor(index, current, context, recent, history, protected, blo
             adjacent_ceiling=float((config.get('dislike') or {}).get('max_sim', .93)) if fallback_mode=='change' else None,
             semantic_context_floor=opts['context_floor'] if mode=='continue' else None,
             recovery_floor=max(.78,opts['semantic_floor']-.08),
-            recovery_mert_floor=max(.94,float((config.get('similarity') or {}).get('like_min',.975))-.035),
+            recovery_mert_floor=context_mert_floor,
             excluded=excluded or (),old_mert_ceiling=float((config.get('dislike') or {}).get('max_sim',.93)),change_semantic_ceiling=CHANGE_MAX,
             natural_semantic_floor=max(.78,opts['semantic_floor']-.08) if mode=='continue' and modern else None,
             semantic_peaks=semantic_peaks)
@@ -239,6 +240,8 @@ def _recommend_at_floor(index, current, context, recent, history, protected, blo
     semantic = semantic or {}
     sem_positions = [i for i, key in enumerate(keys) if key in semantic]
     sem_refs = [key for key in context if key in semantic]
+    if modern and mode == 'continue' and current in semantic and not sem_refs:
+        sem_refs = [current]
     # Natural continuity must check the actual current song, never replace it with an older semantic query.
     query_key = (current if current in semantic else None) if mode == 'continue' else (sem_refs[-1] if sem_refs else None)
     use_semantic = bool(query_key is not None and sem_refs)
@@ -318,6 +321,9 @@ def _recommend_at_floor(index, current, context, recent, history, protected, blo
         old_admissible &= local <= float((config.get('dislike') or {}).get('max_sim', .93))
         eligible &= old_admissible
     context_refs = [k for k in sem_refs if k != current] if modern and mode=='continue' and current in semantic else []
+    context_mert_keys = [
+        k for k in context if k != current and k not in semantic
+    ] if modern and mode == 'continue' and use_semantic else []
     soft_context = {key:detail for key in context_refs if (detail:=soft_context_reference(
         opts['context_floor'],normal_semantic_min,semantic_peaks.get(key),float(semantic[current]@semantic[key])))}
     # An isolated historical exemplar has no independently supported absolute gate.
@@ -326,12 +332,20 @@ def _recommend_at_floor(index, current, context, recent, history, protected, blo
     # Context admission is an OR across positive exemplars. A verified sparse
     # bridge already supplies that support; an older unmatched exemplar must not
     # become an AND veto merely because the supported exemplar is kept soft.
-    context_refs = [] if soft_context else context_refs
-    if context_refs:
+    if soft_context:
+        context_refs = []
+        context_mert_keys = []
+    if context_refs or context_mert_keys:
         # A locally similar encoding/step must not jump outside every recent positive exemplar.
-        context_support = sem_matrix @ np.stack([semantic[k] for k in context_refs]).T
         contextual = np.zeros(len(keys),dtype=bool)
-        contextual[sem_positions] = context_support.max(axis=1) >= opts['context_floor']
+        if context_refs:
+            context_support = sem_matrix @ np.stack([semantic[k] for k in context_refs]).T
+            contextual[sem_positions] = context_support.max(axis=1) >= opts['context_floor']
+        if context_mert_keys:
+            # Missing/abstained historical MuQ keeps its existing MERT support.
+            # Actual-current MuQ admission is still applied independently.
+            mert_support = matrix @ matrix[[positions[k] for k in context_mert_keys]].T
+            contextual |= mert_support.max(axis=1) >= context_mert_floor
         boundary &= contextual
     eligible &= boundary & adjacent_gate
     hard = set(protected) | set(blocked) | set(unavailable) | {paths[q]}
@@ -490,11 +504,13 @@ def _recommend_at_floor(index, current, context, recent, history, protected, blo
     if mode == 'change' and use_semantic:
         diagnostic.update(change_range=[CHANGE_MIN, CHANGE_MAX], direction_similarity=DIRECTION_SIMILARITY)
     if modern:
-        diagnostic.update(stage_details, policy_revision=5, context_floor_applied=bool(context_refs),
+        diagnostic.update(stage_details, policy_revision=5, context_floor_applied=bool(context_refs or context_mert_keys),
             tag_available=sum(any((tags or {}).get(k, {}).values()) for k in keys),
             direction_keys=session.get('direction', []), negative_count=len(session.get('negatives', [])),
             old_direction_count=len(session.get('memories', [])),
             negative_contexts=session.get('negatives', []), direction_memories=session.get('memories', []))
+        if context_mert_keys:
+            diagnostic.update(context_mert_keys=context_mert_keys, context_mert_floor=context_mert_floor)
         if mode=='continue':
             calibrated=dict(soft_context)
             if sparse_current:calibrated[current]=sparse_current

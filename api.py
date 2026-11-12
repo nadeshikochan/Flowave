@@ -3212,8 +3212,8 @@ def _recommend_session_policy(body, song_key, index, resource_map, path_to_resou
                 ('recommendation', 'similarity', 'dislike', 'history', 'dislike_correction')) or not same_online:
             raise HTTPException(status_code=409, detail='音乐库或推荐设置刚发生变化，请重试推荐。')
     if details.get('current_index_available') is False and not index_preparing:details['preparation_status']='index_required'
-    details['policy_build']='context-guard-v5'
-    reserve_details['policy_build']='context-guard-v5'
+    details['policy_build']='context-guard-v6'
+    reserve_details['policy_build']='context-guard-v6'
     reserve_details['semantic_status']=semantic_status
     if reserve_details.get('current_index_available') is False and not index_preparing:reserve_details['preparation_status']='index_required'
     details['semantic_status'] = semantic_status

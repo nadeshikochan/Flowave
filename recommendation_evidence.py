@@ -29,6 +29,8 @@ def attach_evidence(rows, details, index, current, context, recent, session, sem
     # These are the actual ranking weights, not calibrated probabilities or inferred preferences.
     weights={}
     semrefs=[k for k in references if k in semantic]
+    if use_semantic and mode=='continue' and not semrefs:
+        semrefs=[current]
     if use_semantic and semrefs:
         decay=.7 if mode=='recover' or details.get('fallback')=='continuity_reserve' else .5
         ws=np.power(decay,np.arange(len(semrefs)-1,-1,-1));ws/=ws.sum()

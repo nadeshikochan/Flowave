@@ -214,16 +214,30 @@ def continuity_fallback(keys, paths, matrix, current, context, history, protecte
         pool=[i for i in pool if current in positions and local[i]<=adjacent_ceiling]
         if not pool:return [],dict(reason='no_verified_change',fallback='continuity_reserve',mode=mode,change_mert_ceiling=adjacent_ceiling)
     context_refs=[k for k in sem_refs if k!=current] if mode=='continue' and current in semantic else []
-    if semantic_context_floor is not None and context_refs:
+    context_mert_keys = [
+        k for k in refs if k != current and k not in semantic
+    ] if mode == 'continue' and current in semantic else []
+    if semantic_context_floor is not None and (context_refs or context_mert_keys):
         for key in context_refs:
             detail=soft_context_reference(semantic_context_floor,
                 natural_semantic_floor if natural_semantic_floor is not None else recovery_floor,
                 semantic_peaks.get(key),float(semantic[current]@semantic[key]))
             if detail:calibrated[key]=detail
-        context_refs=[] if calibrated else context_refs
-        if context_refs:
-            pool=[i for i in pool if keys[i] in semantic and max(float(semantic[keys[i]]@semantic[k]) for k in context_refs)>=semantic_context_floor]
+        if calibrated:
+            context_refs = []
+            context_mert_keys = []
+        if context_refs or context_mert_keys:
+            def supports_context(i):
+                if keys[i] in semantic and context_refs:
+                    if max(float(semantic[keys[i]]@semantic[k]) for k in context_refs)>=semantic_context_floor:
+                        return True
+                return any(
+                    float(matrix[i] @ matrix[positions[key]]) >= recovery_mert_floor
+                    for key in context_mert_keys
+                )
+            pool=[i for i in pool if supports_context(i)]
             gates.append(dict(gate='近期正向上下文',count=len(pool)))
+    context_diagnostics=dict(context_mert_keys=context_mert_keys,context_mert_floor=recovery_mert_floor) if context_mert_keys else {}
     if natural_semantic_floor is not None and current in semantic:
         detail=sparse_reference(natural_semantic_floor,semantic_peaks.get(current))
         if detail:calibrated[current]=detail
@@ -253,12 +267,13 @@ def continuity_fallback(keys, paths, matrix, current, context, history, protecte
             return [dict(path=paths[positions[current]],sim=1.,probability=1.,weight=1.,is_repeat=True,
                 local_semantic_similarity=1. if current in semantic else None)],dict(
                 reason='context_preserving_replay',fallback='continuity_reserve',mode=mode,model='context_replay',
-                context_floor_applied=bool(context_refs),adjacent_mert_floor=adjacent_floor,
+                context_floor_applied=bool(context_refs or context_mert_keys),adjacent_mert_floor=adjacent_floor,
                 degradation=[cause,'adjacent_replay_only']+(['relaxed_short_cooldown'] if paths[positions[current]] in protected else []),
                 repeat_mass=1.,repeat_budget_relaxed=True,recent_repeat_count=sum(bool(f) for f in session.get('repeat_flags',[])[-19:]),
                 repeat_window=20,repeat_limit=5,repeat_only_candidates=1,
                 gate_counts=gates,natural_semantic_floor=natural_semantic_floor,
                 old_direction_mert_ceiling=old_mert_ceiling,old_direction_muq_ceiling=change_semantic_ceiling,
+                **context_diagnostics,
                 **({'context_bridge_keys':context_bridges} if context_bridges else {}),
                 **({'semantic_neighbourhood':calibrated} if calibrated else {}))
         return [],dict(reason='no_playable_resources',fallback='continuity_reserve',degradation=reasons,mode=mode)
@@ -334,6 +349,7 @@ def continuity_fallback(keys, paths, matrix, current, context, history, protecte
         gate_counts=gates,natural_semantic_floor=natural_semantic_floor,
         old_direction_mert_ceiling=old_mert_ceiling,old_direction_muq_ceiling=change_semantic_ceiling,
         eligible=len(pool),returned=len(rows),context_keys=refs,model=model,adjacent_mert_floor=adjacent_floor,change_mert_ceiling=adjacent_ceiling,
-        context_floor_applied=bool(context_refs and semantic_context_floor is not None),**repeat_details,
+        context_floor_applied=bool((context_refs or context_mert_keys) and semantic_context_floor is not None),**repeat_details,
+        **context_diagnostics,
         **({'context_bridge_keys':context_bridges} if context_bridges else {}),
         **({'semantic_neighbourhood':calibrated} if calibrated else {}))

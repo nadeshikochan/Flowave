@@ -5893,7 +5893,7 @@ const dataMethods = {
           await pause(700);
         } while(valid());
         if(!valid()) return null;
-        if(!data?.missing && (data?.diagnostic?.policy!=="session-intent-v5"||data?.diagnostic?.details?.policy_build!=="context-guard-v5")) {
+        if(!data?.missing && (data?.diagnostic?.policy!=="session-intent-v5"||data?.diagnostic?.details?.policy_build!=="context-guard-v6")) {
           const error=new Error("推荐服务仍是旧版本，请重新启动软件及后台服务。");error.code="RECOMMEND_POLICY_OLD";throw error;
         }
         // An empty completed result stays distinct from an unfinished computation; never replace its diagnosis with a placeholder.
