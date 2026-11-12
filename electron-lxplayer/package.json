@@ -136,6 +136,10 @@
       {
         "from": "../packaging/windows/data-location.ps1",
         "to": "resources/data-location.ps1"
+      },
+      {
+        "from": "../packaging/windows/uninstall-data.ps1",
+        "to": "resources/uninstall-data.ps1"
       }
     ],
     "win": {

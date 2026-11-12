@@ -47,6 +47,14 @@ const items=[
     "keywords": "低音 高音 人声 音效"
   },
   {
+    "id": "setting-bluetooth-protection",
+    "anchor": "setting-bluetooth-protection",
+    "page": "general",
+    "title": "蓝牙耳机保护",
+    "path": "播放与声音",
+    "keywords": "断连 暂停 摘下 戴回 自动恢复 防外放"
+  },
+  {
     "id": "setting-general-fa64d60993",
     "anchor": "setting-general-fa64d60993",
     "page": "general",

@@ -3,8 +3,9 @@
 // Owns only Flowave's mute/lease. It never changes the system default device,
 // other applications' volume or microphone permissions.
 class AudioOutputSafety {
-  constructor(monitor) {
+  constructor(monitor, {enabled = true} = {}) {
     this.monitor = monitor;
+    this.enabled = enabled;
     this.owner = null;
     this.mutedOwners = new WeakSet();
     this.active = false;
@@ -22,7 +23,19 @@ class AudioOutputSafety {
     monitor.on('device-event', this.event);
     monitor.on('wear-state', this.wear);
   }
+  setEnabled(enabled) {
+    if (this.enabled === enabled) return;
+    this.enabled = enabled;
+    if (enabled) return;
+    const owner = this.owner;
+    this.release();
+    if (owner && !owner.isDestroyed() && this.mutedOwners.has(owner)) {
+      owner.setAudioMuted(false);
+      this.mutedOwners.delete(owner);
+    }
+  }
   async prepare(owner, { resume = false, allowOutputChange = false, wearToken = null } = {}) {
+    if (!this.enabled) return {ok:wearToken == null, blocked:false, disabled:true};
     const episode = wearToken == null ? null : this.wearEpisode;
     if (wearToken != null && (!episode || episode.token !== wearToken || owner !== this.owner))
       return { ok: false, blocked: this.blocked };
@@ -102,6 +115,7 @@ class AudioOutputSafety {
     this.owner.send('lx-audio-output-safety', { reason: 'headphones-worn', wearToken: episode.token });
   }
   trip(reason) {
+    if (!this.enabled) return;
     if (this.blocked && !(this.wearEpisode && (reason !== 'headphones-removed' || this.wearEpisode.notified))) return;
     this.blocked = true;
     this.wearEpisode = reason === 'headphones-removed'

@@ -27,7 +27,7 @@ const backendHealth = require("./backend-health");
 const {AudioOutputMonitor}=require('./audio-output-monitor');
 const audioOutputMonitor=new AudioOutputMonitor();
 const {AudioOutputSafety}=require('./audio-output-safety');
-const audioOutputSafety=new AudioOutputSafety(audioOutputMonitor);
+const audioOutputSafety=new AudioOutputSafety(audioOutputMonitor, {enabled:false});
 const outputLeaseOwners=new Map(),outputLeaseWatched=new WeakSet();
 function releaseOutputOwner(ownerId){const owned=outputLeaseOwners.get(ownerId);if(owned)for(const id of owned)audioOutputMonitor.release(id);outputLeaseOwners.delete(ownerId)}
 function setOutputLease(event,consumer,enabled){
@@ -357,6 +357,7 @@ const DEFAULT_LYRIC_SOURCE_CONFIG = {
   externalLyricDir: "",
 };
 let rendererState = loadRendererStateConfig();
+audioOutputSafety.setEnabled(rendererState['lx-bluetooth-protection'] === '1');
 let persistedRendererState = rendererState;
 const rendererStateWriter = createCoalescedWriter(async (snapshot) => {
   await writeJsonObjectAtomic(getRendererStateConfigPath(), snapshot);
@@ -1630,6 +1631,21 @@ function registerIpc() {
     return audioOutputSafety.prepare(event.sender, {resume:value.resume===true,allowOutputChange:value.allowOutputChange===true,wearToken:value.wearToken});
   });
   ipcMain.handle('lx-audio-output-get',async event=>secureProtocols.isTrustedRendererUrl(event.senderFrame?.url)?audioOutputMonitor.get():{id:'',transport:'unknown',confirmed:false,reason:'untrusted-page'});
+  ipcMain.handle('lx-audio-output-protection', async (event, enabled) => {
+    if (!secureProtocols.isTrustedRendererUrl(event.senderFrame?.url) || event.sender !== mainWindow?.webContents
+      || typeof enabled !== 'boolean' || appIsQuitting || workspaceTransition?.saving) return {ok:false};
+    const key = 'lx-bluetooth-protection', previous = rendererState[key];
+    const value = enabled ? '1' : '0';
+    rendererState = {...rendererState, [key]:value};
+    const result = await saveRendererStateConfig();
+    if (result.ok) audioOutputSafety.setEnabled(rendererState[key] === '1');
+    else if (rendererState[key] === value) {
+      rendererState = {...rendererState};
+      if (previous === undefined) delete rendererState[key];
+      else rendererState[key] = previous;
+    }
+    return result;
+  });
   ipcMain.handle('lx-audio-output-acquire',(event,id)=>setOutputLease(event,id,true));
   ipcMain.handle('lx-audio-output-release',(event,id)=>setOutputLease(event,id,false));
   ipcMain.on('lx-startup-background-get-sync', event => {

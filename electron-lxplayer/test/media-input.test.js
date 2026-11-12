@@ -58,6 +58,31 @@ function safetyFixture() {
   return { monitor, effects, owner, safety: new AudioOutputSafety(monitor) };
 }
 
+test('bluetooth protection opt-out releases mute and monitoring and rejects late wear resume', async () => {
+  const {monitor, owner, safety, effects} = safetyFixture();
+  safety.setEnabled(false);
+  assert.equal((await safety.prepare(owner)).disabled, true);
+  assert.equal(monitor.leases.size, 0);
+  safety.trip('headphones-disconnected');
+  assert.equal(effects.length, 0);
+  safety.setEnabled(true);
+  await safety.prepare(owner);
+  safety.trip('headphones-removed');
+  const token = safety.wearEpisode.token;
+  assert.equal(safety.blocked, true);
+  safety.setEnabled(false);
+  assert.deepEqual(effects.at(-1), ['mute', false]);
+  assert.equal(monitor.leases.size, 0);
+  assert.equal(safety.wearEpisode, null);
+  assert.equal((await safety.prepare(owner, {wearToken:token})).ok, false);
+  safety.setEnabled(true);
+  const pending = safety.prepare(owner);
+  safety.setEnabled(false);
+  assert.equal((await pending).ok, false);
+  assert.equal(monitor.leases.size, 0);
+  safety.dispose();
+});
+
 test('headphone loss mutes before pause delivery; unrelated devices and communication defaults do not trip', async () => {
   const { monitor, effects, owner, safety } = safetyFixture();
   assert.equal((await safety.prepare(owner)).ok, true);

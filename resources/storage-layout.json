@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "groups": [
+    {"id":"personal", "label":"设置、歌单、记录与轨迹", "directories":["config","library/listening","library/listening-traces","online-sources","migration-backup"], "files":["library/composite_seeds.json","library/online_catalog.json"]},
+    {"id":"results", "label":"索引、分析、分轨与谱面", "directories":["library/track-analysis","library/stems","library/practice-analysis"], "files":["library/tracks.json","library/embeddings.npy","library/track_identities.json","library/tag_commit_pending.json","library/online_embeddings.json","library/online_embeddings.npy"]},
+    {"id":"resources", "label":"插件、模型与计算环境", "directories":["packages","components"], "files":[]},
+    {"id":"temporary", "label":"缓存、日志与浏览器会话", "directories":["cache","logs","electron"], "files":[]}
+  ],
+  "alwaysKeep":["downloads"],
+  "workspaceMarkers":[".flowave-workspace.json",".flowave-data.json"]
+}

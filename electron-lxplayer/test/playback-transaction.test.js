@@ -14,7 +14,7 @@ test("headphone safety latches through real Vue and invalidates pending playback
   const vueContext = { console };
   nodeVm.runInNewContext(fs.readFileSync(path.join(__dirname, "..", "renderer", "vendor", "vue.global.prod.js"), "utf8"), vueContext);
   let confirmOutput;
-  const { capturedConfig, fakeAudio } = createRendererHarness({ lxEnv: { prepareAudioOutput: value => value.playing
+  const { capturedConfig, fakeAudio } = createRendererHarness({ rendererState:{'lx-bluetooth-protection':'1'}, lxEnv: { prepareAudioOutput: value => value.playing
     ? new Promise(resolve => { confirmOutput = resolve; }) : Promise.resolve({ok:true}) } });
   const renderer = vueContext.Vue.createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode: () => null, nextSibling: () => null });
   const notices = [];
@@ -47,6 +47,43 @@ test("headphone safety latches through real Vue and invalidates pending playback
   } finally { instance.unmount(); }
 });
 
+test('bluetooth protection defaults off, persists only confirmed changes and ignores disabled events in real Vue', async () => {
+  const vueContext = {console};
+  nodeVm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'renderer/vendor/vue.global.prod.js'), 'utf8'), vueContext);
+  let saves = 0, success = false, preparations = 0;
+  const {capturedConfig} = createRendererHarness({lxEnv:{
+    setBluetoothProtection:async () => {saves++; return {ok:success, error:'disk full'};},
+    prepareAudioOutput:async () => {preparations++; return {ok:true};},
+  }});
+  const renderer = vueContext.Vue.createRenderer({createComment:() => ({}), insert() {}, remove() {}, parentNode:() => null, nextSibling:() => null});
+  const instance = renderer.createApp({data:capturedConfig.data, render:() => null, methods:capturedConfig.methods});
+  const app = instance.mount({});
+  try {
+    assert.equal(app.bluetoothProtectionEnabled, false);
+    await app.prepareSafeAudioOutput();
+    app.handleAudioOutputSafety({reason:'headphones-disconnected'});
+    assert.equal(preparations, 0);
+    assert.equal(app.outputSafetyBlocked, false);
+    const event = {target:{checked:true}};
+    await app.updateBluetoothProtection(event);
+    assert.equal(app.bluetoothProtectionEnabled, false);
+    assert.equal(event.target.checked, false);
+    assert.match(app.bluetoothProtectionMessage, /disk full/);
+    success = true;
+    event.target.checked = true;
+    await app.updateBluetoothProtection(event);
+    assert.equal(app.bluetoothProtectionEnabled, true);
+    app.outputSafetyBlocked = true;
+    app.outputSafetyWearResume = {token:1};
+    event.target.checked = false;
+    await app.updateBluetoothProtection(event);
+    assert.equal(app.outputSafetyBlocked, false);
+    assert.equal(app.outputSafetyWearResume, null);
+    assert.equal(saves, 3);
+    assert.equal(capturedConfig.data().bluetoothProtectionEnabled, false);
+  } finally {instance.unmount();}
+});
+
 test("media session mapping uses the common bridge for recover and change", async () => {
   const sent = [], bindings = new Map();
   const { app } = createRendererHarness({
@@ -71,7 +108,7 @@ async function createWearPlaybackFixture() {
   const owner = {isDestroyed:()=>false, setAudioMuted:value=>effects.push(value),
     send:(_channel,event)=>{ void Promise.resolve().then(()=>app.handleAudioOutputSafety(event)); }};
   const safety = new AudioOutputSafety(monitor);
-  const { capturedConfig, fakeAudio } = createRendererHarness({markRaw:vueContext.Vue.markRaw,lxEnv:{prepareAudioOutput:async value=>{
+  const { capturedConfig, fakeAudio } = createRendererHarness({rendererState:{'lx-bluetooth-protection':'1'},markRaw:vueContext.Vue.markRaw,lxEnv:{prepareAudioOutput:async value=>{
     if (value.playing) return safety.prepare(owner,value);
     safety.pause(owner,value); return {ok:true};
   }}});

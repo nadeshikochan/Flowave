@@ -46,6 +46,8 @@ function dataLayout(data){
   return {history,packages};
 }
 function locations(data,appHome,layout=dataLayout(data)){
+ let policy={groups:[]};
+ try{policy=JSON.parse(fs.readFileSync(path.join(appHome,'resources/storage-layout.json'),'utf8'));}catch{}
  let mert=path.join(appHome,'models','MERT-v1-330M');
  let indexRuntime=path.join(appHome,'backend','index-worker');
  try{const config=JSON.parse(fs.readFileSync(path.join(data,'config','app.json'),'utf8').replace(/^\uFEFF/,''));if(typeof config.model?.local_dir==='string'&&config.model.local_dir.trim())mert=path.resolve(appHome,config.model.local_dir.trim());}catch{}
@@ -66,7 +68,7 @@ function locations(data,appHome,layout=dataLayout(data)){
  }
  return [
   {id:'history',name:'听歌记录与备份',path:layout.history,note:'保留时长、次数和推荐学习；移除功能包不会删除。',important:true},
-  {id:'index',name:'曲库索引与歌曲身份',path:path.join(data,'library'),note:'保留声音索引、稳定身份及复合种子；删除后可能需要重建。',important:true},
+  {id:'index',name:'曲库索引与歌曲身份',path:path.join(data,'library'),note:'此目录同时包含记录和分析成果。卸载按类别处理，手动整理时请核对具体文件。',important:true},
   {id:'analysis',name:'歌曲分析结果',path:path.join(data,'library','track-analysis'),note:'标签、段落、向量及任务恢复数据。',important:true},
   {id:'stems',name:'分轨与演奏成果',path:path.join(data,'library','stems'),note:'已生成的伴奏分轨。',important:true},
   {id:'practice',name:'谱面分析结果',path:path.join(data,'library','practice-analysis'),note:'谱面、原始音高与历史版本。',important:true},
@@ -78,6 +80,11 @@ function locations(data,appHome,layout=dataLayout(data)){
   {id:'components',name:'计算运行组件',path:path.join(data,'components'),note:'分析等运行依赖；移除界面包时保留。'},
   {id:'settings',name:'设置与歌单',path:path.join(data,'config'),note:'主题、歌单、目录设置和用户偏好。',important:true},
   {id:'cache',name:'缓存与处理中间文件',path:path.join(data,'cache'),note:'含在途任务恢复材料；请退出软件后再整理。'},
- ];
+ ].map(location=>{
+   const relative=path.relative(data,location.path).split(path.sep).join('/');
+   const external=relative==='..'||relative.startsWith('../')||path.isAbsolute(relative);
+   const group=policy.groups.find(item=>item.directories.some(folder=>relative===folder||relative.startsWith(folder+'/'))||item.files.includes(relative));
+   return {...location,external,storageGroup:external?'外部位置':group?.label||'包含多类数据'};
+ });
 }
 module.exports={dataLayout,locations,resolveDataDir,locatorFile};

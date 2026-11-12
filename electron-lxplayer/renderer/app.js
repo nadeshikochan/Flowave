@@ -535,6 +535,7 @@ const audioEffectsMethods = {
     }
   },
   async prepareSafeAudioOutput(resume = false, allowOutputChange = false, wearToken = null) {
+    if (this.bluetoothProtectionEnabled === false) return;
     if (this.outputSafetyBlocked && !resume) throw new PlaybackTransitionUtils.StalePlaybackTransitionError("耳机输出变化后已停止播放");
     if (!window.lxEnv?.prepareAudioOutput) return;
     const revision = this.outputSafetyRevision;
@@ -590,6 +591,7 @@ const audioEffectsMethods = {
     }
   },
   handleAudioOutputSafety(event = {}) {
+    if (this.bluetoothProtectionEnabled === false) return;
     if (event.reason === 'headphones-worn') return this.resumeByHeadphoneWear(event);
     const canResume = event.reason === 'headphones-removed' && Number.isSafeInteger(event.wearToken)
       && ((this.isPlaying && this.playbackIntent === 'play' && this.currentPath && !this.pendingPlaybackTransition)
@@ -606,6 +608,28 @@ const audioEffectsMethods = {
     this.showNotice(event.reason === 'headphones-removed'
       ? "双耳均已摘下，播放已暂停。"
       : "耳机输出已变化，播放已暂停。确认设备后点击播放继续。", "error");
+  },
+  async updateBluetoothProtection(event) {
+    if (this.bluetoothProtectionSaving) return;
+    const enabled = event.target.checked;
+    this.bluetoothProtectionSaving = true;
+    this.bluetoothProtectionMessage = '';
+    try {
+      const saved = await window.lxEnv.setBluetoothProtection(enabled);
+      if (!saved?.ok) throw Error(saved?.error || '蓝牙保护设置保存失败。');
+      rendererStateStore['lx-bluetooth-protection'] = enabled ? '1' : '0';
+      this.bluetoothProtectionEnabled = enabled;
+      this.outputSafetyRevision++;
+      this.outputSafetyBlocked = false;
+      this.outputSafetyWearResume = null;
+      this.outputSafetyWarningShown = false;
+      if (enabled && this.isPlaying) await this.prepareSafeAudioOutput(true, false);
+    } catch (error) {
+      this.bluetoothProtectionMessage = String(error.message || error);
+    } finally {
+      this.bluetoothProtectionSaving = false;
+      event.target.checked = this.bluetoothProtectionEnabled;
+    }
   },
   async resumeEffectsEngine() {
     await this.prepareSafeAudioOutput();
@@ -10948,6 +10972,9 @@ const kumikoVueApp = createApp({
       pausedByAudioInterruption: false,
       playbackPauseReason: "none", // none | manual | internal | interruption
       outputSafetyBlocked: false,
+      bluetoothProtectionEnabled: readStoredString('lx-bluetooth-protection', '0') === '1',
+      bluetoothProtectionSaving: false,
+      bluetoothProtectionMessage: '',
       outputSafetyWarningShown: false,
       outputSafetyRevision: 0,
       outputSafetyWearResume: null,

@@ -43,7 +43,9 @@ Name: "chinesesimp"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
-Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourceDir}\*"; DestDir: "{app}"; Excludes: "resources\uninstall-data.ps1,resources\storage-layout.json"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "uninstall-data.ps1"; DestDir: "{app}\resources"; Flags: ignoreversion
+Source: "..\..\resources\storage-layout.json"; DestDir: "{app}\resources"; Flags: ignoreversion
 Source: "installer-check.ps1"; Flags: dontcopy
 Source: "data-location.ps1"; Flags: dontcopy
 
@@ -59,6 +61,8 @@ var
   DataPage: TInputDirWizardPage;
   StorageProgress: TOutputProgressWizardPage;
   DataPrepared: Boolean;
+  RemoveDataGroups: String;
+  ForgetWorkspaceLocations: Boolean;
 
 function LocationFile: String;
 var
@@ -193,12 +197,79 @@ end;
 function InitializeUninstall: Boolean;
 var
   Code: Integer;
+  Form: TSetupForm;
+  Intro, Location: TNewStaticText;
+  Keep: array[0..3] of TNewCheckBox;
+  Forget: TNewCheckBox;
+  ProceedButton, CancelButton: TNewButton;
+  Labels, Ids: array[0..3] of String;
+  I: Integer;
 begin
   Code := CheckProgramDirectory(ExpandConstant('{app}\resources\installer-check.ps1'), ExpandConstant('{app}'));
   Result := Code = 0;
   if (not Result) and (not UninstallSilent) then
     MsgBox(CheckMessage(Code), mbError, MB_OK);
-  if Result and (not UninstallSilent) then
-    Result := MsgBox('听歌记录、设置、插件、模型、索引和分析成果将保留在以下目录，重装后可继续使用。' + #13#10
-      + SavedDataDirectory, mbInformation, MB_OKCANCEL or MB_DEFBUTTON2) = IDOK;
+  if not Result then exit;
+  RemoveDataGroups := ExpandConstant('{param:REMOVEDATA|}');
+  ForgetWorkspaceLocations := ExpandConstant('{param:FORGETLOCATIONS|0}') = '1';
+  if UninstallSilent then exit;
+  Labels[0] := '保留设置、歌单、记录与轨迹'; Ids[0] := 'personal';
+  Labels[1] := '保留索引、分析、分轨与谱面'; Ids[1] := 'results';
+  Labels[2] := '保留插件、模型与计算环境'; Ids[2] := 'resources';
+  Labels[3] := '保留缓存、日志与浏览器会话'; Ids[3] := 'temporary';
+  Form := CreateCustomForm(580, 360, False, False);
+  try
+    Form.Caption := '卸载 Flowave — 保留内容';
+    Intro := TNewStaticText.Create(Form); Intro.Parent := Form;
+    Intro.SetBounds(ScaleX(20),ScaleY(16),ScaleX(540),ScaleY(40));
+    Intro.WordWrap := True;
+    Intro.Caption := '选中的内容会保留，取消选中后将在卸载时删除。仅处理下方工作区，下载的音乐和其他工作区保留。';
+    Location := TNewStaticText.Create(Form); Location.Parent := Form;
+    Location.SetBounds(ScaleX(20),ScaleY(61),ScaleX(540),ScaleY(48));
+    Location.WordWrap := True; Location.Caption := SavedDataDirectory;
+    for I := 0 to 3 do begin
+      Keep[I] := TNewCheckBox.Create(Form); Keep[I].Parent := Form;
+      Keep[I].SetBounds(ScaleX(24),ScaleY(119+I*31),ScaleX(530),ScaleY(25));
+      Keep[I].Caption := Labels[I]; Keep[I].Checked := True;
+    end;
+    Forget := TNewCheckBox.Create(Form); Forget.Parent := Form;
+    Forget.SetBounds(ScaleX(24),ScaleY(251),ScaleX(530),ScaleY(25));
+    Forget.Caption := '同时忘记默认工作区与最近列表'; Forget.Checked := False;
+    ProceedButton := TNewButton.Create(Form); ProceedButton.Parent := Form;
+    ProceedButton.SetBounds(ScaleX(350),ScaleY(310),ScaleX(100),ScaleY(30));
+    ProceedButton.Caption := '继续卸载'; ProceedButton.ModalResult := mrOK;
+    CancelButton := TNewButton.Create(Form); CancelButton.Parent := Form;
+    CancelButton.SetBounds(ScaleX(460),ScaleY(310),ScaleX(100),ScaleY(30));
+    CancelButton.Caption := '取消'; CancelButton.ModalResult := mrCancel; CancelButton.Cancel := True;
+    Form.ActiveControl := CancelButton;
+    Result := Form.ShowModal = mrOK;
+    if Result then begin
+      RemoveDataGroups := '';
+      for I := 0 to 3 do if not Keep[I].Checked then begin
+        if RemoveDataGroups <> '' then RemoveDataGroups := RemoveDataGroups + ',';
+        RemoveDataGroups := RemoveDataGroups + Ids[I];
+      end;
+      ForgetWorkspaceLocations := Forget.Checked;
+      if RemoveDataGroups <> '' then
+        Result := MsgBox('即将按刚才的选择删除工作区中的相应内容，删除后无法通过重装恢复。请确认已备份需要保留的内容。' + #13#10#13#10 + SavedDataDirectory,
+          mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Code: Integer;
+  Parameters: String;
+begin
+  if (CurUninstallStep <> usUninstall) or ((RemoveDataGroups = '') and (not ForgetWorkspaceLocations)) then exit;
+  Parameters := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File '
+    + AddQuotes(ExpandConstant('{app}\resources\uninstall-data.ps1')) + ' -Action Remove -DataDir '
+    + AddQuotes(SavedDataDirectory) + ' -InstallDir ' + AddQuotes(ExpandConstant('{app}'));
+  if RemoveDataGroups <> '' then Parameters := Parameters + ' -Groups ' + AddQuotes(RemoveDataGroups);
+  if ForgetWorkspaceLocations then Parameters := Parameters + ' -ForgetLocations';
+  if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), Parameters, '', SW_HIDE, ewWaitUntilTerminated, Code) then Code := 45;
+  if Code <> 0 then RaiseException('部分数据未能清理，卸载已停止。请确认工作区可访问且后台任务已退出。原位置记录保留，可稍后重试。');
 end;

@@ -65,6 +65,7 @@ contextBridge.exposeInMainWorld("lxEnv", {
   setMediaSessionAvailable: available => ipcRenderer.invoke('lx-media-session-ready', available),
   sendMediaInput: action => ipcRenderer.invoke('lx-media-input', action),
   prepareAudioOutput: value => ipcRenderer.invoke('lx-audio-output-playback', value),
+  setBluetoothProtection: enabled => ipcRenderer.invoke('lx-audio-output-protection', enabled),
   onAudioOutputSafety: callback => subscribe('lx-audio-output-safety', callback),
   getAudioOutput:()=>ipcRenderer.invoke('lx-audio-output-get'),
   acquireAudioOutput:id=>ipcRenderer.invoke('lx-audio-output-acquire',id),
