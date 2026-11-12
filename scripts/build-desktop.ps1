@@ -48,7 +48,7 @@ for profile in resources['profiles'].values():
     if (-not $SkipNpmInstall) { Run -exe npm -arguments @('ci') }
     $output = 'dist/' + $Mode + '-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
     $configPath = Join-Path $repo "build/desktop-$Mode.json"
-    $config = (Get-Content -LiteralPath (Join-Path $electron 'package.json') -Raw | ConvertFrom-Json).build
+    $config = (Get-Content -LiteralPath (Join-Path $electron 'package.json') -Raw -Encoding UTF8 | ConvertFrom-Json).build
     $config.directories.output = Join-Path $electron $output
     if ($Mode -eq 'installed') {
       $marker = Join-Path $repo 'build/installed-distribution.json'
@@ -69,7 +69,7 @@ for profile in resources['profiles'].values():
   if ($Mode -eq 'portable') {
     & (Join-Path $PSScriptRoot 'verify-release-data.ps1') -DataDir (Join-Path $unpacked 'data')
   } elseif (Test-Path -LiteralPath (Join-Path $unpacked 'data')) { throw 'Installed program must not contain user data.' }
-  $version = (Get-Content -LiteralPath (Join-Path $electron 'package.json') -Raw | ConvertFrom-Json).version
+  $version = (Get-Content -LiteralPath (Join-Path $electron 'package.json') -Raw -Encoding UTF8 | ConvertFrom-Json).version
   if ($Mode -eq 'installed') {
     $compiler = & (Join-Path $PSScriptRoot 'prepare-inno.ps1')
     Run -exe $compiler -arguments @("/DSourceDir=$unpacked", "/DAppVersion=$version", ('/DAppIcon=' + (Join-Path $electron 'renderer/assets/app-icon.ico')), ('/O' + (Join-Path $electron $output)), (Join-Path $repo 'packaging/windows/installer.iss'))
