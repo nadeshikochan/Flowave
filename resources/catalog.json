@@ -1379,5 +1379,19 @@
       "profiles": [],
       "license": "不需要模型。"
     }
-  }
+  },
+  "runtime_wheels": [
+    {
+      "path": "torchaudio-2.7.0+cu126-cp313-cp313-win_amd64.whl",
+      "url": "https://download-r2.pytorch.org/whl/cu126/torchaudio-2.7.0%2Bcu126-cp313-cp313-win_amd64.whl",
+      "bytes": 4219985,
+      "sha256": "2e9d8a75fde59d954c22f848045caece82673b545828c1f8d9b984fa4817a303"
+    },
+    {
+      "path": "torchvision-0.22.0+cu126-cp313-cp313-win_amd64.whl",
+      "url": "https://download-r2.pytorch.org/whl/cu126/torchvision-0.22.0%2Bcu126-cp313-cp313-win_amd64.whl",
+      "bytes": 6334173,
+      "sha256": "4976d5b9893e9973934a765da27b0f1f6a00ac533c28fea8db1636de90036998"
+    }
+  ]
 }

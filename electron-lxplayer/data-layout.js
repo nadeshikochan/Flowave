@@ -50,20 +50,30 @@ function locations(data,appHome,layout=dataLayout(data)){
  try{policy=JSON.parse(fs.readFileSync(path.join(appHome,'resources/storage-layout.json'),'utf8'));}catch{}
  let mert=path.join(appHome,'models','MERT-v1-330M');
  let indexRuntime=path.join(appHome,'backend','index-worker');
- try{const config=JSON.parse(fs.readFileSync(path.join(data,'config','app.json'),'utf8').replace(/^\uFEFF/,''));if(typeof config.model?.local_dir==='string'&&config.model.local_dir.trim())mert=path.resolve(appHome,config.model.local_dir.trim());}catch{}
+ const imported=path.join(data,'components/resources/legacy');
+ const importedMert=path.join(imported,'models/MERT-v1-330M');
+ if(fs.existsSync(importedMert))mert=importedMert;
+ if(fs.existsSync(path.join(imported,'python-index/Scripts/python.exe')))indexRuntime=path.join(imported,'python-index');
+ let customMert=false;
+ try {
+   const config=JSON.parse(fs.readFileSync(path.join(data,'config','app.json'),'utf8').replace(/^\uFEFF/,''));
+   const selected=String(config.model?.local_dir || '').trim();
+   customMert=!!selected && selected.replace(/\\/g,'/')!=='models/MERT-v1-330M';
+   if(customMert)mert=path.resolve(appHome,selected);
+ } catch {}
  if(fs.existsSync(path.join(appHome,'resources/catalog.json'))){
    const {ResourceManager,revision}=require('./resource-manager');
    const manager=new ResourceManager(appHome,{dataDir:data});
    const root=path.join(data,'components/resources');
-   indexRuntime=path.join(root,'runtimes/recommendation');
-   if(!fs.existsSync(mert))mert=path.join(root,'assets/mert');
+   if(!fs.existsSync(indexRuntime))indexRuntime=path.join(root,'runtimes/recommendation');
+   if(!customMert&&!fs.existsSync(mert))mert=path.join(root,'assets/mert');
    try{
      const catalog=manager.catalog();
      const model=catalog.groups.mert,profile=catalog.profiles.recommendation;
-     if(model&&manager.ready('assets','mert',model)&&!fs.existsSync(path.join(mert,'config.json')))
+     if(!customMert&&model&&manager.ready('assets','mert',model))
        mert=path.join(root,'assets/mert',revision(model).slice(0,16),'tree/models/MERT-v1-330M');
      if(profile&&manager.ready('runtimes','recommendation',profile))
-       indexRuntime=path.join(indexRuntime,revision(profile).slice(0,16));
+       indexRuntime=path.join(root,'runtimes/recommendation',revision(profile).slice(0,16));
    }catch{}
  }
  return [

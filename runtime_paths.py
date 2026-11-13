@@ -58,7 +58,9 @@ _HISTORY_ROOT = LIBRARY_DIR / "listening"
 LISTENING_HISTORY_DIR = (CONFIG_DIR if any(
     (CONFIG_DIR / name).exists() for name in ("listening_history.json", "listening-history-backups", "listening-history-snapshots")
 ) else _HISTORY_ROOT)
-MODEL_DIR = APP_HOME / "models" / "MERT-v1-330M"
+MODEL_DIR = DATA_DIR / "components/resources/legacy/models/MERT-v1-330M"
+if not MODEL_DIR.is_dir():
+    MODEL_DIR = APP_HOME / "models" / "MERT-v1-330M"
 MIGRATION_STATE_PATH = CONFIG_DIR / "migration.json"
 
 APP_CONFIG_PATH = CONFIG_DIR / "app.json"

@@ -23,7 +23,7 @@ from analysis_audio import read_audio
 def emit(**data):print(json.dumps(data,ensure_ascii=False,allow_nan=False),flush=True)
 
 def waveform(row,workdir=None,checkpoint=lambda:None):
-    audio,sr=read_audio(row['path'],workdir or ROOT/'data/cache/analysis-audio',checkpoint,MAX_DURATION)
+    audio,sr=read_audio(row['path'],workdir or asset_path(ROOT,'data/cache/analysis-audio'),checkpoint,MAX_DURATION)
     g=math.gcd(sr,24000)
     wave=resample_poly(audio.mean(1),24000//g,sr//g).astype(np.float32)
     if not 5<len(wave)/24000<=MAX_DURATION:
@@ -271,7 +271,7 @@ class ModelPool:
 
 
 def analyze(path,checkpoint,progress):
-    pool=ModelPool(ROOT/'data/cache/analysis-audio')
+    pool=ModelPool(asset_path(ROOT,'data/cache/analysis-audio'))
     errors=[]
     try:
         rows=[{'id':'single','path':str(path)}]

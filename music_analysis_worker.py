@@ -6,8 +6,9 @@ import sys,json,math,time,hashlib,traceback
 if hasattr(sys.stdout,'reconfigure'):sys.stdout.reconfigure(encoding='utf-8',errors='replace')
 from pathlib import Path
 ROOT=Path(os.environ.get('KUMIKO_APP_HOME') or Path(__file__).resolve().parent)
+from resource_runtime import asset_path
 # Dedicated optional component survives ordinary cache cleanup. No startup download.
-sys.path.insert(0,str(ROOT/'data/components/music-analysis/python'))
+sys.path.insert(0,str(asset_path(ROOT,'data/components/music-analysis/python')))
 
 def emit(**value):print(json.dumps(value,ensure_ascii=False),flush=True)
 

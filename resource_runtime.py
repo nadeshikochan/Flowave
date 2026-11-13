@@ -65,6 +65,12 @@ def asset_path(root, relative):
         directory = managed_dir(root, 'assets', name, item)
         if ready(directory, item):
             return directory / 'tree' / relative
+    data = resolve_data_dir(root)
+    if relative.startswith('data/'):
+        return data / relative[5:]
+    imported = data / 'components/resources/legacy' / relative
+    if relative.startswith('models/') and imported.exists():
+        return imported
     return Path(root) / relative
 
 
@@ -76,9 +82,10 @@ def runtime_python(root, profile, required=True):
         if ready(directory, item) and exe.is_file():
             ensure_runtime_path(directory)
             return exe
-    legacy = Path(root) / '.venv-index/Scripts/python.exe'
-    if legacy.is_file():
-        return legacy
+    for legacy in (resolve_data_dir(root) / 'components/resources/legacy/python-index/Scripts/python.exe',
+                   Path(root) / '.venv-index/Scripts/python.exe'):
+        if legacy.is_file():
+            return legacy
     if required:
         raise ValueError('必要的计算环境尚未准备好，请在功能选装中安装所需资源。')
     return None
@@ -110,8 +117,11 @@ def worker_environment(root):
     root=Path(root).resolve()
     data = resolve_data_dir(root)
     cache = data / 'cache'
+    temporary = cache / 'tmp'
+    temporary.mkdir(parents=True, exist_ok=True)
     return {**os.environ, 'KUMIKO_APP_HOME': str(root), 'KUMIKO_DATA_DIR': str(data), 'PYTHONIOENCODING': 'utf-8',
             'PYTHONUNBUFFERED': '1', 'HF_HUB_OFFLINE': '1', 'TRANSFORMERS_OFFLINE': '1',
             'HF_HOME':str(cache/'huggingface'),'HF_HUB_CACHE':str(cache/'huggingface/hub'),
             'HF_MODULES_CACHE':str(cache/'huggingface/modules'),'TORCH_HOME':str(cache/'torch'),
+            'TEMP':str(temporary),'TMP':str(temporary),'TMPDIR':str(temporary),
             'OMP_NUM_THREADS': '2', 'MKL_NUM_THREADS': '2', 'OPENBLAS_NUM_THREADS': '2'}

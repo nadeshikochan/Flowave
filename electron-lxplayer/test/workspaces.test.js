@@ -70,8 +70,9 @@ test('portable internal workspaces survive a whole directory move and recent-lis
 
 test('new workspaces cannot import legacy configuration from the application directory', t => {
   const {temp, home, store, b} = fixture(t, 'portable');
-  const python = path.resolve(__dirname, '../../build/backend-venv/Scripts/python.exe');
-  if (!fs.existsSync(python)) return t.skip('Pinned backend build environment unavailable');
+  const python = ['../../build/backend-venv/Scripts/python.exe', '../../.venv/Scripts/python.exe']
+    .map(name => path.resolve(__dirname, name)).find(name => fs.existsSync(name));
+  if (!python) return t.skip('Backend development environment unavailable');
   const defaultSpace = store.create(path.join(home, 'data'));
   const legacy = path.join(temp, 'old-config.json');
   fs.writeFileSync(legacy, '{"oldUser":true}');
@@ -283,4 +284,65 @@ test('canceled save preparation cannot pause or close history after its configur
   assert.deepEqual(order, []);
   assert.equal((await methods.prepareWorkspaceSwitch.call(app)).ok, true);
   assert.deepEqual(order, ['pause', 'history']);
+});
+
+test('relocated resources resolve inside the selected workspace without leaking into another workspace', t => {
+  const {home, a, b} = fixture(t, 'portable');
+  const repo = path.resolve(__dirname, '../..');
+  const python = ['.venv/Scripts/python.exe', 'build/backend-venv/Scripts/python.exe']
+    .map(name => path.join(repo, name)).find(name => fs.existsSync(name));
+  if (!python) return t.skip('Backend development environment unavailable');
+  for (const name of ['components/resources/legacy/models/MERT-v1-330M/config.json',
+    'components/resources/legacy/python-index/Scripts/python.exe', 'components/music-analysis/manifest.json']) {
+    const file = path.join(a.path, name);
+    fs.mkdirSync(path.dirname(file), {recursive:true});
+    fs.writeFileSync(file, '{}');
+  }
+  const code = `from pathlib import Path
+import sys
+from resource_runtime import asset_path, runtime_python, worker_environment
+root=Path(sys.argv[1]); data=Path(sys.argv[2]); expected=sys.argv[3]=='present'
+model=asset_path(root,'models/MERT-v1-330M/config.json')
+assert model.is_file() == expected
+assert (runtime_python(root,'analysis',required=False) is not None) == expected
+assert asset_path(root,'data/components/music-analysis/manifest.json') == data/'components/music-analysis/manifest.json'
+assert Path(worker_environment(root)['TEMP']).is_relative_to(data)
+`;
+  for (const [space, expectation] of [[a, 'present'], [b, 'missing']]) {
+    execFileSync(python, ['-X', 'utf8', '-c', code, home, space.path, expectation],
+      {cwd:repo, windowsHide:true, env:{...process.env, KUMIKO_APP_HOME:home, KUMIKO_DATA_DIR:space.path}});
+  }
+});
+
+test('development resource installation uses the source launcher and selected data root', async t => {
+  const {home, a} = fixture(t, 'portable');
+  const {EventEmitter} = require('node:events');
+  const {PassThrough} = require('node:stream');
+  const {ResourceManager, revision} = require('../resource-manager');
+  const python = path.join(home, '.venv/Scripts/python.exe');
+  fs.mkdirSync(path.dirname(python), {recursive:true});
+  fs.writeFileSync(python, 'fixture');
+  fs.writeFileSync(path.join(home, 'backend_launcher.py'), '# fixture');
+  const group = {name:'fixture', files:[]};
+  fs.mkdirSync(path.join(home, 'resources'));
+  fs.writeFileSync(path.join(home, 'resources/catalog.json'), JSON.stringify({
+    groups:{fixture:group}, profiles:{}, modules:{analysis:{groups:['fixture'], profiles:[]}},
+  }));
+  const spawnProcess = (command, args, options) => {
+    assert.equal(command, process.env.KUMIKO_PYTHON || python);
+    assert.deepEqual(args, ['-X', 'utf8', path.join(home, 'backend_launcher.py'), '--install-resources', 'analysis']);
+    assert.equal(options.env.KUMIKO_DATA_DIR, a.path);
+    const child = new EventEmitter();
+    child.stdout = new PassThrough(); child.stderr = new PassThrough();
+    setImmediate(() => {
+      const folder = path.join(a.path, 'components/resources/assets/fixture', revision(group).slice(0,16));
+      fs.mkdirSync(folder, {recursive:true});
+      fs.writeFileSync(path.join(folder, '.ready.json'), JSON.stringify({revision:revision(group)}));
+      child.emit('close', 0);
+    });
+    return child;
+  };
+  const manager = new ResourceManager(home, {dataDir:a.path, spawnProcess});
+  assert((await manager.prepare('analysis', {isDestroyed:()=>false, send:()=>{}})).ok);
+  assert.equal(manager.snapshot().analysis.ready, true);
 });

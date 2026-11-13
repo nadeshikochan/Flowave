@@ -250,8 +250,11 @@ def bind_downloaded_wheels(lock, wheels, wheel_cache, output):
     text = lock.read_text(encoding='utf-8')
     for wheel in wheels:
         package, version = Path(wheel['path']).name.split('-')[:2]
+        package = re.sub(r'[-_.]+', '-', package).lower()
         pattern = re.compile(r'(?m)^' + re.escape(package + '==' + version) + r'(?=\s|$)')
         matches = list(pattern.finditer(text))
+        if not matches and wheel.get('optional'):
+            continue
         if len(matches) != 1:
             raise ValueError('已下载依赖与锁文件不匹配。')
         start = matches[0].start()
@@ -259,8 +262,14 @@ def bind_downloaded_wheels(lock, wheels, wheel_cache, output):
         block = text[start:matches[0].end() + end.start() if end else len(text)]
         if '--hash=sha256:' + wheel['sha256'] not in block:
             raise ValueError('锁文件未包含已下载依赖的校验值。')
-        uri = within(wheel_cache, wheel['path']).resolve().as_uri()
+        file = Path(wheel['local_path']) if wheel.get('local_path') else within(wheel_cache, wheel['path'])
+        uri = file.resolve().as_uri()
         text = pattern.sub(lambda _: package + ' @ ' + uri, text, count=1)
+    # CUDA packages are now direct, hash-checked files. A global CUDA index
+    # would also query that server for ordinary packages such as cloudpickle.
+    text = re.sub(r'(?m)^--(?:extra-)?index-url\s+\S+\s*\n', '', text)
+    if re.search(r'(?m)^[\w.-]+==[^\s]+\+cu\d+', text):
+        raise ValueError('CUDA依赖尚未绑定到已校验文件，请更新资源安装器。')
     output.write_text(text, encoding='utf-8', newline='\n')
     return output
 
@@ -287,22 +296,35 @@ def install_profile(root, name, item, cache):
     if digest(lock) != item['lock_sha256']:
         raise ValueError('计算环境锁文件校验失败。')
     wheel_cache=cache/'wheels';wheel_cache.mkdir(exist_ok=True)
-    for wheel in item.get('bootstrap_wheels',[]):
+    wheels = list(item.get('bootstrap_wheels', []))
+    lock_text = lock.read_text(encoding='utf-8')
+    for wheel in catalog(root).get('runtime_wheels', []):
+        package, version = Path(wheel['path']).name.split('-')[:2]
+        if re.search(r'(?m)^' + re.escape(package + '==' + version) + r'(?=\s|$)', lock_text):
+            wheels.append(wheel)
+    for wheel in wheels:
         file=download(wheel,cache,name);dest=within(wheel_cache,wheel['path'])
         if not dest.exists():
             try:os.link(file,dest)
             except OSError:shutil.copyfile(file,dest)
     for wheel in item.get('bundled_wheels',[]):
         if digest(within(root,wheel['file']))!=wheel['sha256']:raise ValueError('随附计算依赖校验失败。')
+        wheels.append({**wheel, 'path':Path(wheel['file']).name,
+                       'local_path':str(within(root,wheel['file'])), 'optional':True})
     # Index resolution can prefer a remote wheel over --find-links. Direct local
     # references prevent downloading the same multi-GB engine a second time.
-    local_lock = bind_downloaded_wheels(lock, item.get('bootstrap_wheels', []), wheel_cache, work / 'requirements-local.txt')
+    local_lock = bind_downloaded_wheels(lock, wheels, wheel_cache, work / 'requirements-local.txt')
     emit(phase='install', group=name, file='正在安装已校验计算依赖')
     env = {**worker_environment(root), 'UV_CACHE_DIR': str(cache / 'uv-cache'), 'UV_LINK_MODE': 'hardlink',
            'UV_NATIVE_TLS': 'true', 'UV_PYTHON_DOWNLOADS': 'never', 'PYTHONIOENCODING': 'utf-8',
            'PYTHONNOUSERSITE': '1', 'PYTHONPATH': ''}
+    for key in ('UV_INDEX', 'UV_INDEX_URL', 'UV_EXTRA_INDEX_URL', 'UV_DEFAULT_INDEX', 'UV_TORCH_BACKEND',
+                'UV_CONFIG_FILE', 'PIP_INDEX_URL', 'PIP_EXTRA_INDEX_URL'):
+        env.pop(key, None)
     cmd = [str(uv), 'pip', 'install', '--python', str(python / 'python.exe'), '--target',
-           str(python / 'Lib/site-packages'), '--reinstall', '--find-links',str(wheel_cache),'--find-links',str(root/'resources/wheels'),'--require-hashes', '--index-strategy','unsafe-best-match', '--only-binary', ':all:', '-r', str(local_lock)]
+           str(python / 'Lib/site-packages'), '--reinstall', '--no-config', '--default-index', 'https://pypi.org/simple',
+           '--find-links',str(wheel_cache),'--find-links',str(root/'resources/wheels'),'--require-hashes',
+           '--index-strategy','first-index', '--only-binary', ':all:', '-r', str(local_lock)]
     flags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace', env=env, creationflags=flags)
     lines = []

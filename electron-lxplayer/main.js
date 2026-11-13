@@ -728,7 +728,8 @@ async function startBackendServerInner() {
   let cmd = apiExe;
   let args = ["--host", BACKEND_HOST, "--port", String(BACKEND_PORT)];
   if (!fs.existsSync(apiExe)) {
-    cmd = process.env.KUMIKO_PYTHON || "python";
+    const developmentPython = path.join(APP_HOME, '.venv', 'Scripts', 'python.exe');
+    cmd = process.env.KUMIKO_PYTHON || (fs.existsSync(developmentPython) ? developmentPython : "python");
     args = ["-m", "uvicorn", "api:app", "--host", BACKEND_HOST, "--port", String(BACKEND_PORT), "--workers", "1"];
   }
   try {

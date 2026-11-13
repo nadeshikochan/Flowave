@@ -1,20 +1,37 @@
-"""Recognize legacy recipe hashes differing only in text line endings.
+"""Recognize reviewed path-only adaptations and text line endings.
 
-Do not rewrite provenance or accept changed code/models. Raw recipe generation
-stays unchanged so in-flight workers retain their exact publication contract.
+Result provenance stays intact. Every accepted digest retains the current
+inference content and model manifests. In-flight publication keeps its raw recipe.
 """
 import hashlib
 from functools import lru_cache
 from pathlib import Path
 from resource_runtime import asset_path, source_path
 
+# These substitutions restore the preceding release's resource lookups. They
+# retain every inference statement and current model manifest in the digest.
+_PREVIOUS_RESOURCE_LOOKUPS = {
+    'analysis_audio.py': (
+        ("asset_path(root,'data/components/ffmpeg/ffmpeg.exe')", "root/'data/components/ffmpeg/ffmpeg.exe'"),
+    ),
+    'music_analysis_worker.py': (
+        ('from resource_runtime import asset_path\n', ''),
+        ("asset_path(ROOT,'data/components/music-analysis/python')", "ROOT/'data/components/music-analysis/python'"),
+    ),
+    'music_structure_engine.py': (
+        ("asset_path(ROOT,'data/cache/analysis-audio')", "ROOT/'data/cache/analysis-audio'"),
+    ),
+}
+
 
 @lru_cache(maxsize=4)
 def _newline_variants(prefix, contents):
     digests = [hashlib.sha256(prefix.encode())]
-    for raw in contents:
-        lf = raw.replace(b'\r\n', b'\n')
-        variants = set((raw, lf, lf.replace(b'\n', b'\r\n')))
+    for alternatives in contents:
+        variants = set()
+        for raw in alternatives:
+            lf = raw.replace(b'\r\n', b'\n')
+            variants.update((raw, lf, lf.replace(b'\n', b'\r\n')))
         following = []
         for digest in digests:
             for value in variants:
@@ -26,7 +43,7 @@ def _newline_variants(prefix, contents):
 
 
 def equivalent_recipes(root, current, target='tags'):
-    """Only current inputs, preserving content and per-file boundaries exactly."""
+    """Current inputs plus audited path lookups, preserving model identities."""
     root = Path(root)
     if target == 'tags':
         from analysis_vocab import VERSION
@@ -54,7 +71,13 @@ def equivalent_recipes(root, current, target='tags'):
     # Also fail closed when inputs changed after the caller obtained its recipe.
     if raw.hexdigest() != current:
         return frozenset((current,))
-    return _newline_variants(prefix, contents)
+    alternatives = []
+    for name, value in zip(names, contents):
+        previous = value.replace(b'\r\n', b'\n')
+        for new, old in _PREVIOUS_RESOURCE_LOOKUPS.get(name, ()):
+            previous = previous.replace(new.encode(), old.encode())
+        alternatives.append((value, previous))
+    return _newline_variants(prefix, tuple(alternatives))
 
 
 def accepted_recipes(current, edges, equivalents=()):

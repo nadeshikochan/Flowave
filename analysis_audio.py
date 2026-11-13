@@ -15,7 +15,7 @@ def stop_process_tree(proc):
 
 def decoder():
     root=Path(os.environ.get('KUMIKO_APP_HOME') or Path(__file__).resolve().parent)
-    for path in (asset_path(root,'models/audio-tools/ffmpeg.exe'),asset_path(root,'models/stem-separation/ffmpeg.exe'),root/'data/components/ffmpeg/ffmpeg.exe',root/'ffmpeg/bin/ffmpeg.exe'):
+    for path in (asset_path(root,'models/audio-tools/ffmpeg.exe'),asset_path(root,'models/stem-separation/ffmpeg.exe'),asset_path(root,'data/components/ffmpeg/ffmpeg.exe'),root/'ffmpeg/bin/ffmpeg.exe'):
         if path.is_file():return str(path)
     return shutil.which('ffmpeg')
 

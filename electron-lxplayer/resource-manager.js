@@ -40,7 +40,11 @@ class ResourceManager {
     if (signal?.aborted) throw Error('安装已取消。');
     if (this.snapshot()[id]?.ready) { delete this.last[id]; return {ok: true}; }
     const exe = ['backend/api.exe', 'build/backend/api/api.exe'].map(file => path.join(this.root, file)).find(file => fs.existsSync(file));
-    if (!exe) throw Error('资源安装器缺失，请使用完整ZIP便携版。');
+    const launcher = path.join(this.root, 'backend_launcher.py');
+    const python = process.env.KUMIKO_PYTHON || path.join(this.root, '.venv/Scripts/python.exe');
+    if (!exe && !(fs.existsSync(launcher) && fs.existsSync(python))) throw Error('资源安装器缺失，请检查程序或开发环境。');
+    const command = exe || python;
+    const args = exe ? ['--install-resources', id] : ['-X', 'utf8', launcher, '--install-resources', id];
     const op = {id, progress: {phase: 'prepare'}, cancelled: false, child: null, closed: null, killing: null};
     this.operation = op;
     const send = value => {
@@ -51,7 +55,7 @@ class ResourceManager {
     };
     let pending = '', stderr = '';
     try {
-      const child = op.child = this.spawnProcess(exe, ['--install-resources', id], {
+      const child = op.child = this.spawnProcess(command, args, {
         cwd: this.root, windowsHide: true,
         env: {...process.env, KUMIKO_APP_HOME: this.root, KUMIKO_DATA_DIR: this.dataDir, PYTHONIOENCODING: 'utf-8'},
         stdio: ['ignore', 'pipe', 'pipe'],

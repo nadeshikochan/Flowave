@@ -8629,7 +8629,7 @@ const utilityMethods = {
     this.setView("settings");
     this.settingsTab = id;
     if (id === "storage") this.loadDataLocations();
-    if (id === 'features') this.loadWorkspaces();
+    if (id === 'storage') this.loadWorkspaces();
     if (id === "song-info") this.openSongInfoBatchSettings();
     this.$nextTick(() => {
       if (generation !== this.settingsNavigationGeneration || this.view !== 'settings' || this.settingsTab !== id) return;
