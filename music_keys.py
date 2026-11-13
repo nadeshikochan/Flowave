@@ -58,13 +58,34 @@ def list_audio_files(folder: Path) -> List[Path]:
     return [p for p in folder.rglob("*") if p.suffix.lower() in exts]
 
 
+def _song_key_id3(fileobj, **kwargs):
+    from mutagen.easyid3 import EasyID3
+    from mutagen.id3 import Frames, Frames_2_2
+
+    # The key needs three text frames. Skip decoding pictures and embedded lyrics.
+    frames = {name: Frames[name] for name in ("TIT2", "TPE1", "TPE2")}
+    frames.update({name: Frames_2_2[name] for name in ("TT2", "TP1", "TP2")})
+    tags = EasyID3()
+    tags.load(fileobj, known_frames=frames, **kwargs)
+    return tags
+
+
 def get_song_key(path: Path) -> str:
     artist = ""
     title = ""
     try:
         from mutagen import File as MutagenFile
 
-        mf = MutagenFile(str(path), easy=True)
+        if path.suffix.lower() == ".mp3":
+            from mutagen.mp3 import EasyMP3
+
+            try:
+                mf = EasyMP3(str(path), ID3=_song_key_id3)
+            except Exception:
+                # Preserve format sniffing for mislabeled files and legacy errors.
+                mf = MutagenFile(str(path), easy=True)
+        else:
+            mf = MutagenFile(str(path), easy=True)
         if mf:
             arts = mf.get("artist") or mf.get("albumartist")
             if arts:

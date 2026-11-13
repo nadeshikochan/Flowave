@@ -526,7 +526,7 @@ def _scan_local_audio_snapshot(scan_dir: Path, known_keys: Optional[Dict[str, st
 def _build_track_identity_observations_locked() -> List[TrackObservation]:
     key_counts: Dict[str, int] = {}
     for path in state["audio_files"]:
-        song_key = str(state["path_key_cache"].get(str(path)) or "")
+        song_key = str(state["path_key_cache"].get(str(path)) or state["local_path_to_key"].get(str(path)) or "")
         if song_key:
             key_counts[song_key] = key_counts.get(song_key, 0) + 1
     records_by_path = _resource_records_by_path_locked()
@@ -537,7 +537,7 @@ def _build_track_identity_observations_locked() -> List[TrackObservation]:
     observations: List[TrackObservation] = []
     for path in state["audio_files"]:
         path_str = str(path)
-        song_key = str(state["path_key_cache"].get(path_str) or "")
+        song_key = str(state["path_key_cache"].get(path_str) or state["local_path_to_key"].get(path_str) or "")
         try:
             stat = Path(path).stat()
             size = int(stat.st_size)
@@ -1353,12 +1353,22 @@ def _load_startup_sync_state() -> Dict[str, Any]:
         return {}
 
 
-def _save_startup_sync_state(signature: Dict[str, Any]) -> None:
+def _save_startup_sync_state(signature: Dict[str, Any], path_keys: Dict[str, str]) -> None:
+    temporary = None
     try:
         ensure_runtime_dirs()
-        STARTUP_SYNC_STATE_PATH.write_text(json.dumps(signature, ensure_ascii=False, indent=2), encoding="utf-8")
+        payload = {"signature": signature, "path_keys": path_keys}
+        temporary = STARTUP_SYNC_STATE_PATH.with_name(f".{STARTUP_SYNC_STATE_PATH.name}.{uuid.uuid4().hex}.tmp")
+        temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(temporary, STARTUP_SYNC_STATE_PATH)
     except Exception as exc:
         print(f"[startup][warn] save sync state failed: {exc}")
+    finally:
+        if temporary is not None:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 def _rebuild_local_index_cache_from_existing_map_locked():
@@ -1402,8 +1412,15 @@ def _sync_local_view_locked(
         sig_t0 = time.perf_counter()
         signature = _startup_sync_signature(target_dir, state["audio_files"])
         previous = _load_startup_sync_state()
-        if previous == signature:
+        saved_keys = previous.get("path_keys")
+        if (
+            previous.get("signature") == signature
+            and isinstance(saved_keys, dict)
+            and all(isinstance(saved_keys.get(str(path)), str) and saved_keys[str(path)]
+                    for path in state["audio_files"])
+        ):
             cache_t0 = time.perf_counter()
+            state["path_key_cache"] = {str(path): saved_keys[str(path)] for path in state["audio_files"]}
             _reconcile_track_identities_locked(
                 relocation_resource_ids=relocation_resource_ids,
             )
@@ -1417,8 +1434,11 @@ def _sync_local_view_locked(
             if state["recommendation_rate_meta"].get("status") in {"missing", "stale"}:
                 threading.Thread(target=lambda: _maybe_start_recommendation_rate_rebuild("startup-unchanged"), daemon=True).start()
             return relocated
+        # A changed/incomplete signature cannot vouch for any old tag mapping.
+        state["path_key_cache"] = {}
     relocated = 0
     cache_t0 = time.perf_counter()
+    _current_local_track_map_locked()
     _reconcile_track_identities_locked(
         relocation_resource_ids=relocation_resource_ids,
     )
@@ -1437,7 +1457,9 @@ def _sync_local_view_locked(
     if state["recommendation_rate_meta"].get("status") in {"missing", "stale"}:
         threading.Thread(target=lambda: _maybe_start_recommendation_rate_rebuild(trace_label or "local-view"), daemon=True).start()
     if skip_heavy_if_unchanged and signature is not None:
-        _save_startup_sync_state(signature)
+        signature["local_tracks"] = _file_stamp(LOCAL_TRACKS_PATH)
+        signature["local_embeddings"] = _file_stamp(LOCAL_EMBEDDINGS_PATH)
+        _save_startup_sync_state(signature, dict(state["local_path_to_key"]))
     return relocated
 
 
@@ -2639,7 +2661,7 @@ def rescan_tracks(req: Optional[TracksRescanRequest] = None):
             ),
         }
 
-    _save_startup_sync_state(signature)
+    _save_startup_sync_state(signature, path_key_cache)
     return result
 
 

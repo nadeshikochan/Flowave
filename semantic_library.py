@@ -13,10 +13,26 @@ from music_analysis_store import AnalysisStore, recipe_version
 from analysis_visibility import visible_groups
 from recipe_compatibility import equivalent_recipes, accepted_recipes
 
+try:
+    from pydantic_core import from_json as _fast_from_json
+except ImportError:
+    _fast_from_json = None
 
-def aggregate_vector(payload_text, blob):
+
+def _decode_payload(payload):
+    if _fast_from_json is not None:
+        try:
+            return _fast_from_json(payload, cache_strings='keys', allow_partial=False, allow_inf_nan=True)
+        except (ValueError, TypeError):
+            # Retain stdlib handling of legacy escapes and older core versions.
+            pass
+    return json.loads(payload)
+
+
+def aggregate_vector(payload, blob):
     """Same full-coverage/time-weighted contract as the selected seed verifier."""
-    payload = json.loads(payload_text)
+    if isinstance(payload, (str, bytes, bytearray)):
+        payload = _decode_payload(payload)
     segments = payload['segments']
     duration = float(payload['duration'])
     matrix = np.load(io.BytesIO(blob), allow_pickle=False)
@@ -149,12 +165,13 @@ class SemanticLibrary:
                     if rid not in wanted or sources[rid] != source or version not in accepted or not blob:
                         continue
                     try:
+                        payload = _decode_payload(payload)
                         vector = aggregate_vector(payload, blob)
                     except (ValueError, TypeError, KeyError, EOFError, IndexError, AttributeError):
                         continue
                     if vector is not None:
                         vectors[rid] = vector
-                        raw_tags = json.loads(payload).get('tags')
+                        raw_tags = payload.get('tags')
                         groups = visible_groups(raw_tags if isinstance(raw_tags, dict) else {})
                         profile = {kind: {str(t['id']): min(1., float(t['score'])) for t in rows[:8] if t.get('id')}
                                    for kind, rows in groups.items()}
