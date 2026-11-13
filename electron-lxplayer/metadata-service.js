@@ -212,12 +212,12 @@ const cacheReady = (async () => {
     if (!fs.existsSync(CACHE_PATH)) return;
     const raw = await fsp.readFile(CACHE_PATH, "utf-8");
     const obj = JSON.parse(raw);
-    const entries = readCacheEntries(obj);
-    Object.entries(entries).forEach(([k, v]) => {
-      if (typeof k === "string" && v && typeof v === "object" && !Array.isArray(v)) {
-        cache.set(k, v);
-      }
-    });
+    const entries = Object.entries(readCacheEntries(obj));
+    for (let i = 0; i < entries.length; i++) {
+      const [k, v] = entries[i];
+      if (typeof k === "string" && v && typeof v === "object" && !Array.isArray(v)) cache.set(k, v);
+      if ((i + 1) % 64 === 0) await new Promise(resolve => setImmediate(resolve));
+    }
   } catch (_) {
     // ignore
   }

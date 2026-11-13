@@ -1,4 +1,4 @@
-"""Disposable, read-only MuQ aggregate index. Never loads audio or neural models."""
+"""Validated MuQ aggregate cache. Query-index setup belongs to AnalysisStore; no model loading."""
 from contextlib import closing
 import io
 import hashlib
@@ -9,7 +9,7 @@ import threading
 import time
 
 import numpy as np
-from music_analysis_store import recipe_version
+from music_analysis_store import AnalysisStore, recipe_version
 from analysis_visibility import visible_groups
 from recipe_compatibility import equivalent_recipes, accepted_recipes
 
@@ -88,6 +88,11 @@ class SemanticLibrary:
             self.warming = True
         def run():
             try:
+                try:
+                    AnalysisStore(self.database).prepare_query_index()
+                except (OSError, sqlite3.DatabaseError):
+                    # Optional schema acceleration must not disable a readable store.
+                    pass
                 self.get(entries)
             finally:
                 with self.lock:

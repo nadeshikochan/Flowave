@@ -118,6 +118,13 @@ def recommend(index, current, context, recent, history, protected, blocked, conf
             details['semantic_conflicts']=[*conflicts,*details.get('semantic_conflicts',[])]
             return rows,details
     keys, paths, matrix, positions = view
+    mert_queries = memo.setdefault('mert_queries', {})
+    def mert_scores(query):
+        if query not in mert_queries:
+            mert_queries[query] = matrix @ matrix[positions[query]]
+        return mert_queries[query]
+    if current in positions:
+        memo.setdefault('local', mert_scores(current))
     semantic_conflicts=[]
     if session is not None and semantic:
         # Near-identical MERT recordings with strongly conflicting MuQ are uncertain,
@@ -125,7 +132,7 @@ def recommend(index, current, context, recent, history, protected, blocked, conf
         suspect=set()
         for query in dict.fromkeys([current,*context]):
             if query not in positions or query not in semantic:continue
-            near=matrix@matrix[positions[query]]
+            near=mert_scores(query)
             for i in np.flatnonzero(near>=.9999):
                 peer=keys[i]
                 if peer==query or peer not in semantic:continue
@@ -140,11 +147,13 @@ def recommend(index, current, context, recent, history, protected, blocked, conf
             # Do not immediately cycle through the disputed near-duplicate recordings.
             protected=list(dict.fromkeys([*protected,*(paths[positions[k]] for k in suspect if k!=current)]))
     natural = session is not None and mode == 'continue'
-    semantic_peaks = semantic_reference_peaks(keys, semantic or {}, [current, *context]) if natural else {}
+    if natural and 'semantic_peaks' not in memo:
+        memo['semantic_peaks'] = semantic_reference_peaks(keys, semantic or {}, [current, *context])
+    semantic_peaks = memo.get('semantic_peaks', {}) if natural else {}
     floors = [base]
     unavailable_set = set(unavailable)
     if natural and current in positions:
-        scores = matrix @ matrix[positions[current]]
+        scores = mert_scores(current)
         # Only bands gaining an actual candidate need evaluation; all intervening bands are identical.
         for i,k in enumerate(keys):
             if k == current or paths[i] in unavailable_set or scores[i] < 0:

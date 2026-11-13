@@ -2161,7 +2161,7 @@ const lyricMethods = {
     this._karaokeRenderedProgress = -1;
   },
   shouldRunKaraokeProgressTicker() {
-    return !!(this.showLyric && this.lyricKaraoke && this.lyricHasTimeline && this.lyricLines.length
+    return !!(!document.hidden && this.showLyric && this.lyricKaraoke && this.lyricHasTimeline && this.lyricLines.length
       && this.isPlaying && !audio.paused && !audio.seeking && !audio.stretchWaiting && Number(audio.readyState) >= 3);
   },
   stopKaraokeProgressTicker() {
@@ -2574,7 +2574,6 @@ const lyricMethods = {
   },
   sendLyricOverlay() {
     if (!window.lxEnv) return;
-    const settings = this.getLyricOverlaySettingsPayload();
     if (!this.desktopLyricEnabled) {
       if (this.desktopLyricOpen && typeof window.lxEnv.closeLyricOverlay === "function") {
         window.lxEnv.closeLyricOverlay().catch(() => {});
@@ -2590,6 +2589,7 @@ const lyricMethods = {
       this.desktopLyricOpen = false;
       return;
     }
+    const settings = this.getLyricOverlaySettingsPayload();
     const update = this.buildLyricOverlayPayload();
     const openPayload = { settings, update, locked: this.desktopLyricLocked };
     if (!this.desktopLyricOpen && typeof window.lxEnv.openLyricOverlay === "function") {
@@ -4481,7 +4481,7 @@ const dataMethods = {
     };
   },
   rebuildTrackLookup() {
-    this.trackByPath = new Map((this.tracks || []).map((t) => [t.path, t]));
+    this.trackByPath = markSearchRaw(new Map((this.tracks || []).map((t) => [t.path, t])));
     this.searchDocs = markSearchRaw((this.tracks || []).map((t) => t._searchDoc).filter(Boolean));
     this.searchFuse = markSearchRaw(window.KumikoSearch?.createFuse?.(this.searchDocs) || null);
     this.searchIndexReady = !!this.searchDocs.length;
@@ -4558,7 +4558,7 @@ const dataMethods = {
     // 后台补齐只更新下一份索引；已有完整索引继续提供同一种搜索语义。
     this.searchIndexReady = !!this.searchDocs.length;
     this.searchIndexBuilding = true;
-    this.trackByPath = new Map(tracks.map((t) => [t.path, t]));
+    this.trackByPath = markSearchRaw(new Map(tracks.map((t) => [t.path, t])));
     let index = 0;
     const chunkSize = 120;
     const buildChunk = () => {
@@ -4680,20 +4680,23 @@ const dataMethods = {
     }
   },
   rebuildTrackIdentityMaps() {
-    this.trackByResourceId = new Map();
-    this.trackResourcesBySongKey = new Map();
+    const byResourceId = new Map();
+    const bySongKey = new Map();
     (this.tracks || []).forEach((track) => {
       const resourceId = String(track?.resourceId || "");
       const songKey = String(track?.songKey || "");
-      if (resourceId && !this.trackByResourceId.has(resourceId)) {
-        this.trackByResourceId.set(resourceId, track);
+      if (resourceId && !byResourceId.has(resourceId)) {
+        byResourceId.set(resourceId, track);
       }
       if (songKey) {
-        const list = this.trackResourcesBySongKey.get(songKey) || [];
+        const list = bySongKey.get(songKey) || [];
         list.push(track);
-        this.trackResourcesBySongKey.set(songKey, list);
+        bySongKey.set(songKey, list);
       }
     });
+    // Lookup containers are replaced together. Their track values stay reactive.
+    this.trackByResourceId = markSearchRaw(byResourceId);
+    this.trackResourcesBySongKey = markSearchRaw(bySongKey);
   },
   makeTrackReference(path, previous = null) {
     const trackPath = String(path || previous?.path || "");
@@ -4917,7 +4920,7 @@ const dataMethods = {
         _metaLoaded: sameResourceTagChanged ? false : !!previous?._metaLoaded,
       };
     }).map((t) => this.prepareTrackForList(t, { buildDoc: false }));
-    this.trackByPath = new Map(this.tracks.map((t) => [t.path, t]));
+    this.trackByPath = markSearchRaw(new Map(this.tracks.map((t) => [t.path, t])));
     this.soundMapLibraryRevision++;
     if(this.useRecommend)void this.prepareRecommendationFeatures();
     this._localMetadataRevision = Number(this._localMetadataRevision || 0) + 1;
@@ -5088,7 +5091,7 @@ const dataMethods = {
         contentFingerprint: String(t.contentFingerprint || ""),
         _metaLoaded: !!t._metaLoaded,
       })).map((t) => this.prepareTrackForList(t, { buildDoc: false }));
-      this.trackByPath = new Map(this.tracks.map((t) => [t.path, t]));
+      this.trackByPath = markSearchRaw(new Map(this.tracks.map((t) => [t.path, t])));
       this._localMetadataRevision = Number(this._localMetadataRevision || 0) + 1;
       this.rebuildTrackIdentityMaps();
       this.searchDocs = [];
@@ -9495,20 +9498,22 @@ const utilityMethods = {
     return hist[curIdx - 1] || "";
   },
   buildMetadataFillPlan() {
+    const pending = this.tracks.filter(track => track && !track._metaLoaded);
+    if (!pending.length) return { priority: [], background: [] };
     const priority = [];
     const seen = new Set();
     const appendTrack = (track) => {
       const path = String(track?.path || "");
       if (!path || seen.has(path)) return;
       const current = this.trackByPath.get(path);
-      if (!current) return;
+      if (!current || current._metaLoaded) return;
       seen.add(path);
       priority.push(current);
     };
     appendTrack(this.trackByPath.get(this.currentPath));
 
     if (this.view !== "library") {
-      const background = this.tracks.filter((track) => !seen.has(String(track?.path || "")));
+      const background = pending.filter((track) => !seen.has(String(track?.path || "")));
       return { priority, background };
     }
 
@@ -9528,7 +9533,7 @@ const utilityMethods = {
     const visibleStart = Math.max(0, Math.floor((Number(this.libraryScrollTop) || 0) / rowHeight) - 2);
     const visibleCount = Math.max(20, viewportRows + 8);
     visibleTracks.slice(visibleStart, visibleStart + visibleCount).forEach(appendTrack);
-    const background = this.tracks.filter((track) => !seen.has(String(track?.path || "")));
+    const background = pending.filter((track) => !seen.has(String(track?.path || "")));
     return { priority, background };
   },
   async fillMetadataTargets(
@@ -10149,7 +10154,10 @@ function mountedHook() {
     this.updateLyricHighlight(this.isAudioEventForCommittedSource()?Number(audio.currentTime)||0:this.currentTime,{source:'output-calibration'});
   };
   window.addEventListener('flowave-output-calibration',this._onLyricOutputCalibration);
-  this.outputCalibrationVisibility=()=>this.syncOutputCalibrationConsumers();
+  this.outputCalibrationVisibility=()=>{
+    this.syncOutputCalibrationConsumers();
+    this.syncKaraokeProgressTicker();
+  };
   document.addEventListener('visibilitychange',this.outputCalibrationVisibility);
   this.syncOutputCalibrationConsumers();
   this._startupSplashStartedAt = Date.now();
@@ -10684,9 +10692,9 @@ const kumikoVueApp = createApp({
         download_dir: "",
       },
       tracks: [], // [{path,name,artist,album,duration,durationText}]
-      trackByPath: new Map(),
-      trackByResourceId: new Map(),
-      trackResourcesBySongKey: new Map(),
+      trackByPath: markSearchRaw(new Map()),
+      trackByResourceId: markSearchRaw(new Map()),
+      trackResourcesBySongKey: markSearchRaw(new Map()),
       _localMetadataRevision: 0,
       _localTrackMatchIndex: null,
       searchDocs: [],

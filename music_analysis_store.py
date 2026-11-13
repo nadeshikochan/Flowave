@@ -1,5 +1,5 @@
 """Small transactional result database. No audio/model imports in the API process."""
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from pathlib import Path
 from resource_runtime import asset_path, source_path
 import json,sqlite3,time,hashlib
@@ -22,11 +22,25 @@ class AnalysisStore:
         try:
             con.execute('PRAGMA journal_mode=WAL')
             con.execute('CREATE TABLE IF NOT EXISTS results (id TEXT PRIMARY KEY, source TEXT NOT NULL, recipe TEXT NOT NULL, summary TEXT NOT NULL, payload TEXT NOT NULL, vectors BLOB, updated REAL NOT NULL)')
+            self._ensure_query_index(con)
             con.execute('CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY CHECK(id=1), payload TEXT NOT NULL)')
             con.execute('CREATE TABLE IF NOT EXISTS recipe_compatibility (old TEXT PRIMARY KEY, new TEXT NOT NULL)')
             yield con;con.commit()
         except Exception:con.rollback();raise
         finally:con.close()
+    @staticmethod
+    def _ensure_query_index(con):
+        # A covering index keeps freshness checks off the large payload/blob pages.
+        columns = {row[1] for row in con.execute('PRAGMA table_info(results)')}
+        if {'id', 'source', 'recipe', 'updated'} <= columns:
+            con.execute('CREATE INDEX IF NOT EXISTS results_metadata_v1 ON results(id,source,recipe,updated)')
+    def prepare_query_index(self):
+        """Upgrade an existing store for lightweight consumers without creating an empty DB."""
+        if not self.path.is_file():
+            return
+        with closing(sqlite3.connect(self.path.resolve().as_uri()+'?mode=rw', uri=True, timeout=5)) as con:
+            self._ensure_query_index(con)
+            con.commit()
     def task(self,value=None):
         with self.connect() as con:
             if value is not None:con.execute('INSERT OR REPLACE INTO tasks VALUES (1,?)',(json.dumps(value,ensure_ascii=False),))
