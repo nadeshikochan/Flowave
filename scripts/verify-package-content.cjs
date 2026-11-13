@@ -38,7 +38,7 @@ if (archive) {
   const asar = require(require.resolve('@electron/asar', {paths: [path.join(root, 'electron-lxplayer')]}));
   const names = new Set(asar.listPackage(archive).map(file => file.replaceAll('\\', '/').replace(/^\//, '')));
   for (const bundle of currentBundles) {
-    if (!asar.extractFile(archive, bundle.relative).equals(bundle.bytes))
+    if (!asar.extractFile(archive, path.normalize(bundle.relative)).equals(bundle.bytes))
       throw Error('Packaged official module differs from verified source: ' + bundle.relative);
   }
   const entry = JSON.parse(asar.extractFile(archive, 'package.json').toString('utf8')).main;
