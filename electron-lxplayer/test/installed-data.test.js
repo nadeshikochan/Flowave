@@ -70,8 +70,8 @@ test('installer copies and verifies old data before publishing the location and 
   fs.writeFileSync(path.join(legacy, 'library/stems/track.bin'), Buffer.alloc(4000, 7));
   const pointer = path.join(local, 'Flowave/data-location.txt');
   const shell = path.join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe');
-  const run = (action, destination = target) => execFileSync(shell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
-    '-File', path.join(repo, 'packaging/windows/data-location.ps1'), '-Action', action, '-DataDir', destination, '-InstallDir', program],
+  const run = (action, destination = target, mode = 'Copy') => execFileSync(shell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+    '-File', path.join(repo, 'packaging/windows/data-location.ps1'), '-Action', action, '-DataDir', destination, '-InstallDir', program, '-DataMode', mode],
   {env:{...process.env, LOCALAPPDATA:local}, windowsHide:true, stdio:'pipe', encoding:'utf8'});
   run('Prepare');
   assert.equal(fs.existsSync(pointer), false);
@@ -79,8 +79,8 @@ test('installer copies and verifies old data before publishing the location and 
   run('Commit');
   assert.equal(resolveDataDir(program, {mode:'installed', localAppData:local}), target);
   assert.equal(fs.readFileSync(path.join(legacy, 'config/listening_history.json'), 'utf8'), '{"listening":true}');
-  run('Prepare');
-  run('Commit');
+  run('Prepare', target, 'Existing');
+  run('Commit', target, 'Existing');
   const unknown = path.join(temp, 'unknown');
   fs.mkdirSync(unknown);
   fs.writeFileSync(path.join(unknown, 'keep.txt'), 'keep');
@@ -88,6 +88,35 @@ test('installer copies and verifies old data before publishing the location and 
   assert.equal(fs.readFileSync(path.join(unknown, 'keep.txt'), 'utf8'), 'keep');
   assert.equal(resolveDataDir(program, {mode:'installed', localAppData:local}), target);
   assert.throws(() => run('Prepare', path.join(program, 'data')));
+});
+
+test('new installation uses an empty workspace despite old data and an unavailable saved location', t => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'flowave-fresh-install-'));
+  t.after(() => fs.rmSync(temp, {recursive:true, force:true}));
+  const repo = path.resolve(__dirname, '../..');
+  const local = path.join(temp, 'local'), legacy = path.join(local, 'Flowave/data');
+  const pointer = path.join(local, 'Flowave/data-location.txt');
+  const program = path.join(temp, 'program'), target = path.join(temp, '全新工作区');
+  fs.mkdirSync(path.join(legacy, 'config'), {recursive:true});
+  fs.writeFileSync(path.join(legacy, 'config/old.json'), 'old settings');
+  fs.writeFileSync(pointer, path.join(temp, 'unavailable-disk'));
+  const run = (action, destination=target, mode='New') => execFileSync('powershell.exe', [
+    '-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',path.join(repo,'packaging/windows/data-location.ps1'),
+    '-Action',action,'-DataDir',destination,'-InstallDir',program,'-DataMode',mode,
+  ], {env:{...process.env,LOCALAPPDATA:local},windowsHide:true,encoding:'utf8',stdio:'pipe'});
+  run('Prepare');
+  assert.equal(fs.readFileSync(pointer,'utf8'),path.join(temp,'unavailable-disk'));
+  assert.deepEqual(fs.readdirSync(target),['.flowave-data.json']);
+  run('Commit');
+  assert.equal(fs.readFileSync(pointer,'utf8').replace(/^\uFEFF/,''),target);
+  assert.equal(fs.readFileSync(path.join(legacy,'config/old.json'),'utf8'),'old settings');
+  const unfinished = path.join(temp, 'interrupted');
+  run('Prepare',unfinished);
+  fs.writeFileSync(path.join(unfinished,'unexpected.txt'),'external data');
+  assert.throws(()=>run('Commit',unfinished));
+  assert.throws(()=>run('Prepare',unfinished));
+  assert.throws(()=>run('Prepare',legacy));
+  assert.equal(fs.readFileSync(pointer,'utf8').replace(/^\uFEFF/,''),target);
 });
 
 test('installed resource readiness reads the external data root', t => {

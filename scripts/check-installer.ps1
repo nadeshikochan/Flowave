@@ -19,7 +19,8 @@ try {
   $env:LOCALAPPDATA = Join-Path $fixture 'local-app-data'
   [IO.Directory]::CreateDirectory($fixture) | Out-Null
   function InstallTo([string]$target, [int]$expected = 0) {
-    $process = Start-Process -FilePath $Installer -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/CURRENTUSER',('/DIR="'+$target+'"'),('/DATADIR="'+$profile+'"')) -PassThru -Wait -WindowStyle Hidden
+    $mode = if (Test-Path -LiteralPath $profile) { 'Existing' } else { 'New' }
+    $process = Start-Process -FilePath $Installer -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/CURRENTUSER',('/DATAMODE='+$mode),('/DIR="'+$target+'"'),('/DATADIR="'+$profile+'"')) -PassThru -Wait -WindowStyle Hidden
     if ($process.ExitCode -ne $expected) { throw "Installer returned $($process.ExitCode), expected $expected" }
   }
   $blocked = Join-Path $fixture 'portable-with-data'

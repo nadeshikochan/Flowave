@@ -43,9 +43,11 @@ Name: "chinesesimp"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
-Source: "{#SourceDir}\*"; DestDir: "{app}"; Excludes: "resources\uninstall-data.ps1,resources\storage-layout.json"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourceDir}\*"; DestDir: "{app}"; Excludes: "resources\uninstall-data.ps1,resources\storage-layout.json,resources\installer-check.ps1,resources\data-location.ps1"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "uninstall-data.ps1"; DestDir: "{app}\resources"; Flags: ignoreversion
 Source: "..\..\resources\storage-layout.json"; DestDir: "{app}\resources"; Flags: ignoreversion
+Source: "installer-check.ps1"; DestDir: "{app}\resources"; Flags: ignoreversion
+Source: "data-location.ps1"; DestDir: "{app}\resources"; Flags: ignoreversion
 Source: "installer-check.ps1"; Flags: dontcopy
 Source: "data-location.ps1"; Flags: dontcopy
 
@@ -58,7 +60,9 @@ Type: filesandordirs; Name: "{app}\backend\source\__pycache__"
 
 [Code]
 var
+  DataModePage: TInputOptionWizardPage;
   DataPage: TInputDirWizardPage;
+  PreviousDataDirectory: String;
   StorageProgress: TOutputProgressWizardPage;
   DataPrepared: Boolean;
   RemoveDataGroups: String;
@@ -83,21 +87,51 @@ begin
 end;
 
 procedure InitializeWizard;
+var
+  Mode, RegisteredDir: String;
 begin
-  DataPage := CreateInputDirPage(wpSelectDir, '软件数据存储位置',
+  PreviousDataDirectory := SavedDataDirectory;
+  if (PreviousDataDirectory = '') and DirExists(AddBackslash(ExtractFileDir(LocationFile)) + 'data') then
+    PreviousDataDirectory := AddBackslash(ExtractFileDir(LocationFile)) + 'data';
+  DataModePage := CreateInputOptionPage(wpSelectDir, '软件数据',
+    '选择全新开始，或继续使用已有工作区。',
+    '工作区保存设置、歌单、记录、插件、模型、索引和处理结果。' + #13#10
+    + '检测到的旧目录：' + PreviousDataDirectory, True, False);
+  DataModePage.Add('创建全新工作区');
+  DataModePage.Add('继续使用旧目录，就地读取已有内容');
+  DataModePage.Add('复制旧数据到新目录，校验后切换');
+  DataModePage.SelectedValueIndex := 0;
+  if (PreviousDataDirectory <> '') and RegQueryStringValue(HKCU,
+    'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#ApplicationId}_is1', 'InstallLocation', RegisteredDir) then
+    DataModePage.SelectedValueIndex := 1;
+  Mode := ExpandConstant('{param:DATAMODE|}');
+  if CompareText(Mode, 'New') = 0 then DataModePage.SelectedValueIndex := 0
+  else if CompareText(Mode, 'Existing') = 0 then DataModePage.SelectedValueIndex := 1
+  else if CompareText(Mode, 'Copy') = 0 then DataModePage.SelectedValueIndex := 2
+  else if Mode <> '' then RaiseException('DATAMODE须为New、Existing或Copy。');
+  DataPage := CreateInputDirPage(DataModePage.ID, '软件数据存储位置',
     '请选择空间充足的数据文件夹，建议使用非系统盘。',
     '这里将保存听歌记录、设置、歌单、插件、模型和运行环境、曲库索引、分析结果、分轨、听歌轨迹、下载与缓存。' + #13#10#13#10
-    + '占用会随安装功能和曲库规模增长。卸载软件保留此目录，请妥善备份。已有数据更换位置时会先复制并校验，原文件保留供核对。',
+    + '占用会随安装功能和曲库规模增长。卸载默认保留此目录。全新工作区请选择空文件夹；复制迁移仅按上一页明确选择执行。',
     False, 'FlowaveData');
   DataPage.Add('数据文件夹');
   DataPage.Values[0] := ExpandConstant('{param:DATADIR|}');
-  if DataPage.Values[0] = '' then DataPage.Values[0] := SavedDataDirectory;
+  if (DataPage.Values[0] = '') and (DataModePage.SelectedValueIndex = 1) then DataPage.Values[0] := PreviousDataDirectory;
   StorageProgress := CreateOutputProgressPage('准备软件数据', '正在检查数据目录与已有内容。');
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
+  if CurPageID = DataModePage.ID then begin
+    if (DataModePage.SelectedValueIndex <> 0) and (PreviousDataDirectory = '') then begin
+      MsgBox('未检测到旧目录，请选择创建全新工作区。安装后也可在软件中打开其他已有工作区。', mbInformation, MB_OK);
+      Result := False;
+      exit;
+    end;
+    if DataModePage.SelectedValueIndex = 1 then DataPage.Values[0] := PreviousDataDirectory
+    else if CompareText(DataPage.Values[0], PreviousDataDirectory) = 0 then DataPage.Values[0] := '';
+  end;
   if (CurPageID = DataPage.ID) and (Trim(DataPage.Values[0]) = '') then begin
     MsgBox('请选择软件数据存储位置，建议使用空间充足的非系统盘。', mbInformation, MB_OK);
     Result := False;
@@ -106,8 +140,16 @@ end;
 
 function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo, MemoTypeInfo,
   MemoComponentsInfo, MemoGroupInfo, MemoTasksInfo: String): String;
+var
+  ModeLabel: String;
 begin
-  Result := MemoDirInfo + NewLine + NewLine + '软件数据存储位置' + NewLine + Space + DataPage.Values[0]
+  case DataModePage.SelectedValueIndex of
+    1: ModeLabel := '继续使用旧数据目录';
+    2: ModeLabel := '复制旧数据到新目录';
+  else ModeLabel := '创建全新工作区';
+  end;
+  Result := MemoDirInfo + NewLine + NewLine + ModeLabel
+    + NewLine + '软件数据存储位置' + NewLine + Space + DataPage.Values[0]
     + NewLine + Space + '记录、模型、索引、分析、分轨和缓存均存储于此，卸载后保留。'
     + NewLine + NewLine + MemoGroupInfo + NewLine + MemoTasksInfo;
 end;
@@ -115,22 +157,32 @@ end;
 procedure OnStorageProgress(const S: String; const Error, FirstLine: Boolean);
 begin
   Log(S);
-  if not WizardSilent then
-    StorageProgress.SetText(S, '全部校验通过后再切换目录，原数据保留。');
+  if not WizardSilent then begin
+    if DataModePage.SelectedValueIndex = 2 then StorageProgress.SetText(S, '复制校验完成后切换，旧目录保留。')
+    else if DataModePage.SelectedValueIndex = 1 then StorageProgress.SetText(S, '正在确认已有工作区。')
+    else StorageProgress.SetText(S, '正在准备全新工作区。');
+  end;
 end;
 
 function RunStorageAction(const Action: String): String;
 var
   Code: Integer;
   Parameters, ErrorFile: String;
+  Mode: String;
   Lines: TArrayOfString;
 begin
   Result := '';
   ErrorFile := ExpandConstant('{tmp}\flowave-storage-error.txt');
   DeleteFile(ErrorFile);
+  case DataModePage.SelectedValueIndex of
+    1: Mode := 'Existing';
+    2: Mode := 'Copy';
+  else Mode := 'New';
+  end;
   Parameters := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File '
     + AddQuotes(ExpandConstant('{tmp}\data-location.ps1')) + ' -Action ' + Action
     + ' -DataDir ' + AddQuotes(DataPage.Values[0]) + ' -InstallDir ' + AddQuotes(ExpandConstant('{app}'))
+    + ' -DataMode ' + Mode
     + ' -ErrorFile ' + AddQuotes(ErrorFile);
   if not ExecAndLogOutput(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), Parameters,
       '', SW_HIDE, ewWaitUntilTerminated, Code, @OnStorageProgress) then Code := 44;

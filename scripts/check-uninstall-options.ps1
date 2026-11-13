@@ -17,7 +17,8 @@ $originalLocal = $env:LOCALAPPDATA
 $env:LOCALAPPDATA = Join-Path $fixture 'local'
 
 function RunInstaller {
-  $process = Start-Process -FilePath $Installer -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-',('/DIR="'+$program+'"'),('/DATADIR="'+$data+'"')) -PassThru -Wait -WindowStyle Hidden
+  $mode = if (Test-Path -LiteralPath $data) { 'Existing' } else { 'New' }
+  $process = Start-Process -FilePath $Installer -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-',('/DATAMODE='+$mode),('/DIR="'+$program+'"'),('/DATADIR="'+$data+'"')) -PassThru -Wait -WindowStyle Hidden
   if ($process.ExitCode -ne 0) { throw "Install failed: $($process.ExitCode)" }
 }
 function Uninstall([string]$groups = '', [bool]$forget = $false, [bool]$failure = $false) {

@@ -2,6 +2,7 @@
   [Parameter(Mandatory=$true)][ValidateSet('Prepare','Commit')][string]$Action,
   [Parameter(Mandatory=$true)][string]$DataDir,
   [Parameter(Mandatory=$true)][string]$InstallDir,
+  [ValidateSet('New','Existing','Copy')][string]$DataMode = 'New',
   [string]$ErrorFile = ''
 )
 $ErrorActionPreference = 'Stop'
@@ -44,16 +45,19 @@ try {
   $legacy = Join-Path $anchor 'data'
   $target = FullPath $DataDir
   $program = FullPath $InstallDir
-  if ($target.Length -le 3 -or (ContainsPath $program $target) -or (ContainsPath $target $program) -or (ContainsPath $anchor $target) -or (ContainsPath $target $anchor)) {
+  $reuseLegacy = $DataMode -eq 'Existing' -and $target.Equals($legacy, [StringComparison]::OrdinalIgnoreCase)
+  if ($target.Length -le 3 -or (ContainsPath $program $target) -or (ContainsPath $target $program) -or ((ContainsPath $anchor $target) -and -not $reuseLegacy) -or (ContainsPath $target $anchor)) {
     throw '数据目录须与程序和系统应用数据目录分开，请选择独立文件夹。'
   }
   AssertNormalDirectory $target
   $source = ''
-  if (Test-Path -LiteralPath $pointer) {
+  if ($DataMode -ne 'New' -and (Test-Path -LiteralPath $pointer)) {
     $source = FullPath ([IO.File]::ReadAllText($pointer).Trim())
     if (-not (Test-Path -LiteralPath $source -PathType Container)) { throw '原数据目录不可用，请连接原磁盘后重试，避免丢失已有记录。' }
-  } elseif (Test-Path -LiteralPath $legacy -PathType Container) { $source = $legacy }
+  } elseif ($DataMode -ne 'New' -and (Test-Path -LiteralPath $legacy -PathType Container)) { $source = $legacy }
   $same = $source -and $source.Equals($target, [StringComparison]::OrdinalIgnoreCase)
+  if ($DataMode -eq 'Existing' -and -not $same) { throw '继续使用旧数据时请选择原目录。需要复制到新位置时，请明确选择复制迁移。' }
+  if ($DataMode -eq 'Copy' -and (-not $source -or $same)) { throw '复制迁移需要可用的旧数据目录及不同的新目录。' }
   if ($source -and -not $same -and ((ContainsPath $source $target) -or (ContainsPath $target $source))) { throw '新旧数据目录不能互相包含。' }
   $marker = Join-Path $target '.flowave-data.json'
 
@@ -63,9 +67,11 @@ try {
       if (-not (Test-Path -LiteralPath $marker)) { throw '目标目录已有内容，请新建空文件夹，避免覆盖或混合数据。' }
       $state = Get-Content -LiteralPath $marker -Raw -Encoding UTF8 | ConvertFrom-Json
       if ($state.source -ne $source -or $state.anchor -ne $anchor -or $state.state -notin @('copying','prepared')) { throw '目标目录已有内容，请新建空文件夹，避免覆盖或混合数据。' }
+      if ($state.mode -and $state.mode -ne $DataMode) { throw '该目录已有其他安装方式准备的数据，请选择空目录。' }
+      if ($DataMode -eq 'New' -and @(Get-ChildItem -LiteralPath $target -Force | Where-Object { $_.Name -ne '.flowave-data.json' }).Count) { throw '全新工作区需要空文件夹，请选择其他目录。' }
     }
     [IO.Directory]::CreateDirectory($target) | Out-Null
-    WriteAtomic $marker (@{source=$source;anchor=$anchor;state='copying'} | ConvertTo-Json -Compress)
+    WriteAtomic $marker (@{source=$source;anchor=$anchor;mode=$DataMode;state='copying'} | ConvertTo-Json -Compress)
     $files = New-Object 'Collections.Generic.List[IO.FileInfo]'
     $directories = New-Object 'Collections.Generic.Stack[string]'
     if ($source) { AssertNormalDirectory $source; $directories.Push($source) }
@@ -108,12 +114,15 @@ try {
         $clock.Restart()
       }
     }
-    WriteAtomic $marker (@{source=$source;anchor=$anchor;state='prepared'} | ConvertTo-Json -Compress)
-    Write-Output '数据准备完成，安装成功后切换。原文件保留供核对。'
+    WriteAtomic $marker (@{source=$source;anchor=$anchor;mode=$DataMode;state='prepared'} | ConvertTo-Json -Compress)
+    if ($DataMode -eq 'New') { Write-Output '全新工作区已准备，安装成功后启用。' }
+    else { Write-Output '复制校验完成，安装成功后切换。原文件保留供核对。' }
   } else {
     if (-not $same) {
       $state = Get-Content -LiteralPath $marker -Raw -Encoding UTF8 | ConvertFrom-Json
       if ($state.source -ne $source -or $state.anchor -ne $anchor -or $state.state -ne 'prepared') { throw '数据准备尚未完成，保留原目录。' }
+      if ($state.mode -and $state.mode -ne $DataMode) { throw '数据准备方式发生变化，保留原目录。' }
+      if ($DataMode -eq 'New' -and @(Get-ChildItem -LiteralPath $target -Force | Where-Object { $_.Name -ne '.flowave-data.json' }).Count) { throw '全新目录出现了其他内容，请核对后重试。' }
     }
     [IO.Directory]::CreateDirectory($anchor) | Out-Null
     WriteAtomic $pointer $target
