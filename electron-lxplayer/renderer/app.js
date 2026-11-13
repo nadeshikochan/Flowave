@@ -8615,6 +8615,7 @@ const utilityMethods = {
     if (item) this.openSettingsSection(item.page, item.anchor);
   },
   openSettingsSection(id = "overview", anchor = "") {
+    if (id === "features" && anchor === "setting-workspaces") id = "storage";
     const module=window.FlowaveFeatureModules?.viewModule(id);
     if(module && this.featureEnabled?.(module)===false)id='features';
     const catalog = window.FlowaveSettings;
@@ -8627,6 +8628,7 @@ const utilityMethods = {
     if (id === "insights") { this.setView("insights"); return; }
     this.setView("settings");
     this.settingsTab = id;
+    if (id === "storage") this.loadDataLocations();
     if (id === 'features') this.loadWorkspaces();
     if (id === "song-info") this.openSongInfoBatchSettings();
     this.$nextTick(() => {
@@ -9749,8 +9751,8 @@ const utilityMethods = {
 
 const computedProps = {
   settingsSections() { return Object.entries(window.FlowaveSettings.titles).map(([id,title])=>({id,title})); },
-  settingsCategories() { return window.FlowaveSettings.categories.filter(row=>row.id!=='recommend'||this.featureEnabled?.('recommendation')!==false); },
-  settingsTools() { return ['features','folders','insights','history','song-info'].filter(id=>this.featureEnabled?.(window.FlowaveFeatureModules?.viewModule(id) || '')!==false).map(id=>({id,title:window.FlowaveSettings.titles[id]})); },
+  settingsCategories() { return window.FlowaveSettings.categories; },
+  settingsTools() { return ['folders','insights','history','song-info'].filter(id=>this.featureEnabled?.(window.FlowaveFeatureModules?.viewModule(id) || '')!==false).map(id=>({id,title:window.FlowaveSettings.titles[id]})); },
   currentSettingsCategory() { return window.FlowaveSettings.categoryFor(this.settingsTab); },
   currentSettingsPages() { return (this.currentSettingsCategory?.pages || []).map(id=>({id,title:window.FlowaveSettings.titles[id]})); },
   settingsSearchResults() { return window.FlowaveSettings.search(this.settingsOverviewQuery); },

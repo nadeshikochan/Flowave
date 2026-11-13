@@ -125,7 +125,7 @@
         </section>
 
         <div class="nav-footer">
-          <button class="nav-btn" @click="openSettingsSection('features','setting-workspaces')" title="工作区">
+          <button class="nav-btn" @click="openSettingsSection('storage','setting-workspaces')" title="工作区">
             <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M3 7V5h6l2 2h10v12H3Z" /></svg>
             <span>工作区</span>
           </button>
@@ -501,14 +501,8 @@
             <div v-if="settingsOverviewQuery.trim()" class="settings-search-results"><header class="settings-panel-header"><div><h2>搜索设置</h2><p>{{settingsSearchResults.length}} 个结果</p></div><button class="mini" @click="settingsOverviewQuery=''">清除</button></header><button v-for="item in settingsSearchResults" :key="item.id" class="settings-search-result" @click="openSettingsResult(item)"><strong>{{item.title}}</strong><small>{{item.path}}</small></button><p v-if="!settingsSearchResults.length" class="settings-no-match">未找到设置。试试“歌词字号”或“下载目录”。</p></div>
             <div v-show="!settingsOverviewQuery.trim()" class="settings-page-content">
             <section v-if="settingsTab==='features'" class="settings-panel feature-selection-panel" aria-labelledby="feature-selection-title">
-              <header class="settings-panel-header"><div><h2 id="feature-selection-title">功能选装</h2><p>安装会自动准备插件、模型和运行环境，完成后重新打开软件生效。</p></div></header>
-              <section class="settings-card" data-setting-id="setting-workspaces">
-                <div class="settings-card-title"><div><h3>工作区</h3><p>切换会保存当前内容并重新启动软件。</p></div></div>
-                <div class="feature-storage-row" v-if="workspaceState.current"><div><strong>{{workspaceState.current.name}}</strong><code>{{workspaceState.current.path}}</code></div></div>
-                <div class="btns"><button class="mini" :disabled="workspaceBusy || featureSaving" @click="changeWorkspace('create')">新建工作区</button><button class="mini" :disabled="workspaceBusy || featureSaving" @click="changeWorkspace('open')">打开工作区</button></div>
-                <p class="error" role="alert" v-if="workspaceMessage || workspaceState.warning">{{workspaceMessage || workspaceState.warning}}</p>
-                <details class="feature-storage" v-if="workspaceState.recent?.length"><summary>最近打开</summary><div class="feature-storage-row" v-for="space in workspaceState.recent" :key="space.id"><div><strong>{{space.name}}</strong><code>{{space.path}}</code></div><button class="mini" :disabled="workspaceBusy || featureSaving || space.id===workspaceState.current?.id" @click="changeWorkspace('recent',space.id)">{{space.id===workspaceState.current?.id?'当前':'打开'}}</button></div></details>
-              </section>
+              <header class="settings-panel-header"><div><h2 id="feature-selection-title">插件与模型</h2><p>安装会自动准备插件、模型和运行环境，完成后重新打开软件生效。</p></div></header>
+
               <p v-if="featureSelection.error || featureMessage" class="error" role="alert">{{featureSelection.error || featureMessage}}</p>
               <p v-if="featureSelection.restartRequired" class="feature-restart-notice" role="status">选择已保存，完全退出并重新打开软件后生效。</p>
               <section class="feature-install-item" v-for="item in featureCatalog" :key="item.id">
@@ -528,9 +522,21 @@
                   <p v-if="resourceState(item.id).message" role="status" :class="{error:resourceState(item.id).phase==='error'}">{{resourceState(item.id).message}}</p>
                 </details>
               </section>
-              <details class="feature-storage" @toggle="$event.target.open && loadDataLocations()"><summary>数据与存储位置</summary><p>移除插件保留数据。卸载时可分别保留记录与设置、处理成果、模型组件和缓存。下载的音乐及其他工作区保留。手动整理前请完全退出软件及后台。</p><div v-for="location in featureDataLocations" :key="location.id" class="feature-storage-row"><div><strong>{{location.name}}</strong><small>{{location.storageGroup}}<template v-if="location.external"> · 卸载清理保留此外部位置</template></small><small>{{location.note}}</small><code>{{location.path}}</code></div><button class="mini" @click="openFeatureData(location.id)">打开目录</button></div></details>
+
               <p class="feature-data-note">安装自动包含所需资源；下载失败可再次点击继续。移除保留模型、索引、处理结果和记录。</p>
               <p class="feature-data-note">基础播放、搜索、歌单、歌词与音效始终保留。推荐可继续读取已有分析；停用听歌记录后停止累计长期时长与次数。</p>
+            </section>
+            <section v-if="settingsTab==='storage'" class="settings-panel">
+              <header class="settings-panel-header"><h2>工作区与存储</h2><button class="mini" @click="loadDataLocations()">刷新位置</button></header>
+              <p v-if="featureMessage" class="error" role="alert">{{featureMessage}}</p>
+              <section class="settings-card" data-setting-id="setting-workspaces">
+                <div class="settings-card-title"><div><h3>工作区</h3><p>切换会保存当前内容并重新启动软件。</p></div></div>
+                <div class="feature-storage-row" v-if="workspaceState.current"><div><strong>{{workspaceState.current.name}}</strong><code>{{workspaceState.current.path}}</code></div></div>
+                <div class="btns"><button class="mini" :disabled="workspaceBusy || featureSaving" @click="changeWorkspace('create')">新建工作区</button><button class="mini" :disabled="workspaceBusy || featureSaving" @click="changeWorkspace('open')">打开工作区</button></div>
+                <p class="error" role="alert" v-if="workspaceMessage || workspaceState.warning">{{workspaceMessage || workspaceState.warning}}</p>
+                <details class="feature-storage" v-if="workspaceState.recent?.length"><summary>最近打开</summary><div class="feature-storage-row" v-for="space in workspaceState.recent" :key="space.id"><div><strong>{{space.name}}</strong><code>{{space.path}}</code></div><button class="mini" :disabled="workspaceBusy || featureSaving || space.id===workspaceState.current?.id" @click="changeWorkspace('recent',space.id)">{{space.id===workspaceState.current?.id?'当前':'打开'}}</button></div></details>
+              </section>
+              <details open class="feature-storage" data-setting-id="setting-storage-locations" @toggle="$event.target.open && loadDataLocations()"><summary>数据与存储位置</summary><p>移除插件保留数据。卸载时可分别保留记录与设置、处理成果、模型组件和缓存。下载的音乐及其他工作区保留。手动整理前请完全退出软件及后台。</p><div v-for="location in featureDataLocations" :key="location.id" class="feature-storage-row"><div><strong>{{location.name}}</strong><small>{{location.storageGroup}}<template v-if="location.external"> · 卸载清理保留此外部位置</template></small><small>{{location.note}}</small><code>{{location.path}}</code></div><button class="mini" @click="openFeatureData(location.id)">打开目录</button></div></details>
             </section>
             <div v-if="settingsTab==='library-settings'" class="settings-panel"><header class="settings-panel-header"><div><h2>本地音乐</h2></div><button class="mini" @click="refreshSongList" :disabled="loading || audioDirectoryChanged">刷新音乐库</button></header><section class="settings-card" data-setting-id="setting-library-settings-17de1ed2d9">
                 <div class="settings-card-title"><div><h3>音乐文件夹</h3></div><span class="status-pill" :class="{pending: audioDirectoryChanged}">{{ libraryDirectoryStatusLabel }}</span></div>
@@ -816,17 +822,40 @@
             <div v-if="['advanced', 'downloads', 'recommendation'].includes(settingsTab)" class="settings-panel">
               <header class="settings-panel-header">
                 <h2>{{ currentSettingsSectionTitle }}</h2>
-                <span v-if="settingsTab!=='advanced' && ['saving','pending','error'].includes(configSaveState)" class="settings-save-state" :class="configSaveState">{{ configSaveLabel }}</span>
+                <span v-if="['saving','pending','error'].includes(configSaveState)" class="settings-save-state" :class="configSaveState">{{ configSaveLabel }}</span>
               </header>
-              <section v-if="settingsTab==='advanced'" class="settings-card" data-setting-id="setting-advanced-405be21f38">
+              <section v-if="settingsTab==='advanced'" class="settings-card" data-setting-id="setting-recommendation-setup">
+                <div class="settings-card-title"><div><h3>准备歌曲推荐</h3><p>首次使用先安装插件、添加音乐，再更新推荐索引。</p></div></div>
+                <div class="settings-setup-links">
+                  <button class="settings-search-result" @click="openSettingsSection('features')"><strong>安装歌曲推荐插件</strong><small>{{featureEnabled('recommendation') ? '当前已启用，安装与模型管理' : '前往安装或启用，完成后重启软件'}}</small></button>
+                  <button class="settings-search-result" @click="openSettingsSection('library-settings')"><strong>添加音乐文件夹</strong><small>选择本地歌曲所在的目录并应用</small></button>
+                  <button class="settings-search-result" @click="openSettingsSection('recommendation')"><strong>开启连续推荐</strong><small>索引完成后，调整接歌与防重复规则</small></button>
+                </div>
+                <p class="settings-section-note">基础推荐使用 MERT 索引。歌曲分析生成的 MuQ 和标签会补充推荐信息，可在曲库概览处理。</p>
+                <button class="mini" @click="openSettingsSection('insights')">前往曲库分析</button>
+              </section>
+              <section v-if="settingsTab==='advanced'" class="settings-card" data-setting-id="setting-advanced-72ce9b8c3f">
                 <div class="settings-card-title">
                   <div>
-                    <h3>推荐模型</h3>
-                    <p>推荐功能所需的组件与模型。</p>
+                    <h3>推荐索引</h3>
+                    <p>新增音乐后更新索引。任务失败时保留已有索引。</p>
                   </div>
                 </div>
+                <div class="btns">
+                  <button class="mini" @click="refreshSongList" :disabled="loading || audioDirectoryChanged">刷新音乐库</button>
+                  <button class="mini" @click="updateIndex" :disabled="loading || indexTaskRunning || audioDirectoryChanged || !featureEnabled('recommendation')">更新推荐索引</button>
+                  <button class="danger-button" @click="scanIndex(true)" :disabled="loading || indexTaskRunning || audioDirectoryChanged || !featureEnabled('recommendation')">重建推荐索引</button>
+                  <button class="mini" v-if="indexTaskRunning" @click="cancelIndexTask">取消任务</button>
+                </div>
+                <small class="hint library-refresh-message" v-if="libraryRefreshMessage">{{ libraryRefreshMessage }}</small>
+                <p class="hint" role="status" v-if="indexTaskStatus.last_started_at">{{ indexTaskProgressText() }}</p>
+                <p class="hint" role="alert" v-if="!indexTaskRunning && indexTaskStatus.last_ok === false && indexTaskStatus.last_error">{{ indexTaskStatus.last_error }}</p>
+                <progress class="index-task-progress" v-if="indexTaskRunning" aria-label="当前阶段索引进度" :max="indexTaskStatus.progress?.total || 1" :value="indexTaskStatus.progress?.total > 0 ? indexTaskStatus.progress.done : null"></progress>
+              </section>
+              <details v-if="settingsTab==='advanced'" class="settings-card settings-inline-disclosure" data-setting-id="setting-advanced-405be21f38">
+                <summary><strong>模型与自定义位置</strong></summary>
                 <p>推荐插件会自动安装匹配的模型和运行环境。</p>
-                <button class="mini" @click="launchRecommendationInstaller">前往功能选装</button>
+                <button class="mini" @click="launchRecommendationInstaller">前往插件与模型</button>
                 <label class="form-row" data-setting-id="setting-advanced-params-model-local-dir">
                   <span>模型目录</span>
                   <input v-model="params.model.local_dir" placeholder="选择推荐模型文件夹" />
@@ -839,7 +868,7 @@
                     <input v-model="params.model.source" placeholder="m-a-p/MERT-v1-330M" />
                   </label>
                 </details>
-              </section>
+              </details>
               <section v-if="settingsTab==='downloads'" class="settings-card" data-setting-id="setting-downloads-c60e1b1007">
                 <div class="settings-card-title">
                   <div>
@@ -969,24 +998,7 @@
                 <small class="hint" v-if="recommendationRateMessage">{{ recommendationRateMessage }}</small>
                 <small class="hint">记录前忽略为 0 时，从第一次换歌开始统计。</small>
               </details>
-              <section v-if="settingsTab==='advanced'" class="settings-card" data-setting-id="setting-advanced-72ce9b8c3f">
-                <div class="settings-card-title">
-                  <div>
-                    <h3>曲库与索引</h3>
-                    <p>任务失败时保留现有数据。</p>
-                  </div>
-                </div>
-                <div class="btns">
-                  <button class="mini" @click="refreshSongList" :disabled="loading || audioDirectoryChanged">刷新音乐库</button>
-                  <button class="mini" @click="updateIndex" :disabled="loading || indexTaskRunning">更新推荐索引</button>
-                  <button class="danger-button" @click="scanIndex(true)" :disabled="loading || indexTaskRunning">重建推荐索引</button>
-                  <button class="mini" v-if="indexTaskRunning" @click="cancelIndexTask">取消任务</button>
-                </div>
-                <small class="hint library-refresh-message" v-if="libraryRefreshMessage">{{ libraryRefreshMessage }}</small>
-                <p class="hint" role="status" v-if="indexTaskStatus.last_started_at">{{ indexTaskProgressText() }}</p>
-                <p class="hint" role="alert" v-if="!indexTaskRunning && indexTaskStatus.last_ok === false && indexTaskStatus.last_error">{{ indexTaskStatus.last_error }}</p>
-                <progress class="index-task-progress" v-if="indexTaskRunning" aria-label="当前阶段索引进度" :max="indexTaskStatus.progress?.total || 1" :value="indexTaskStatus.progress?.total > 0 ? indexTaskStatus.progress.done : null"></progress>
-              </section>
+
             </div>
 
             <div v-if="settingsTab==='source'" class="settings-panel">
@@ -1280,7 +1292,7 @@
               <section id="manual-playback" class="manual-section">
                 <h4>播放本地音乐</h4>
                 <ul>
-                  <li>在“曲库与在线 / 本地音乐”添加文件夹并应用。</li>
+                  <li>在“音乐库与在线 / 本地音乐”添加文件夹并应用。</li>
                   <li>双击歌曲开始播放。</li>
                   <li>点击底部封面打开歌词。</li>
                 </ul>
@@ -1297,8 +1309,8 @@
               <section id="manual-index" class="manual-section">
                 <h4>启用推荐</h4>
                 <ul>
-                  <li>在“维护与帮助 / 模型与索引”安装组件和模型。</li>
-                  <li>新增歌曲后使用“更新推荐索引”。</li>
+                  <li>在“插件与模型”安装歌曲推荐，完成后重启软件。</li>
+                  <li>在“歌曲推荐 / 准备与索引”更新推荐索引，再在“接歌规则”开启连续推荐。</li>
                   <li>“刷新音乐库”只重新读取音乐目录。</li>
                 </ul>
               </section>
@@ -1314,7 +1326,7 @@
               <section id="manual-lyrics" class="manual-section">
                 <h4>歌词与快捷键</h4>
                 <ul>
-                  <li>在“外观与歌词”调整歌词显示。</li>
+                  <li>在“歌词”调整软件内歌词和桌面歌词。</li>
                   <li>锁定桌面歌词后会点击穿透。</li>
                   <li>快捷键留空时禁用。</li>
                 </ul>
@@ -1323,7 +1335,7 @@
               <section id="manual-history" class="manual-section">
                 <h4>数据与恢复</h4>
                 <ul>
-                  <li>备份或迁移时复制整个程序文件夹。</li>
+                  <li>在“数据与帮助 / 工作区与存储”查看实际位置，完全退出软件后备份整个工作区。</li>
                   <li>“清空统计”和“重置推荐学习”互不影响。</li>
                   <li>媒体键与推荐记录可在“诊断日志”查看。</li>
                 </ul>
