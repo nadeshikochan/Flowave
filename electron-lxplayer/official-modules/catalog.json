@@ -16,7 +16,7 @@
     },
     "recommendation": {
       "name": "歌曲推荐",
-      "latest": "1.0.0",
+      "latest": "1.0.1",
       "releases": [
         {
           "version": "1.0.0",
@@ -24,6 +24,12 @@
           "bundle": "recommendation-1.0.0.fwm",
           "bytes": 134610,
           "url": "https://github.com/nadeshikochan/Flowave/releases/download/plugins-v1.0.0/recommendation-1.0.0.fwm"
+        },
+        {
+          "version": "1.0.1",
+          "sha256": "5a8a3e283bde3ad18bcbebc0aa4061be47ee041ffaa0e83e6c86d41ec3adfad2",
+          "bundle": "recommendation-1.0.1.fwm",
+          "bytes": 137338
         }
       ]
     },

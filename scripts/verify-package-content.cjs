@@ -3,6 +3,23 @@ const fs = require('node:fs'), path = require('node:path'), crypto = require('no
 const root = path.resolve(__dirname, '..');
 const sha = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const catalog = JSON.parse(fs.readFileSync(path.join(root, 'resources/catalog.json'), 'utf8'));
+const moduleCatalog = JSON.parse(fs.readFileSync(path.join(root, 'electron-lxplayer/official-modules/catalog.json'), 'utf8'));
+const definitions = require('../electron-lxplayer/official-module-definitions');
+const { decode } = require('../electron-lxplayer/official-package-store');
+const currentBundles = [];
+for (const [id, definition] of Object.entries(definitions)) {
+  const item = moduleCatalog.packages[id], release = item.releases.find(row => row.version === item.latest);
+  const relative = 'official-modules/packages/' + release.bundle;
+  const bytes = fs.readFileSync(path.join(root, 'electron-lxplayer', relative));
+  const pack = decode(bytes, moduleCatalog);
+  const source = id === 'history' ? path.join(root, 'electron-lxplayer/official-modules/history') : path.join(root, 'electron-lxplayer/renderer');
+  for (const name of [...definition.files, ...definition.optionalFiles || []]) {
+    const expected = fs.readFileSync(path.join(source, name), 'utf8').replace(/\r\n?/g, '\n').replace(/\n*$/, '\n');
+    if (pack.files[name]?.toString('utf8') !== expected)
+      throw Error('Official module contains stale source: ' + id + '/' + name + '; increment its version and rebuild it');
+  }
+  currentBundles.push({ relative, bytes });
+}
 const check = (file, expected) => {
   const full = path.resolve(root, file);
   if (!full.startsWith(root + path.sep) || sha(fs.readFileSync(full)) !== expected) throw Error('Resource input mismatch: ' + file);
@@ -20,6 +37,10 @@ const archive = process.argv[2];
 if (archive) {
   const asar = require(require.resolve('@electron/asar', {paths: [path.join(root, 'electron-lxplayer')]}));
   const names = new Set(asar.listPackage(archive).map(file => file.replaceAll('\\', '/').replace(/^\//, '')));
+  for (const bundle of currentBundles) {
+    if (!asar.extractFile(archive, bundle.relative).equals(bundle.bytes))
+      throw Error('Packaged official module differs from verified source: ' + bundle.relative);
+  }
   const entry = JSON.parse(asar.extractFile(archive, 'package.json').toString('utf8')).main;
   if (typeof entry !== 'string' || !names.has(entry)) throw Error('Missing Electron entry point: ' + entry);
   for (const name of names) {

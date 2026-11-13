@@ -3,7 +3,10 @@ const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypt
 const root=path.resolve(__dirname,'..'),folder=path.join(root,'electron-lxplayer/official-modules');
 const definitions=require('../electron-lxplayer/official-module-definitions'),catalogFile=path.join(folder,'catalog.json');
 const catalog=JSON.parse(fs.readFileSync(catalogFile,'utf8'));
+const selected=process.argv[2];
+if(selected&&!definitions[selected])throw Error('Unknown official module: '+selected);
 for(const [id,definition] of Object.entries(definitions)){
+ if(selected&&id!==selected)continue;
  const manifest=JSON.parse(fs.readFileSync(path.join(folder,id,'manifest.json'),'utf8')),version=manifest.version;
  if(manifest.id!==id||manifest.hostApi!==1||!/^\d+\.\d+\.\d+$/.test(version))throw Error('Invalid official module manifest');
  const source=id==='history'?path.join(folder,id):path.join(root,'electron-lxplayer/renderer');
