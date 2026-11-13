@@ -47,6 +47,9 @@
     }
     async resume() {
       if (!this.Context) return false;
+      clearTimeout(this.idleTimer);
+      // A pending suspend must settle before resume, otherwise it can silence a new play.
+      await this.idleSuspend;
       if (!this.context) {
         const context = new this.Context();
         this.context = context;
@@ -80,7 +83,23 @@
       }
       if (this.context.state !== 'running') await this.context.resume();
       if (this.context.state !== 'running') throw new Error('音频输出暂未就绪，请再次点击播放');
+      clearTimeout(this.idleTimer);
       return true;
+    }
+    hasPlayback() {
+      return this.elements.some(element => !element.paused && !element.ended)
+        || Boolean(this.tail || this.releasingTail)
+        || Boolean(this.externalActive ? this.externalActive() : this.externalMix || this.metronomeMix);
+    }
+    scheduleIdle(delay = 2000) {
+      clearTimeout(this.idleTimer);
+      const context = this.context;
+      if (!context || context.state !== 'running' || this.hasPlayback()) return;
+      this.idleTimer = setTimeout(() => {
+        this.idleTimer = null;
+        if (this.context !== context || context.state !== 'running' || this.hasPlayback()) return;
+        this.idleSuspend = context.suspend().catch(() => {}).finally(() => { this.idleSuspend = null; });
+      }, delay);
     }
     smooth(param, value, seconds = 0.035) {
       const now = this.context.currentTime;
@@ -113,6 +132,7 @@
       const cfg = this.settings;
       const boosted = cfg.enabled && cfg.autoHeadroom && cfg.gains.some(value => value > 0);
       this.smooth(this.peakGuard.ratio, boosted || this.externalMix || this.metronomeMix || Boolean(this.tail || this.releasingTail) ? 20 : 1);
+      this.scheduleIdle();
     }
     setVolume(volume, muted) {
       this.volume = clamp(volume, 0, 1, 0.8); this.muted = Boolean(muted);
@@ -183,7 +203,7 @@
       this.updatePeakProtection();
       this.tailTimer = setTimeout(() => { if (this.tail === outgoing) { this.tail = null; this.release(outgoing); this.updatePeakProtection(); } }, duration * 1000 + 50);
     }
-    dispose() { clearTimeout(this.tailTimer); for (const element of this.elements) this.release(element); this.context?.close().catch(() => {}); }
+    dispose() { clearTimeout(this.idleTimer); clearTimeout(this.tailTimer); for (const element of this.elements) this.release(element); this.context?.close().catch(() => {}); }
   }
   return { frequencies, presets, normalize, waitReady, Engine };
 });

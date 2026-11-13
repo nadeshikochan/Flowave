@@ -3106,6 +3106,24 @@ def prepare_recommendation_features():
     return {'requested': bool(entries)}
 
 
+@app.get('/recommend/revision')
+def recommendation_inputs_revision():
+    """Validate prepared decisions without rescoring or sampling a new song."""
+    with state_lock:
+        cache = state['local_index_cache']
+        entries = list((state.get('local_resource_map') or {}).items())
+        config = copy.deepcopy(state['config'])
+        rate = copy.deepcopy(state.get('recommendation_rate_meta') or {})
+        online = tuple((key, path, id(vector)) for key, (path, vector) in state['online_index'].items())
+    revision = [os.getpid(), cache.get('generation'), online,
+                {key: config.get(key) for key in ('recommendation', 'similarity', 'dislike', 'history', 'dislike_correction')},
+                rate, _file_stamp(LISTENING_HISTORY_PATH), RECOMMEND_SEMANTIC_LIBRARY.revision(entries)]
+    with state_lock:
+        if state['local_index_cache'] is not cache:
+            raise HTTPException(status_code=409, detail='音乐库刚发生变化，请重试。')
+    return {'revision': hashlib.sha256(json.dumps(revision, sort_keys=True, ensure_ascii=False).encode()).hexdigest()}
+
+
 @app.get("/tracks")
 def list_tracks(scope: Literal["local", "all"] = "local"):
     """返回当前索引中的所有歌曲路径列表（与索引保持一致）。"""

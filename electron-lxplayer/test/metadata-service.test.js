@@ -371,9 +371,83 @@ test("matching metadata cache envelope loads only object entries", () => {
   assert.deepEqual(__test.readCacheEntries({ version: __test.CACHE_VERSION, entries: [] }), {});
 });
 
+test("v6 lyrics migrate before publishing the small index, and migration failure retains the old cache", () => {
+  const { execFileSync } = require('node:child_process');
+  for (const fail of [false, true]) {
+    const directory = path.join(tempCacheRoot, 'migration-' + fail);
+    fs.mkdirSync(path.join(directory, 'metadata'), { recursive: true });
+    const file = path.join(directory, 'metadata/metadata_cache.json');
+    const original = JSON.stringify({ version: 6, entries: { song: { title: 'Song', lyrics: '保存的歌词', lyricsProvenance: { sourceType: 'embedded' } } } });
+    fs.writeFileSync(file, original);
+    const script = `
+      const fs = require('node:fs');
+      if (${fail}) { const rename=fs.promises.rename; fs.promises.rename=async(from,to)=>{
+        if(to===${JSON.stringify(file)}) throw Error('fixture publish failure');
+        return rename(from,to);
+      }; }
+      const service=require(${JSON.stringify(path.resolve(__dirname, '../metadata-service'))});
+      service.flushMetadataCache().then(()=>console.log(JSON.stringify([...service.__test.cache.values()])));
+    `;
+    const values = JSON.parse(execFileSync(process.execPath, ['-e', script], {
+      env: { ...process.env, KUMIKO_CACHE_DIR: directory }, encoding: 'utf8', windowsHide: true,
+    }).trim());
+    const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
+    assert.equal(saved.version, fail ? 6 : 7);
+    assert.equal(values[0].title, 'Song');
+    if (fail) assert.equal(fs.readFileSync(file, 'utf8'), original);
+    else {
+      assert.equal(Object.hasOwn(saved.entries.song, 'lyrics'), false);
+      const body = path.join(directory, 'metadata/lyrics', saved.entries.song._lyricBlob + '.json');
+      assert.equal(JSON.parse(fs.readFileSync(body, 'utf8')).lyrics, '保存的歌词');
+      assert.equal(fs.readFileSync(path.join(directory, 'metadata/metadata_cache.v6.json'), 'utf8'), original);
+    }
+  }
+});
+
+test("lyric bodies round-trip across restart with a bounded recent cache and checksum protection", async () => {
+  const { MetadataLyricsCache } = require('../metadata-lyrics-cache');
+  const directory = path.join(tempCacheRoot, 'body-fixture');
+  const bodies = new MetadataLyricsCache(directory, 400);
+  const original = { title: 'Song', lyrics: '逐字歌词'.repeat(15), lyricsProvenance: { sourceType: 'embedded' } };
+  const packed = bodies.pack(original);
+  assert.equal(Object.hasOwn(packed, 'lyrics'), false);
+  assert.deepEqual(await bodies.expand(packed), { ...original, _lyricBlob: packed._lyricBlob });
+  await bodies.persist();
+  assert.equal(bodies.pending.size, 0);
+  const cold = new MetadataLyricsCache(directory, 400);
+  assert.deepEqual(await cold.expand(packed), { ...original, _lyricBlob: packed._lyricBlob });
+  for (let i = 0; i < 20; i++) cold.pack({ lyrics: String(i).repeat(50) });
+  assert(cold.bytes <= 400);
+  const corrupt = new MetadataLyricsCache(directory);
+  fs.writeFileSync(path.join(directory, packed._lyricBlob + '.json'), '{}');
+  await assert.rejects(corrupt.expand(packed), /校验失败/);
+  await assert.rejects(corrupt.expand({ _lyricBlob: '../../private' }), /索引无效/);
+  assert.equal(Object.hasOwn(__test.publicMetadata(packed), '_lyricBlob'), false);
+});
+
+test("a corrupt cold lyric body is rebuilt from the actual song sources", async () => {
+  const { execFileSync } = require('node:child_process');
+  const trackPath = path.join(tempCacheRoot, 'Recovered - Lyrics.mp3');
+  fs.writeFileSync(trackPath, 'invalid audio fixture');
+  fs.writeFileSync(trackPath.replace(/\.mp3$/, '.lrc'), '[ti:Lyrics]\n[ar:Recovered]\n[00:01.00]真实歌词');
+  const info = await getMeta(trackPath);
+  assert.match(info.lyrics, /真实歌词/);
+  await flushMetadataCache();
+  const key = __test.cacheKey(trackPath, fs.statSync(trackPath));
+  const hash = __test.cache.get(key)._lyricBlob;
+  fs.writeFileSync(path.join(tempCacheRoot, 'metadata/lyrics', hash + '.json'), '{}');
+  const script = `const service=require(${JSON.stringify(path.resolve(__dirname, '../metadata-service'))});
+    (async()=>{const info=await service.getMeta(${JSON.stringify(trackPath)});await service.flushMetadataCache();console.log(JSON.stringify(info));})();`;
+  const restored = JSON.parse(execFileSync(process.execPath, ['-e', script], {
+    env: { ...process.env, KUMIKO_CACHE_DIR: tempCacheRoot }, encoding: 'utf8', windowsHide: true,
+  }).trim());
+  assert.match(restored.lyrics, /真实歌词/);
+  assert.equal(Object.hasOwn(restored, '_lyricBlob'), false);
+});
+
 test("outdated metadata cache envelope is ignored instead of becoming fake entries", () => {
   const entries = __test.readCacheEntries({
-    version: __test.CACHE_VERSION - 1,
+    version: __test.CACHE_VERSION - 2,
     entries: { stale: { title: "Stale" } },
   });
 

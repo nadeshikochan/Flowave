@@ -3,6 +3,7 @@ const fsp = fs.promises;
 const path = require("path");
 const crypto = require("crypto");
 const { writeJsonObjectAtomic, createCoalescedWriter } = require("./async-json-writer");
+const { MetadataLyricsCache } = require("./metadata-lyrics-cache");
 const { localMediaUrlToPath, toLocalMediaUrl } = require("./secure-protocols");
 const {
   LocalLyricSourceResolver,
@@ -32,7 +33,8 @@ const discoveredLyricResolvers = new Map();
 fs.mkdirSync(COVER_DIR, { recursive: true });
 fs.mkdirSync(THUMB_DIR, { recursive: true });
 // V6 增加仅供主进程使用的稳定资源身份与精确失效代际。
-const CACHE_VERSION = 6;
+const CACHE_VERSION = 7;
+const lyricBodies = new MetadataLyricsCache(path.join(CACHE_DIR, 'lyrics'));
 const cacheIdentityKeys = new Map();
 function cacheEntryScopes(key, value) {
   const scopes = new Set(identityScopes(value?._cacheIdentity));
@@ -64,9 +66,11 @@ class IdentityCache extends Map {
 const cache = new IdentityCache();
 const invalidationGenerations = new Map();
 let saveTimer = null;
-const cacheWriter = createCoalescedWriter((snapshot) => writeJsonObjectAtomic(CACHE_PATH, snapshot, {
-  header: { version: CACHE_VERSION }, serialize: serializeCacheEntry,
-}));
+const cacheWriter = createCoalescedWriter(async snapshot => {
+  const small = new Map([...snapshot].map(([key, value]) => [key, lyricBodies.pack(serializeCacheEntry(value))]));
+  await lyricBodies.persist();
+  await writeJsonObjectAtomic(CACHE_PATH, small, { header: { version: CACHE_VERSION } });
+});
 
 function getExternalLyricRoots() {
   const roots = new Map();
@@ -198,7 +202,7 @@ const CONCURRENCY = 8; // 提升并发，加速未缓存解析
 function readCacheEntries(obj) {
   if (!obj || typeof obj !== "object" || Array.isArray(obj)) return {};
   if (Object.prototype.hasOwnProperty.call(obj, "version")) {
-    if (obj.version !== CACHE_VERSION) return {};
+    if (obj.version !== CACHE_VERSION && obj.version !== 6) return {};
     if (!obj.entries || typeof obj.entries !== "object" || Array.isArray(obj.entries)) return {};
     return obj.entries;
   }
@@ -213,8 +217,23 @@ const cacheReady = (async () => {
     const raw = await fsp.readFile(CACHE_PATH, "utf-8");
     const obj = JSON.parse(raw);
     const entries = Object.entries(readCacheEntries(obj));
-    for (let i = 0; i < entries.length; i++) {
-      const [k, v] = entries[i];
+    let restored = entries;
+    if (obj.version !== CACHE_VERSION && entries.length) {
+      try {
+        await fsp.copyFile(CACHE_PATH, path.join(CACHE_DIR, 'metadata_cache.v6.json'), fs.constants.COPYFILE_EXCL)
+          .catch(error => { if (error.code !== 'EEXIST') throw error; });
+        const small = new Map();
+        for (const [key, value] of entries) {
+          small.set(key, lyricBodies.pack(serializeCacheEntry(value)));
+          if (small.size % 64 === 0) await lyricBodies.persist();
+        }
+        await lyricBodies.persist();
+        await writeJsonObjectAtomic(CACHE_PATH, small, { header: { version: CACHE_VERSION } });
+        restored = [...small];
+      } catch (error) { console.warn('歌词缓存分离暂未完成，继续读取原缓存', error.message); }
+    }
+    for (let i = 0; i < restored.length; i++) {
+      const [k, v] = restored[i];
       if (typeof k === "string" && v && typeof v === "object" && !Array.isArray(v)) cache.set(k, v);
       if ((i + 1) % 64 === 0) await new Promise(resolve => setImmediate(resolve));
     }
@@ -232,6 +251,7 @@ function scheduleSave() {
 }
 
 async function flushMetadataCache() {
+  await cacheReady;
   if (saveTimer) {
     clearTimeout(saveTimer);
     saveTimer = null;
@@ -285,7 +305,7 @@ function isInvalidationGenerationCurrent(snapshot) {
 
 function commitCacheEntry(key, value, generation) {
   if (!isInvalidationGenerationCurrent(generation)) return false;
-  cache.set(key, serializeCacheEntry(value));
+  cache.set(key, lyricBodies.pack(serializeCacheEntry(value)));
   scheduleSave();
   return true;
 }
@@ -342,6 +362,7 @@ function publicMetadata(value, { includeLyricsModel = false, includeLyrics = tru
   if (!value || typeof value !== "object" || Array.isArray(value)) return value;
   const output = { ...value };
   delete output._cacheIdentity;
+  delete output._lyricBlob;
   if (!includeLyricsModel) delete output.lyricsModel;
   if (!includeLyrics) {
     delete output.lyricsModel;
@@ -787,10 +808,12 @@ async function parseMeta(trackPath, stat = null, key = null, context = {}) {
   if (!stat) stat = await fsp.stat(trackPath);
   if (!stat.isFile()) return minimal(trackPath);
   if (!key) key = cacheKey(trackPath, stat);
-  if (cache.has(key)) {
-    const hit = cache.get(key);
-    if (normalizeCachedCoverFields(hit)) scheduleSave();
-    return hit;
+  if (cache.has(key) && !context.rebuildLyricsCache) {
+    try {
+      const hit = context.includeLyrics === false ? cache.get(key) : await lyricBodies.expand(cache.get(key));
+      if (normalizeCachedCoverFields(hit)) commitCacheEntry(key, hit, context.generation);
+      return hit;
+    } catch (_) { /* Rebuild a missing/corrupt derived body from the original sources. */ }
   }
 
   let info = minimal(trackPath);
@@ -860,7 +883,13 @@ async function getMeta(trackPath, options = {}) {
   pruneSupersededCacheEntries(identity, key);
   // 缓存命中直接返回，不进队列
   if (cache.has(key)) {
-    const hit = cache.get(key);
+    let hit;
+    try {
+      hit = options.includeLyrics === false ? cache.get(key) : await lyricBodies.expand(cache.get(key));
+    } catch (_) {
+      const context = { resourceId: identity.resourceId, generation, includeLyrics: true, rebuildLyricsCache: true };
+      hit = await enqueue(() => parseMeta(trackPath, stat, key, context));
+    }
     if (options.includeAudioDetails === true && !hit.audioInfo) {
       await enqueue(async () => {
         if (hit.audioInfo || !isInvalidationGenerationCurrent(generation)) return;
@@ -873,7 +902,7 @@ async function getMeta(trackPath, options = {}) {
         } catch (_) { /* Failed enrichment is retryable; never invalidate healthy playback metadata. */ }
       });
     }
-    if (normalizeCachedCoverFields(hit)) scheduleSave();
+    if (normalizeCachedCoverFields(hit)) commitCacheEntry(key, hit, generation);
     if (options.includeLyrics !== false && await refreshCachedLyrics(trackPath, hit)) {
       commitCacheEntry(key, hit, generation);
     }

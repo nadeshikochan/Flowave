@@ -63,6 +63,7 @@
       "secure-protocols.js",
       "backend-health.js",
       "metadata-service.js",
+      "metadata-lyrics-cache.js",
       "local-file-actions.js",
       "async-json-writer.js",
       "startup-background.js",

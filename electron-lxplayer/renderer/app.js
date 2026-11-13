@@ -233,6 +233,10 @@ let audioSettingsSaveTimer = null, audioDialogFocus = null, effectsResumePromise
 let practiceMetronome = null, practiceMetronomeGeneration = 0, practiceMetronomePreview = null, practiceMetronomePreviewTimer = null;
 let practicePlayer = null, practiceOriginal = null, practiceController = null, practiceGeneration = 0;
 let practiceTraining=null,practiceTrainingGeneration=0;
+if (audioEngine) audioEngine.externalActive = () => Boolean(
+  (practicePlayer && !practicePlayer.paused && !practicePlayer.ended)
+  || practiceMetronomePreview
+  || (audioEngine.metronomeMix && (!practiceMetronome || practiceMetronome.readClock().playing)));
 const slotEventHandlers = [];
 const wireAudioSlot = slot => slotEventHandlers.forEach(([name, handler]) => slot.addEventListener(name, event => { if (slot === audio) handler(event); }));
 audio.preload = "auto";
@@ -5819,10 +5823,46 @@ const dataMethods = {
         }
         const intent = this.getDefaultRecommendationIntent();
         const intents = [...new Set([intent,'recover','change'])];
+        const runtime = this.ensureRecommendationRuntime();
+        const epoch = runtime.epoch;
+        const valid = () => runtime.epoch===epoch && this.recommendationJobs===runtime
+          && origin===this.currentPath && stamp===this.getRecommendationPolicyStamp() && this.useRecommend;
+        let revision = null;
+        try {
+          const {data} = await axios.get(`${this.baseUrl}/recommend/revision`, {timeout:12000});
+          if (typeof data?.revision === 'string') revision = data.revision;
+        } catch { /* Failed validation keeps the complete recommendation path. */ }
+        if (!valid()) { resolve(null); return; }
+        const reusable = revision && runtime.inputRevision === revision && intents.every(key => {
+          const entry = runtime.caches.get(key);
+          return entry?.stamp === stamp && entry.data && !entry.data.missing && !recommendationPacketPending(entry.data);
+        });
+        if (reusable) {
+          const now = Date.now(), base = this.getRecommendationPreparationStamp();
+          for (const key of intents) {
+            const entry = runtime.caches.get(key); entry.at = now;
+            const ticket = runtime.media.get(key);
+            if (ticket?.ready && ticket.base === base) ticket.at = now;
+            void this.prepareRecommendationAudio(key, entry.data);
+          }
+          resolve(runtime.caches.get(intent).data);
+          this.scheduleRecommendPrefetch(45000);
+          return;
+        }
+        const joinedEarlierWork = runtime.jobs.size > 0;
         const results = await Promise.allSettled(intents.map(intent=>this.prefetchRecommend({immediate:true,intent,background:true,force:true})));
         const primary = results[0].status==='fulfilled' ? results[0].value : null;
+        if (!joinedEarlierWork && revision && valid()
+          && results.every((row, index)=>row.status==='fulfilled' && row.value && !row.value.missing
+            && !recommendationPacketPending(row.value) && runtime.caches.get(intents[index])?.data===row.value)) {
+          try {
+            const {data} = await axios.get(`${this.baseUrl}/recommend/revision`, {timeout:12000});
+            if (data?.revision===revision && valid())
+              runtime.inputRevision=revision;
+          } catch { /* Unverified inputs will be recomputed on the next refresh. */ }
+        }
         resolve(primary);
-        if (origin===this.currentPath && stamp===this.getRecommendationPolicyStamp() && this.useRecommend)
+        if (valid())
           this.scheduleRecommendPrefetch(['building','unavailable'].includes(primary?.diagnostic?.details?.semantic_status) ? 1500 : primary ? 45000 : 3000);
       }, Math.max(0, Number(delay) || 0));
     });
@@ -10033,6 +10073,7 @@ const watchHandlers = {
   lyricGlowEnabled() { this.syncLyricAmbient(); },
   lyricGlowSpeed() { this.syncLyricAmbient(); },
   isPlaying() {
+    audioEngine?.scheduleIdle?.();
     this.syncOutputCalibrationConsumers();
     this.syncLyricAmbient();
     this.sendLyricOverlay();

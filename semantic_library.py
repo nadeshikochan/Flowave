@@ -10,7 +10,7 @@ import time
 
 import numpy as np
 from music_analysis_store import AnalysisStore, recipe_version
-from analysis_visibility import visible_groups
+from analysis_visibility import DISPLAY_LIMITS, visible_groups
 from recipe_compatibility import equivalent_recipes, accepted_recipes
 
 try:
@@ -63,6 +63,10 @@ class SemanticLibrary:
         self.failed_at = 0.
         self.row_cache = {}
         self.warming = False
+        implementation = b''.join(Path(__file__).with_name(name).read_bytes().replace(b'\r\n', b'\n')
+                                  for name in ('semantic_library.py', 'analysis_visibility.py'))
+        self.aggregate_version = hashlib.sha256(
+            implementation + json.dumps(DISPLAY_LIMITS, sort_keys=True).encode() + np.__version__.encode()).hexdigest()
 
     def stamp(self):
         # Task/progress writes share this database; they must not invalidate all vectors.
@@ -94,6 +98,9 @@ class SemanticLibrary:
             except (OSError, sqlite3.DatabaseError):
                 result[rid] = None
         return result
+
+    def revision(self, entries):
+        return [self.stamp(), recipe_version(self.root), self.sources(entries)]
 
     def warm(self, entries):
         """Explicit consumer preparation, without blocking the UI or loading models."""
@@ -141,6 +148,12 @@ class SemanticLibrary:
         entries, stamp, recipe = key
         vectors, tags = {}, {}
         try:
+            store = AnalysisStore(self.database)
+            try:
+                persisted = store.semantic_aggregates()
+            except (OSError, sqlite3.DatabaseError):
+                persisted = {}
+            derived = []
             with closing(sqlite3.connect(self.database.resolve().as_uri()+'?mode=ro', uri=True, timeout=5)) as con:
                 con.execute('BEGIN')
                 edges = con.execute('SELECT old,new FROM recipe_compatibility').fetchall()
@@ -158,6 +171,24 @@ class SemanticLibrary:
                         tags[rid] = saved[2]
                         next_rows[rid] = saved
                         continue
+                    cached = persisted.get(rid)
+                    if rid in wanted and sources[rid] == source and version in accepted and updated is not None and cached and cached[:4] == (*signature, self.aggregate_version):
+                        try:
+                            blob, profile_text, digest = cached[4:]
+                            if hashlib.sha256(blob + profile_text.encode()).hexdigest() != digest:
+                                raise ValueError('derived checksum')
+                            vector = np.frombuffer(blob, dtype='<f4').copy()
+                            if vector.shape != (512,) or not np.isfinite(vector).all() or not .999 < float(np.linalg.norm(vector)) < 1.001:
+                                raise ValueError('derived vector')
+                            profile = _decode_payload(profile_text)
+                            if not isinstance(profile, dict):
+                                raise ValueError('derived tags')
+                            vectors[rid] = vector
+                            tags[rid] = profile
+                            next_rows[rid] = (signature, vector, profile)
+                            continue
+                        except (ValueError, TypeError, AttributeError):
+                            pass
                     row = con.execute('SELECT payload,vectors FROM results WHERE id=?', (rid,)).fetchone() if rid in wanted and sources[rid] == source and version in accepted else None
                     if not row:
                         continue
@@ -177,6 +208,11 @@ class SemanticLibrary:
                                    for kind, rows in groups.items()}
                         tags[rid] = profile
                         next_rows[rid] = (signature, vector, profile)
+                        if updated is not None:
+                            vector_blob = vector.astype('<f4', copy=False).tobytes()
+                            profile_text = json.dumps(profile, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
+                            digest = hashlib.sha256(vector_blob + profile_text.encode()).hexdigest()
+                            derived.append((rid, source, version, updated, self.aggregate_version, vector_blob, profile_text, digest))
             # Keep provenance-keyed computation memo even when a concurrent publish invalidates this snapshot.
             # It is never served directly; the next build rechecks every row/version and the complete snapshot.
             with self.lock:
@@ -187,6 +223,10 @@ class SemanticLibrary:
                 self.snapshot = dict(key=key, sources=sources, vectors=vectors, tags=tags)
                 self.failed_key = None
                 self.row_cache = next_rows
+            try:
+                store.save_semantic_aggregates(derived)
+            except (OSError, sqlite3.DatabaseError):
+                pass
         except (OSError, sqlite3.DatabaseError):
             with self.lock:
                 self.failed_key = (key, sources)

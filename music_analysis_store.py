@@ -41,6 +41,25 @@ class AnalysisStore:
         with closing(sqlite3.connect(self.path.resolve().as_uri()+'?mode=rw', uri=True, timeout=5)) as con:
             self._ensure_query_index(con)
             con.commit()
+    def semantic_aggregates(self):
+        """Optional derived cache, read without touching the published result tables."""
+        if not self.path.is_file():
+            return {}
+        with closing(sqlite3.connect(self.path.resolve().as_uri()+'?mode=ro', uri=True, timeout=5)) as con:
+            if not con.execute("SELECT 1 FROM sqlite_master WHERE name='semantic_aggregates_v1'").fetchone():
+                return {}
+            return {row[0]: row[1:] for row in con.execute(
+                'SELECT id,source,recipe,updated,version,vector,tags,digest FROM semantic_aggregates_v1')}
+
+    def save_semantic_aggregates(self, rows):
+        if not rows or not self.path.is_file():
+            return
+        with closing(sqlite3.connect(self.path.resolve().as_uri()+'?mode=rw', uri=True, timeout=5)) as con, con:
+            con.execute('CREATE TABLE IF NOT EXISTS semantic_aggregates_v1 '
+                        '(id TEXT PRIMARY KEY,source TEXT,recipe TEXT,updated REAL,version TEXT,vector BLOB,tags TEXT,digest TEXT)')
+            con.executemany('INSERT OR REPLACE INTO semantic_aggregates_v1 SELECT ?,?,?,?,?,?,?,? '
+                            'WHERE EXISTS (SELECT 1 FROM results WHERE id=? AND source=? AND recipe=? AND updated=?)',
+                            [(*row, *row[:4]) for row in rows])
     def task(self,value=None):
         with self.connect() as con:
             if value is not None:con.execute('INSERT OR REPLACE INTO tasks VALUES (1,?)',(json.dumps(value,ensure_ascii=False),))

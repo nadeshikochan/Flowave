@@ -18,6 +18,7 @@ class Context {
   }
   createMediaElementSource() { this.sources++; return this.node(); }
   async resume() { this.state = 'running'; }
+  async suspend() { this.state = 'suspended'; }
   async close() { this.state = 'closed'; }
 }
 class Element extends EventTarget {
@@ -90,4 +91,27 @@ test('preload waits for canplay, accepts load emptied events, and rejects stale 
   element.readyState = 3; element.dispatchEvent(new Event('canplay'));
   await pending;
   await assert.rejects(waitReady(element, () => { throw Error('stale generation'); }), /stale/);
+});
+
+test('idle suspension respects all consumers and pending suspend cannot win over resume', async () => {
+  const element = new Element(), engine = new Engine([element], Context);
+  await engine.resume();
+  engine.scheduleIdle(0);
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(engine.context.state, 'running');
+  element.pause(); engine.externalMix = true; engine.scheduleIdle(0);
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(engine.context.state, 'running');
+  engine.externalActive = () => false; engine.scheduleIdle(0);
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(engine.context.state, 'suspended');
+  await engine.resume();
+  let finish;
+  engine.context.suspend = () => new Promise(resolve => { finish = () => { engine.context.state = 'suspended'; resolve(); }; });
+  engine.scheduleIdle(0);
+  await new Promise(resolve => setTimeout(resolve, 10));
+  const resumed = engine.resume();
+  finish(); await resumed;
+  assert.equal(engine.context.state, 'running');
+  engine.dispose();
 });

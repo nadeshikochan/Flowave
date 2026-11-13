@@ -49,17 +49,21 @@ test('independent rapid commands survive and coordinator teardown cancels pendin
 function safetyFixture() {
   const monitor = new EventEmitter();
   monitor.leases = new Set();
-  monitor.value = { id: 'headphones', transport: 'bluetooth', route: 'default' };
+  let route = { id: 'headphones', transport: 'bluetooth', route: 'default', sampledAt: Date.now() };
+  Object.defineProperty(monitor, 'value', {get:()=>route,set:value=>{route=value;monitor.state=value;}});
+  monitor.on('change', value=>{monitor.state=value;});
+  monitor.on('wear-state', value=>{monitor.wearState=value;});
+  monitor.reportWear = worn => monitor.emit('wear-state', {id:'headphones',status:'reported',worn});
   monitor.acquire = id => monitor.leases.add(id);
   monitor.release = id => monitor.leases.delete(id);
-  monitor.get = async () => monitor.value;
+  monitor.get = async () => (monitor.state = monitor.value);
   const effects = [];
   const owner = { isDestroyed: () => false, setAudioMuted: value => effects.push(['mute', value]), send: (...args) => effects.push(['send', ...args]) };
   return { monitor, effects, owner, safety: new AudioOutputSafety(monitor) };
 }
 
-test('bluetooth protection opt-out releases mute and monitoring and rejects late wear resume', async () => {
-  const {monitor, owner, safety, effects} = safetyFixture();
+test('disabling bluetooth protection releases monitoring, mute and pending resume', async () => {
+  const { monitor, owner, safety, effects } = safetyFixture();
   safety.setEnabled(false);
   assert.equal((await safety.prepare(owner)).disabled, true);
   assert.equal(monitor.leases.size, 0);
@@ -69,17 +73,18 @@ test('bluetooth protection opt-out releases mute and monitoring and rejects late
   await safety.prepare(owner);
   safety.trip('headphones-removed');
   const token = safety.wearEpisode.token;
-  assert.equal(safety.blocked, true);
   safety.setEnabled(false);
   assert.deepEqual(effects.at(-1), ['mute', false]);
   assert.equal(monitor.leases.size, 0);
-  assert.equal(safety.wearEpisode, null);
-  assert.equal((await safety.prepare(owner, {wearToken:token})).ok, false);
+  assert.equal((await safety.prepare(owner, { wearToken: token })).ok, false);
   safety.setEnabled(true);
+  monitor.state = null;
+  let release;
+  monitor.get = () => new Promise(resolve => { release = () => resolve(monitor.value); });
   const pending = safety.prepare(owner);
   safety.setEnabled(false);
+  release();
   assert.equal((await pending).ok, false);
-  assert.equal(monitor.leases.size, 0);
   safety.dispose();
 });
 
@@ -126,7 +131,7 @@ test('pending output preparation cannot revive playback after pause', async () =
   safety.dispose();
 });
 
-test('only an explicit unworn report from the protected endpoint pauses; wearing never resumes', async () => {
+test('only explicit removal protects the output; wearing proposals never unmute by themselves', async () => {
   const { monitor, effects, owner, safety } = safetyFixture();
   await safety.prepare(owner);
   monitor.emit('wear-state', { id: 'other-headphones', status: 'reported', worn: false });
@@ -138,10 +143,69 @@ test('only an explicit unworn report from the protected endpoint pauses; wearing
   assert.deepEqual(effects[0], ['mute', true]);
   assert.equal(effects[1][2].reason, 'headphones-removed');
   monitor.emit('wear-state', { id: 'headphones', status: 'reported', worn: true });
-  assert.equal(effects.length, 2);
+  assert.equal(effects.at(-1)[2].reason, 'headphones-worn');
   assert.equal(safety.blocked, true);
   safety.dispose();
-  assert.equal(monitor.listenerCount('wear-state'), 0);
+  assert.equal(monitor.listenerCount('wear-state'), 1); // Only the fixture's cache listener remains.
+});
+
+test('wear pause retains monitoring; wearing offers one token and never unmutes by itself', async () => {
+  const { monitor, effects, owner, safety } = safetyFixture();
+  await safety.prepare(owner);
+  monitor.reportWear(false);
+  const token = effects[1][2].wearToken;
+  monitor.reportWear(true); // A quick reinsertion can precede renderer acknowledgement.
+  assert.equal(effects.length, 3);
+  assert.equal(safety.blocked, true);
+  safety.pause(owner, {wearToken:token});
+  assert.equal(monitor.leases.size, 1);
+  assert.equal(effects[2][2].reason, 'headphones-worn');
+  monitor.reportWear(true);
+  assert.equal(effects.length, 3);
+  assert.equal(safety.blocked, true);
+  assert.equal((await safety.prepare(owner, {resume:true,wearToken:token})).ok, true);
+  assert.deepEqual(effects.at(-1), ['mute', false]);
+  safety.pause(owner, {wearToken:token});
+  assert.equal(safety.active, true);
+  assert.equal(monitor.leases.size, 1);
+  safety.dispose();
+});
+
+test('manual pause, disconnection and unknown wear cancel automatic permission', async () => {
+  for (const interrupt of ['manual','disconnect','unknown']) {
+    const { monitor, effects, owner, safety } = safetyFixture();
+    await safety.prepare(owner);
+    monitor.reportWear(false);
+    const token = effects[1][2].wearToken;
+    safety.pause(owner, {wearToken:token});
+    if (interrupt === 'manual') safety.pause(owner);
+    if (interrupt === 'disconnect') monitor.emit('device-event', {kind:'removed',id:'headphones'});
+    if (interrupt === 'unknown') monitor.reportWear(null);
+    monitor.reportWear(true);
+    assert.equal((await safety.prepare(owner, {resume:true,wearToken:token})).ok, false, interrupt);
+    assert.equal(effects.some(effect => effect[0] === 'mute' && effect[1] === false), false, interrupt);
+    safety.dispose();
+  }
+});
+
+test('a newer removal and an output switch both reject old wear offers', async () => {
+  const { monitor, effects, owner, safety } = safetyFixture();
+  await safety.prepare(owner);
+  monitor.reportWear(false);
+  const oldToken = effects[1][2].wearToken;
+  safety.pause(owner, {wearToken:oldToken}); monitor.reportWear(true);
+  monitor.reportWear(false);
+  const newToken = effects.at(-1)[2].wearToken;
+  assert.notEqual(newToken, oldToken);
+  safety.pause(owner, {wearToken:oldToken});
+  assert.equal(safety.wearEpisode.token,newToken);
+  assert.equal(monitor.leases.size,1);
+  assert.equal((await safety.prepare(owner, {resume:true,wearToken:oldToken})).ok, false);
+  safety.pause(owner, {wearToken:newToken}); monitor.reportWear(true);
+  monitor.emit('change', {id:'speakers',transport:'other',confirmed:true,sampledAt:Date.now()});
+  assert.equal((await safety.prepare(owner, {resume:true,wearToken:newToken})).ok, false);
+  assert.equal(effects.some(effect => effect[0] === 'mute' && effect[1] === false), false);
+  safety.dispose();
 });
 
 test('wear report received before route confirmation is applied before playback admission', async () => {

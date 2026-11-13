@@ -18,7 +18,9 @@
       vec3 detail=texture2D(tex,clamp(q*.7+.15+drift,0.,1.)).rgb;
       return mix(colors,detail,.2)*(.90+.14*sin(time*.95+q.x*3.4+q.y*2.6));
     }
-    void main(){vec3 c=mix(field(oldCover,uv),field(cover,uv),blend);
+    void main(){vec3 c;
+      if(blend>=1.) c=field(cover,uv);
+      else c=mix(field(oldCover,uv),field(cover,uv),blend);
       c=pow(max(c,vec3(.001)),vec3(.88));
       float lum=dot(c,vec3(.2126,.7152,.0722));
       c=mix(vec3(lum),c,1.18);
