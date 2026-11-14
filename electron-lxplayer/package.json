@@ -108,11 +108,7 @@
       "resource-manager.js",
       "resource-plan.js",
       "release-info.js",
-      "diagnostics.js",
-      {
-        "from": "../LICENSE",
-        "to": "LICENSE"
-      }
+      "diagnostics.js"
     ],
     "extraFiles": [
       {
@@ -158,6 +154,10 @@
       {
         "from": "../release-template/README-恢复数据.txt",
         "to": "README-恢复数据.txt"
+      },
+      {
+        "from": "../LICENSE",
+        "to": "Flowave-LICENSE.txt"
       }
     ],
     "win": {

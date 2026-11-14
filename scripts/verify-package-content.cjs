@@ -49,6 +49,7 @@ if (archive) {
     if (!asar.extractFile(archive, path.normalize(bundle.relative)).equals(bundle.bytes))
       throw Error('Packaged official module differs from verified source: ' + bundle.relative);
   }
+  if (!fs.readFileSync(path.join(path.dirname(archive), '..', 'Flowave-LICENSE.txt')).equals(fs.readFileSync(path.join(root, 'LICENSE')))) throw Error('Application license missing from packaged program');
   const buildInfo = JSON.parse(fs.readFileSync(path.join(path.dirname(archive), '..', 'build-info.json'), 'utf8').replace(/^\uFEFF/, ''));
   const packagedVersion = JSON.parse(asar.extractFile(archive, 'package.json').toString('utf8')).version;
   if (buildInfo.version !== packagedVersion || !/^[0-9a-f]{40}$/.test(buildInfo.commit)) throw Error('Packaged build identity is missing or invalid');
