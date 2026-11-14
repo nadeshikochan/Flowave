@@ -1,15 +1,25 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_submodules, copy_metadata
+from pathlib import Path
+import sys
 
 
 hiddenimports = collect_submodules("uvicorn")
+# Preserve upstream copyright and license files through PyInstaller metadata.
+metadata = []
+for package in ("fastapi", "uvicorn", "numpy", "mutagen"):
+    metadata.extend(copy_metadata(package, recursive=True))
+python_license = Path(sys.base_prefix) / "LICENSE.txt"
+if not python_license.is_file():
+    raise RuntimeError("The bundled Python license is missing")
+metadata.append((str(python_license), "licenses/python"))
 
 a = Analysis(
     ["../backend_launcher.py"],
     pathex=[".."],
     binaries=[],
-    datas=[],
+    datas=metadata,
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},

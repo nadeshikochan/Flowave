@@ -92,3 +92,12 @@ Uvicorn, Pydantic, NumPy and the Python environments retain their upstream
 license files. Installed wheel dist-info and bundled license files are retained.
 Exact versions and immutable file identities are specified in the host lock
 files, resources/catalog.json and resources/install-plan.json.
+
+Mutagen 1.47.0, Christoph Reiter and contributors
+GPL-2.0-or-later. Copyright and full license are preserved in the bundled
+mutagen dist-info/COPYING. Corresponding upstream source is available at
+https://github.com/quodlibet/mutagen/tree/release-1.47.0
+The backend currently imports Mutagen for reading music metadata. Disabling
+tag writing does not remove that dependency. Compatibility of this combined
+application with the main restrictive license remains an open release issue.
+This private evaluation preview does not assert public-distribution clearance.
