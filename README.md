@@ -14,6 +14,8 @@ Flowave 用于沉浸式听音乐，注重歌曲之间风格和听感的连续性
 
 使用方法请查看[使用指南](docs/使用指南.md)，源码运行请查看[源码运行与构建](docs/源码运行与构建.md)。安装包与ZIP便携版通过 [GitHub预发布](https://github.com/nadeshikochan/Flowave/releases/tag/v0.2.1-preview.1) 提供，校验值和实际验收范围随发布说明记录。
 
+[文档目录](docs/README.md)汇总使用、数据与构建说明，[脚本导航](scripts/README.md)列出当前构建和检查入口。
+
 ### 插件
 
 提供歌曲推荐、歌曲分析、演奏练习、听歌记录四个官方插件。[插件下载](https://github.com/nadeshikochan/Flowave/releases/tag/plugins-v1.1.0)。声音地图与复合种子归入歌曲推荐，分轨与谱面辅助归入演奏练习。
