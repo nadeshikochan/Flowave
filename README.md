@@ -12,7 +12,7 @@ Flowave 用于沉浸式听音乐，注重歌曲之间风格和听感的连续性
 
 目前支持 Windows 10/11 x64。
 
-使用方法请查看[使用指南](docs/使用指南.md)，源码运行请查看[源码运行与构建](docs/源码运行与构建.md)。安装包与ZIP便携版通过 [GitHub预发布](https://github.com/nadeshikochan/Flowave/releases/tag/v0.2.0-preview.1) 提供，校验值和实际验收范围随发布说明记录。
+使用方法请查看[使用指南](docs/使用指南.md)，源码运行请查看[源码运行与构建](docs/源码运行与构建.md)。安装包与ZIP便携版通过 [GitHub预发布](https://github.com/nadeshikochan/Flowave/releases/tag/v0.2.1-preview.1) 提供，校验值和实际验收范围随发布说明记录。
 
 ### 插件
 

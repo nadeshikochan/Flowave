@@ -539,3 +539,38 @@ test("changing the configured lyric directory clears a cached external lyric", a
   assert.equal(second.lyrics, "");
   assert.equal(second.lyricsProvenance, null);
 });
+
+test("migrated cover URLs resolve inside the current workspace", async () => {
+  const {toLocalMediaUrl, localMediaUrlToPath} = require("../secure-protocols");
+  const {pathToFileURL} = require("node:url");
+  const track = path.join(tempCacheRoot, "migrated-cover.wav");
+  await fs.promises.writeFile(track, "isolated metadata fixture");
+  await getMeta(track, {includeLyrics:false});
+  const row = __test.cache.get(__test.cacheKey(track, await fs.promises.stat(track)));
+  const currentCover = path.join(tempCacheRoot, "metadata/covers/moved.png");
+  const currentThumb = path.join(tempCacheRoot, "metadata/thumbs/moved.png");
+  await fs.promises.writeFile(currentCover, "current cover");
+  await fs.promises.writeFile(currentThumb, "current thumb");
+  for (const legacy of ["old/data/cache/metadata", "old workspace 音乐/cache/metadata"]) {
+    const previousCover = path.join(tempCacheRoot, legacy, "covers/moved.png");
+    const previousThumb = path.join(tempCacheRoot, legacy, "thumbs/moved.png");
+    await fs.promises.mkdir(path.dirname(previousCover), {recursive:true});
+    await fs.promises.mkdir(path.dirname(previousThumb), {recursive:true});
+    await fs.promises.writeFile(previousCover, "old cover");
+    await fs.promises.writeFile(previousThumb, "old thumb");
+    for (const encode of [toLocalMediaUrl, value => pathToFileURL(value).href]) {
+      row.cover = encode(previousCover);
+      row.cover_thumb = encode(previousThumb);
+      const result = await getMeta(track, {includeLyrics:false});
+      assert.equal(localMediaUrlToPath(result.cover), currentCover);
+      assert.equal(localMediaUrlToPath(result.cover_thumb), currentThumb);
+    }
+    await fs.promises.unlink(previousCover);
+    await fs.promises.unlink(previousThumb);
+    row.cover = toLocalMediaUrl(previousCover);
+    row.cover_thumb = toLocalMediaUrl(previousThumb);
+    const result = await getMeta(track, {includeLyrics:false});
+    assert.equal(localMediaUrlToPath(result.cover), currentCover);
+    assert.equal(localMediaUrlToPath(result.cover_thumb), currentThumb);
+  }
+});

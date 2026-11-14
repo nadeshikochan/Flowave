@@ -25,7 +25,7 @@ const CACHE_DIR = path.join(RUNTIME_CACHE_ROOT, "metadata");
 const CACHE_PATH = path.join(CACHE_DIR, "metadata_cache.json");
 const COVER_DIR = path.join(CACHE_DIR, "covers");
 const THUMB_DIR = path.join(CACHE_DIR, "thumbs");
-const CACHE_URL_MARKER = "/data/cache/metadata/";
+const CACHE_URL_MARKER = "/cache/metadata/";
 let configuredExternalLyricRoot = String(process.env.KUMIKO_EXTERNAL_LYRIC_DIR || "").trim();
 let configuredLibraryAudioRoots = [];
 const localLyricResolver = new LocalLyricSourceResolver({ externalRoot: configuredExternalLyricRoot });
@@ -394,15 +394,17 @@ function remapMovedCachePath(value) {
   if (!raw) return "";
   if (/^(https?:|data:|blob:)/i.test(raw)) return raw;
   const originalPath = resourceUrlToPath(raw);
-  if (originalPath && fs.existsSync(originalPath)) {
-    return toLocalMediaUrl(originalPath);
-  }
-  const normalized = raw.replace(/\\/g, "/");
+  const normalized = originalPath.replace(/\\/g, "/");
   const idx = normalized.toLowerCase().lastIndexOf(CACHE_URL_MARKER);
-  if (idx < 0) return raw;
-  const rel = normalized.slice(idx + CACHE_URL_MARKER.length).split(/[?#]/)[0];
-  const candidate = path.join(CACHE_DIR, ...rel.split("/").filter(Boolean));
-  if (candidate && fs.existsSync(candidate)) return toLocalMediaUrl(candidate);
+  if (idx >= 0) {
+    const relative = normalized.slice(idx + CACHE_URL_MARKER.length);
+    // Only rebase generated image files within the current workspace.
+    if (/^(covers|thumbs)\/[^/]+\.(png|jpe?g|webp|avif|gif|bmp)$/i.test(relative)) {
+      const candidate = path.join(CACHE_DIR, ...relative.split("/"));
+      if (fs.existsSync(candidate)) return toLocalMediaUrl(candidate);
+    }
+  }
+  if (originalPath && fs.existsSync(originalPath)) return toLocalMediaUrl(originalPath);
   return raw;
 }
 

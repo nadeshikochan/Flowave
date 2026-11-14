@@ -512,7 +512,7 @@
                 </div>
                 <p v-if="moduleFailures[item.id] || packageState(item.id)?.error || packageState(item.id)?.warning" class="error" role="alert">{{moduleFailures[item.id] || packageState(item.id)?.error || packageState(item.id)?.warning}}</p>
                 <p class="hint" v-if="item.id==='recommendation'">包含 MERT、MuQ 和标签处理资源，歌曲分析页面可另行选装。</p>
-                <p class="hint" v-if="item.id!=='history' && !resourceState(item.id).ready">模型、工具与运行环境待准备下载约 {{packageSize(resourceState(item.id).downloadBytes)}}。已下载文件会校验复用。</p>
+                <p class="hint" v-if="item.id!=='history' && !resourceState(item.id).ready">模型、工具与运行环境首次完整下载上限约 {{packageSize(resourceState(item.id).downloadBytes)}}。本地模型和已下载文件会先校验复用，实际下载量按缺失资源确定。</p>
                 <p class="hint" v-if="item.id!=='history' && !resourceState(item.id).ready">下载与解压空间预算上限 {{packageSize(resourceState(item.id).spaceBudgetBytes)}}，安装前核对目标磁盘。需要支持 CUDA 12 的 NVIDIA 驱动<template v-if="item.id==='analysis'">及支持 BF16 的显卡</template><template v-if="item.id==='practice'">、至少 3800 MiB 显存</template>。</p>
                 <p class="error" v-if="resourceState(item.id).error">{{resourceState(item.id).error}}</p>
                 <div v-if="packageState(item.id) && !packageState(item.id).installed" class="feature-installed-actions"><small>安装后下次启动启用</small><button class="mini ghost" :disabled="featureSaving || !!featureSelection.packages.error" @click="manageFeaturePackage(item.id,'import')">从文件安装…</button></div>

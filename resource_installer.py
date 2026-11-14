@@ -21,7 +21,7 @@ import urllib.request
 import urllib.error
 import zipfile
 
-from resource_runtime import catalog, ensure_runtime_path, managed_dir, ready, revision, worker_environment
+from resource_runtime import asset_path, catalog, ensure_runtime_path, managed_dir, ready, revision, worker_environment
 from runtime_paths import resolve_data_dir
 
 _last_progress = 0.0
@@ -67,7 +67,7 @@ def request(url, headers=None):
         urllib.request.Request(url, headers={'User-Agent': 'Flowave-resource-installer/1', **(headers or {})}), timeout=90)
 
 
-def download(item, cache, group):
+def download(item, cache, group, *, source=None):
     global _last_progress
     expected, size = item['sha256'], int(item['bytes'])
     if len(expected) != 64 or any(c not in '0123456789abcdef' for c in expected) or not 0 <= size <= 8 * 1024**3:
@@ -78,6 +78,18 @@ def download(item, cache, group):
         return target
     target.parent.mkdir(parents=True, exist_ok=True)
     part = target.with_suffix('.partial')
+    if source and source.is_file() and source.stat().st_size == size:
+        emit(phase='verify-local', group=group, file='正在校验本地资源 ' + Path(item['path']).name, done=0, total=size)
+        part.unlink(missing_ok=True)
+        try:
+            os.link(source, part)
+        except OSError:
+            shutil.copyfile(source, part)
+        if digest(part) == expected:
+            part.replace(target)
+            emit(phase='verified-local', group=group, file='已复用本地资源 ' + Path(item['path']).name, done=size, total=size)
+            return target
+        part.unlink(missing_ok=True)
     if size > 32 * 1024**2:
         pieces = target.with_suffix('.parts')
         pieces.mkdir(exist_ok=True)
@@ -192,7 +204,7 @@ def install_group(root, name, item, cache):
     tree.mkdir(parents=True, exist_ok=True)
     for index, row in enumerate(item['files']):
         emit(phase='prepare', group=name, file=Path(row['path']).name, item=index + 1, count=len(item['files']))
-        file = download(row, cache, name)
+        file = download(row, cache, name, source=asset_path(root, row['path']))
         out = within(tree, row['path'])
         out.parent.mkdir(parents=True, exist_ok=True)
         if row.get('replacements'):

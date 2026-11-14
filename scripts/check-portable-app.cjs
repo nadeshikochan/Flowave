@@ -164,9 +164,27 @@ async function open() {
     assert.deepEqual(app.errors, []);
     console.log('PASS: real packaged base startup and one-click history installation');
   } finally { await app.close(); }
+  const migratedCover = path.join(dataFolder, 'cache/metadata/covers/migrated-cover.png');
+  fs.copyFileSync(path.join(repo, 'electron-lxplayer/renderer/assets/app-icon.png'), migratedCover);
+  const metadataFile = path.join(dataFolder, 'cache/metadata/metadata_cache.json');
+  const cached = JSON.parse(fs.readFileSync(metadataFile, 'utf8'));
+  const fixtureTrack = path.join(dataFolder, 'fixture-music/Flowave fixture.wav');
+  const metadata = Object.values(cached.entries).find(row => row.path === fixtureTrack);
+  assert(metadata, 'The real metadata cache did not persist before moving covers');
+  const oldCover = path.join(path.dirname(dataFolder), 'old workspace/data/cache/metadata/covers/migrated-cover.png');
+  metadata.cover = metadata.cover_thumb = 'kumiko-media://local/' + encodeURIComponent(oldCover);
+  fs.writeFileSync(metadataFile, JSON.stringify(cached));
   app = await open();
   try {
     assert.equal(await app.evaluate('window.lxEnv.getFeatureSelectionSync().active.enabled.history'), true);
+    const coverResult = await app.evaluate(`(async()=>{
+      const info=await window.lxEnv.getSongInfo(${JSON.stringify(fixtureTrack)},{includeLyrics:false});
+      const width=await new Promise(resolve=>{const image=new Image();image.onload=()=>resolve(image.naturalWidth);image.onerror=()=>resolve(0);image.src=info.cover;});
+      return {url:info.cover,width};
+    })()`);
+    assert(coverResult.url.includes(encodeURIComponent(migratedCover)), JSON.stringify(coverResult));
+    assert(coverResult.width > 0, 'The migrated cover failed to decode in the real renderer');
+    console.log('PASS: encoded migrated cover resolves and displays through the actual media protocol');
     if(withResources)assert.equal(await app.evaluate('Object.values(window.lxEnv.getFeatureSelectionSync().active.enabled).every(Boolean)'),true);
     const remove = await app.evaluate("window.lxEnv.manageOfficialModule({id:'history',action:'remove',revision:window.lxEnv.getFeatureSelectionSync().packages.revision})");
     assert.equal(remove.ok, true, remove.error);
