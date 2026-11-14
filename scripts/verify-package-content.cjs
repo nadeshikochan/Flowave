@@ -7,6 +7,14 @@ const moduleCatalog = JSON.parse(fs.readFileSync(path.join(root, 'electron-lxpla
 const definitions = require('../electron-lxplayer/official-module-definitions');
 const { decode } = require('../electron-lxplayer/official-package-store');
 const currentBundles = [];
+const {readInstallPlan, modulePlan} = require('../electron-lxplayer/resource-plan');
+const installationPlan = readInstallPlan(root, catalog);
+for (const id of Object.keys(catalog.modules)) modulePlan(catalog, installationPlan, id, () => false);
+for (const [id, profile] of Object.entries(installationPlan.profiles)) {
+  const lock = fs.readFileSync(path.join(root, catalog.profiles[id].lock), 'utf8');
+  for (const wheel of profile.wheels)
+    if (!lock.includes('--hash=sha256:' + wheel.sha256)) throw Error('Unpinned planned wheel: ' + wheel.path);
+}
 for (const [id, definition] of Object.entries(definitions)) {
   const item = moduleCatalog.packages[id], release = item.releases.find(row => row.version === item.latest);
   const relative = 'official-modules/packages/' + release.bundle;

@@ -61,7 +61,10 @@ def _read_json(path: Path, default: Any) -> Any:
 def _write_json(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f"{path.name}.tmp")
-    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    with tmp.open('w', encoding='utf-8') as stream:
+        json.dump(payload, stream, ensure_ascii=False, indent=2)
+        stream.flush()
+        os.fsync(stream.fileno())
     os.replace(tmp, path)
 
 
@@ -70,6 +73,8 @@ def _save_npy_atomic(path: Path, arr: np.ndarray) -> None:
     tmp = path.with_name(f"{path.name}.tmp")
     with tmp.open("wb") as f:
         np.save(f, arr)
+        f.flush()
+        os.fsync(f.fileno())
     os.replace(tmp, path)
 
 
@@ -174,9 +179,12 @@ def _save_index(
     staged_emb = emb_path.with_name(f".{emb_path.name}.{generation}.tmp")
     previous_meta = _previous_path(meta_path)
     previous_emb = _previous_path(emb_path)
+    publication_started = False
     try:
         with staged_emb.open("wb") as stream:
             np.save(stream, arr)
+            stream.flush()
+            os.fsync(stream.fileno())
         payload = {
             "version": int(version),
             "generation": generation,
@@ -184,7 +192,10 @@ def _save_index(
             "embedding_sha256": _file_sha256(staged_emb),
             "tracks": tracks,
         }
-        staged_meta.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        with staged_meta.open('w', encoding='utf-8') as stream:
+            json.dump(payload, stream, ensure_ascii=False, indent=2)
+            stream.flush()
+            os.fsync(stream.fileno())
         staged = _load_index_pair(staged_meta, staged_emb, key_field)
         if staged is None or len(staged) != len(tracks):
             raise RuntimeError("新索引校验失败")
@@ -194,11 +205,15 @@ def _save_index(
         if _load_rows_pair(meta_path, emb_path) is not None:
             shutil.copy2(meta_path, previous_meta)
             shutil.copy2(emb_path, previous_emb)
+            for backup in (previous_meta, previous_emb):
+                with backup.open('r+b') as stream:
+                    os.fsync(stream.fileno())
 
+        publication_started = True
         os.replace(staged_emb, emb_path)
         os.replace(staged_meta, meta_path)
     except Exception:
-        if previous_meta.exists() and previous_emb.exists():
+        if publication_started and _load_rows_pair(previous_meta, previous_emb) is not None:
             shutil.copy2(previous_emb, emb_path)
             shutil.copy2(previous_meta, meta_path)
         raise

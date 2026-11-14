@@ -4679,3 +4679,13 @@ html.scrollbars-ready ::-webkit-scrollbar-track,html.scrollbars-ready ::-webkit-
 @media(max-width:760px){.feature-installed-actions .btns{flex-wrap:wrap}.feature-storage-row{align-items:flex-start}.feature-install-header{gap:12px}}
 .feature-restart-notice {padding:12px 0;color:var(--accent);}
 .feature-data-note {max-width:64em;margin-top:24px;}
+
+.diagnostic-preview {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 48vh;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.6;
+  user-select: text;
+}

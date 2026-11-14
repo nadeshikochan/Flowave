@@ -1,10 +1,10 @@
 {
   "name": "flowave",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "专注于本地音乐与连续推荐的 Windows 桌面播放器。",
   "author": "Kumiko",
-  "license": "UNLICENSED",
+  "license": "SEE LICENSE IN LICENSE",
   "homepage": "https://github.com/nadeshikochan/Flowave",
   "repository": {
     "type": "git",
@@ -27,16 +27,22 @@
     "node": ">=22 <25"
   },
   "dependencies": {
-    "axios": "^1.6.7",
-    "music-metadata": "^11.11.1",
-    "sharp": "^0.33.2"
+    "axios": "1.21.1",
+    "music-metadata": "12.5.0",
+    "sharp": "0.35.5"
   },
   "devDependencies": {
-    "electron": "^29.3.0",
-    "electron-builder": "25.1.8"
+    "electron": "45.3.2",
+    "electron-builder": "26.18.0"
   },
   "overrides": {
-    "@noble/hashes": "1.8.0"
+    "@noble/hashes": "1.8.0",
+    "app-builder-lib": {
+      "minimatch": "11.0.8",
+      "@electron/universal": {
+        "minimatch": "11.0.8"
+      }
+    }
   },
   "build": {
     "appId": "app.flowave.desktop",
@@ -99,7 +105,14 @@
       "!renderer/music-analysis.js",
       "package.json",
       "node_modules/**/*",
-      "resource-manager.js"
+      "resource-manager.js",
+      "resource-plan.js",
+      "release-info.js",
+      "diagnostics.js",
+      {
+        "from": "../LICENSE",
+        "to": "LICENSE"
+      }
     ],
     "extraFiles": [
       {
@@ -141,6 +154,10 @@
       {
         "from": "../packaging/windows/uninstall-data.ps1",
         "to": "resources/uninstall-data.ps1"
+      },
+      {
+        "from": "../release-template/README-恢复数据.txt",
+        "to": "README-恢复数据.txt"
       }
     ],
     "win": {
@@ -161,5 +178,8 @@
       "en-US"
     ],
     "compression": "normal"
+  },
+  "allowScripts": {
+    "electron@45.3.2": true
   }
 }

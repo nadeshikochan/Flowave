@@ -302,6 +302,11 @@ def install_profile(root, name, item, cache):
         package, version = Path(wheel['path']).name.split('-')[:2]
         if re.search(r'(?m)^' + re.escape(package + '==' + version) + r'(?=\s|$)', lock_text):
             wheels.append(wheel)
+    from resource_plan import install_plan
+    plan = install_plan(root)
+    if plan['profiles'][name]['lock_sha256'] != item['lock_sha256']:
+        raise ValueError('计算环境安装计划与锁文件不一致。')
+    wheels.extend(plan['profiles'][name]['wheels'])
     for wheel in wheels:
         file=download(wheel,cache,name);dest=within(wheel_cache,wheel['path'])
         if not dest.exists():
@@ -355,6 +360,10 @@ def install(root, module):
     data = catalog(root)
     if module not in data.get('modules', {}):
         raise ValueError('未知的功能资源。')
+    from resource_plan import preflight
+    emit(phase='preflight', module=module, file='正在检查显卡、驱动和工作区空间')
+    budget = preflight(root, module)
+    emit(phase='preflight-ready', module=module, **budget)
     cache = resolve_data_dir(root) / 'cache/resource-downloads'
     cache.mkdir(parents=True, exist_ok=True)
     import msvcrt

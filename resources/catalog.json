@@ -1352,7 +1352,7 @@
         "recommendation",
         "analysis"
       ],
-      "license": "MERT：CC BY-NC 4.0，仅非商业用途。MuQ与Essentia来源许可随资源保留。"
+      "license": "MERT、MuQ/MuLan：CC BY-NC 4.0。Essentia MTG模型：CC BY-NC-SA 4.0。限符合各模型许可的用途。"
     },
     "analysis": {
       "groups": [
@@ -1363,7 +1363,7 @@
       "profiles": [
         "analysis"
       ],
-      "license": "MuQ、Essentia、SongFormer等来源许可保留；下载用于本机分析。"
+      "license": "MuQ：CC BY-NC 4.0；Essentia MTG模型：CC BY-NC-SA 4.0；SongFormer发布说明标注CC BY 4.0，MusicFM标注MIT。"
     },
     "practice": {
       "groups": [
@@ -1374,7 +1374,7 @@
       "profiles": [
         "practice"
       ],
-      "license": "SheetSage2/MERT2仅非商业；分轨权重许可仍需核用途，资源从原发布者获取。"
+      "license": "SheetSage2/MERT2：CC BY-NC 4.0。GAME代码为MIT；六轨SW与四轨SCNet当前权重的授权仍待确认。模型从原来源下载，公开分发前需继续核实。"
     },
     "history": {
       "groups": [],
@@ -1415,5 +1415,9 @@
       "legacy_sha256": "3c1065e8f16cfe3aa79b54fc59741d32102790146d850ab98fca09fdbf579475",
       "legacy_bytes": 2389
     }
-  ]
+  ],
+  "installation_plan": {
+    "file": "resources/install-plan.json",
+    "sha256": "37fde8004bee8c16dfa3b62b9664c688579ecc1d714b358140e61d334343058c"
+  }
 }

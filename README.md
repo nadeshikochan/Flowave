@@ -12,13 +12,13 @@ Flowave 用于沉浸式听音乐，注重歌曲之间风格和听感的连续性
 
 目前支持 Windows 10/11 x64。
 
-使用方法请查看[使用指南](docs/使用指南.md)，源码运行请查看[源码运行与构建](docs/源码运行与构建.md)。目前提供源码和官方插件包，主程序安装包尚未发布，下载请查看 [GitHub Releases](https://github.com/nadeshikochan/Flowave/releases)。
+使用方法请查看[使用指南](docs/使用指南.md)，源码运行请查看[源码运行与构建](docs/源码运行与构建.md)。安装包与ZIP便携版通过 [GitHub预发布](https://github.com/nadeshikochan/Flowave/releases/tag/v0.2.0-preview.1) 提供，校验值和实际验收范围随发布说明记录。
 
 ### 插件
 
-提供歌曲推荐、歌曲分析、演奏练习、听歌记录四个官方插件。[插件下载](https://github.com/nadeshikochan/Flowave/releases/tag/plugins-v1.0.0)。声音地图与复合种子归入歌曲推荐，分轨与谱面辅助归入演奏练习。
+提供歌曲推荐、歌曲分析、演奏练习、听歌记录四个官方插件。[插件下载](https://github.com/nadeshikochan/Flowave/releases/tag/plugins-v1.1.0)。声音地图与复合种子归入歌曲推荐，分轨与谱面辅助归入演奏练习。
 
-在“设置 → 功能选装”中点击安装，软件自动获取官方代码包及匹配的模型、运行环境和工具，完全退出重开后启用。代码包可来自固定 GitHub Release 或便携版随附归档，也可从本地导入 fwm；模型独立校验下载。移除插件保留听歌记录、模型、索引和分析成果。ZIP与完整计算功能正在验收，尚未发布主程序；私有仓库的匿名 GitHub 下载不可用。
+在“设置 → 插件与模型”中点击安装，软件自动获取官方代码包及匹配的模型、运行环境和工具，完全退出重开后启用。代码包可来自固定 GitHub Release 或便携版随附归档，也可从本地导入 fwm；模型独立校验下载。移除插件保留听歌记录、模型、索引和分析成果。当前仓库为私有测试，匿名 GitHub 下载不可用。安装包未签名，两项分轨权重授权仍待确认，具体来源和条款见 [第三方说明](release-template/THIRD_PARTY_NOTICES.txt)。
 
 - 歌曲推荐：根据声音特征和听歌反馈选择下一曲，兼顾当前方向与近期重复情况。
 - 听歌记录：查看听歌时长、播放次数和歌曲排行。
@@ -85,6 +85,6 @@ Flowave 用于沉浸式听音乐，注重歌曲之间风格和听感的连续性
 
 ## 项目许可
 
-项目原始代码和资源保留全部权利，具体见 [LICENSE](LICENSE)。源码公开供查阅，修改及再分发需另行取得授权。
+主程序允许个人非商业长期使用，原始代码和资源保留全部权利，具体见 [LICENSE](LICENSE)。源码公开供查阅，修改及再分发需另行取得授权。
 
 第三方组件遵循各自许可。MERT-v1-330M 使用 CC BY-NC 4.0，限制商业用途，模型不随仓库分发。详情见 [THIRD_PARTY_NOTICES.txt](release-template/THIRD_PARTY_NOTICES.txt)。

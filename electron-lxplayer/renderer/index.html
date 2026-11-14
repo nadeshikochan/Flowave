@@ -512,7 +512,9 @@
                 </div>
                 <p v-if="moduleFailures[item.id] || packageState(item.id)?.error || packageState(item.id)?.warning" class="error" role="alert">{{moduleFailures[item.id] || packageState(item.id)?.error || packageState(item.id)?.warning}}</p>
                 <p class="hint" v-if="item.id==='recommendation'">包含 MERT、MuQ 和标签处理资源，歌曲分析页面可另行选装。</p>
-                <p class="hint" v-if="item.id!=='history' && !resourceState(item.id).ready">模型与工具约 {{packageSize(resourceState(item.id).downloadBytes)}}，运行环境自动安装；需要 NVIDIA 显卡。已下载内容会复用。</p>
+                <p class="hint" v-if="item.id!=='history' && !resourceState(item.id).ready">模型、工具与运行环境待准备下载约 {{packageSize(resourceState(item.id).downloadBytes)}}。已下载文件会校验复用。</p>
+                <p class="hint" v-if="item.id!=='history' && !resourceState(item.id).ready">下载与解压空间预算上限 {{packageSize(resourceState(item.id).spaceBudgetBytes)}}，安装前核对目标磁盘。需要支持 CUDA 12 的 NVIDIA 驱动<template v-if="item.id==='analysis'">及支持 BF16 的显卡</template><template v-if="item.id==='practice'">、至少 3800 MiB 显存</template>。</p>
+                <p class="error" v-if="resourceState(item.id).error">{{resourceState(item.id).error}}</p>
                 <div v-if="packageState(item.id) && !packageState(item.id).installed" class="feature-installed-actions"><small>安装后下次启动启用</small><button class="mini ghost" :disabled="featureSaving || !!featureSelection.packages.error" @click="manageFeaturePackage(item.id,'import')">从文件安装…</button></div>
                 <div v-if="packageState(item.id)?.installed" class="feature-installed-actions"><small>当前{{featureEnabled(item.id)?'已启用':'已停用'}}<template v-if="featureSelected(item.id)!==featureEnabled(item.id)"> · 下次启动{{featureSelected(item.id)?'启用':'停用'}}</template></small><div class="btns"><button class="mini" v-if="packageState(item.id).installed.version!==packageState(item.id).latest" :disabled="featureSaving" @click="manageFeaturePackage(item.id,'install')">更新至 {{packageState(item.id).latest}}</button><button class="mini ghost" :disabled="featureSaving" @click="manageFeaturePackage(item.id,'import')">从文件安装…</button><button class="mini ghost" :disabled="featureSaving" @click="manageFeaturePackage(item.id,'remove')">移除{{item.name}}</button></div></div>
                 <div class="feature-progress" v-if="featureSaving && featurePackageProgress.id===item.id" role="status"><span>{{featurePackageProgress.file || ({prepare:'正在准备安装…',download:'正在下载插件…',verify:'正在校验插件…',resources:'正在安装模型与运行环境…',commit:'正在完成安装…',complete:'已完成',error:'未完成'})[featurePackageProgress.phase] || '正在处理…'}}</span><progress :value="featurePackageProgress.total ? featurePackageProgress.done : null" :max="featurePackageProgress.total || 1"></progress><small v-if="featurePackageProgress.total">{{packageSize(featurePackageProgress.done)}} / {{packageSize(featurePackageProgress.total)}}</small><button class="mini" v-if="['prepare','download','verify','resources'].includes(featurePackageProgress.phase)" @click="cancelModuleInstall(item.id)">取消安装</button></div>
@@ -1287,7 +1289,9 @@
             <div v-if="settingsTab==='manual'" class="settings-panel manual-panel">
               <header class="settings-panel-header">
                 <h2>帮助与恢复</h2>
+                <button class="mini" @click="loadApplicationInfo">查看版本</button>
               </header>
+              <p data-setting-id="setting-release-info" class="hint">Flowave {{applicationInfo.version || ''}} · {{applicationInfo.commit ? applicationInfo.commit.slice(0,12) : '开发版本'}}</p>
 
               <main class="manual-doc-content">
               <section id="manual-playback" class="manual-section">
@@ -1333,13 +1337,18 @@
                 </ul>
               </section>
 
-              <section id="manual-history" class="manual-section">
+              <section id="manual-history" class="manual-section" data-setting-id="setting-recovery">
                 <h4>数据与恢复</h4>
                 <ul>
                   <li>在“数据与帮助 / 工作区与存储”查看实际位置，完全退出软件后备份整个工作区。</li>
                   <li>“清空统计”和“重置推荐学习”互不影响。</li>
                   <li>媒体键与推荐记录可在“诊断日志”查看。</li>
+                  <li>升级或重装后选择“使用现有工作区”，也可在“工作区与存储”打开原目录。</li>
+                  <li>记录主文件损坏时，启动会尝试最近有效的自动备份。请保留损坏文件和操作前快照。</li>
+                  <li>手动恢复先完全退出并复制当前工作区，再将选定记录备份复制为记录目录中的 listening_history.json，保留备份原件。重开后核对日期和时长。</li>
                 </ul>
+                <div class="btns"><button class="mini" @click="inspectRecovery">查看备份状态</button><button class="mini ghost" @click="openFeatureData('history-backups')">打开自动备份</button><button class="mini ghost" @click="openFeatureData('history-snapshots')">打开操作前快照</button><button class="mini ghost" @click="openFeatureData('history')">打开记录目录</button></div>
+                <div v-if="recoveryInfo" class="hint"><p>{{recoveryInfo.history?.warning || (recoveryInfo.history?.recovered ? '本次启动已从有效备份恢复。' : '可在下方查看现有自动备份。')}}</p><ul><li v-for="item in recoveryInfo.backups" :key="item.name">{{item.day}} · {{item.name}}</li></ul><p v-if="!recoveryInfo.backups.length">当前目录还没有每日自动备份。备份会在记录成功保存后生成。</p></div>
               </section>
               </main>
             </div>
@@ -1348,6 +1357,9 @@
                 <header class="settings-panel-header">
                   <h2>诊断日志</h2>
                 </header>
+                <p class="hint" data-setting-id="setting-diagnostic-export">生成本机版本、插件、资源和近期错误信息。先预览并核对脱敏内容，再导出文件提交。</p>
+                <div class="btns"><button class="mini" @click="previewDiagnostics" :disabled="diagnosticBusy">生成诊断预览</button><button class="mini ghost" @click="exportDiagnostics" :disabled="diagnosticBusy || !diagnosticPreview.id">导出已预览内容…</button></div>
+                <details v-if="diagnosticPreview.id" open><summary>诊断预览</summary><pre class="diagnostic-preview">{{diagnosticPreview.text}}</pre></details>
                 <div class="log-block scrollable recommendation-decision-log">
                   <h4>实际选曲与播放记录</h4>
                   <p class="small">仅成功开始播放才计入机会，保留最近 80 次本机记录。</p>

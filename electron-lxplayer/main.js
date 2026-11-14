@@ -122,6 +122,18 @@ const featureSelection = require('./feature-selection').createFeatureSelection(p
   available:id=>officialPackages.hasActive(id),
 });
 const resourceManager=new (require('./resource-manager').ResourceManager)(APP_HOME,{dataDir:DATA_DIR});
+const applicationInfo = () => require('./release-info').releaseInfo(__dirname);
+const diagnostics = require('./diagnostics').createDiagnostics({
+  root:APP_HOME, dataDir:DATA_DIR, info:applicationInfo,
+  packages:() => officialPackages.snapshot(), resources:() => resourceManager.snapshot(),
+  media:() => getMediaDiagSnapshot(),
+  gpu:async () => {
+    try {
+      const info = await app.getGPUInfo('basic');
+      return {devices:info.gpuDevice, driver:info.auxAttributes?.glVersion};
+    } catch { return {status:'unavailable'}; }
+  },
+});
 function featureSnapshot(){
   const selection=featureSelection.snapshot(),packages=officialPackages.snapshot();
   return {...selection,packages,resources:resourceManager.snapshot(),installation:officialModuleOperation?.progress||null,restartRequired:selection.restartRequired||Object.values(packages).some(value=>value?.restartRequired)};
@@ -847,11 +859,19 @@ function showBackendFailure(message) {
     title: "Flowave 启动失败",
     message: "本机服务未能启动",
     detail,
-    buttons: ["知道了"],
+    buttons: ["打开数据目录", "查看恢复说明", "知道了"],
+    defaultId: 2,
+    cancelId: 2,
     noLink: true,
   };
   if (app.isReady()) {
-    dialog.showMessageBox(mainWindow && !mainWindow.isDestroyed() ? mainWindow : null, options).catch(() => {});
+    dialog.showMessageBox(mainWindow && !mainWindow.isDestroyed() ? mainWindow : null, options).then(async result => {
+      if (result.response === 0) await shell.openPath(DATA_DIR);
+      if (result.response === 1) {
+        const packaged = path.join(APP_HOME, 'README-恢复数据.txt');
+        await shell.openPath(fs.existsSync(packaged) ? packaged : path.join(APP_HOME, 'release-template/README-恢复数据.txt'));
+      }
+    }).catch(error => console.warn('[recovery] cannot open help', error.message));
   }
 }
 
@@ -987,9 +1007,9 @@ const win = new BrowserWindow({
   });
   hardenRendererNavigation(win);
 
-  win.webContents.on("console-message", (_event, level, message, line, sourceId) => {
-    const prefix = level >= 2 ? "warn" : "log";
-    console[prefix](`[renderer] ${message} (${sourceId}:${line})`);
+  win.webContents.on("console-message", ({level, message, lineNumber, sourceId}) => {
+    const prefix = level === "error" || level === "warning" ? "warn" : "log";
+    console[prefix](`[renderer] ${message} (${sourceId}:${lineNumber})`);
   });
   win.setMenuBarVisibility(false);
   win.webContents.on("did-finish-load", () => {
@@ -1632,6 +1652,35 @@ function registerIpc() {
     return audioOutputSafety.prepare(event.sender, {resume:value.resume===true,allowOutputChange:value.allowOutputChange===true,wearToken:value.wearToken});
   });
   ipcMain.handle('lx-audio-output-get',async event=>secureProtocols.isTrustedRendererUrl(event.senderFrame?.url)?audioOutputMonitor.get():{id:'',transport:'unknown',confirmed:false,reason:'untrusted-page'});
+  ipcMain.handle('lx-application-info', event => {
+    if (!secureProtocols.isTrustedRendererUrl(event.senderFrame?.url)) return {};
+    return applicationInfo();
+  });
+  ipcMain.handle('lx-diagnostics-preview', async (event, errors) => {
+    if (event.sender !== mainWindow?.webContents || !secureProtocols.isTrustedRendererUrl(event.senderFrame?.url)) return {ok:false};
+    const messages = Array.isArray(errors) ? errors.slice(-20).map(row => ({
+      type:String(row?.type || '').slice(0, 40), message:String(row?.message || '').slice(0, 4096),
+      stack:String(row?.stack || '').slice(0, 4096),
+    })) : [];
+    try { return {ok:true, ...await diagnostics.preview(messages)}; }
+    catch (error) { return {ok:false, error:error.message}; }
+  });
+  ipcMain.handle('lx-diagnostics-export', async (event, id) => {
+    if (event.sender !== mainWindow?.webContents || !secureProtocols.isTrustedRendererUrl(event.senderFrame?.url)) return {ok:false};
+    try {
+      return await diagnostics.export(id, async () => {
+        const picked = await dialog.showSaveDialog(mainWindow, {title:'导出已预览的诊断信息',
+          defaultPath:'Flowave-diagnostics.json', filters:[{name:'诊断信息', extensions:['json']}]});
+        return picked.canceled ? '' : picked.filePath;
+      });
+    } catch (error) { return {ok:false, error:error.message}; }
+  });
+  ipcMain.handle('lx-recovery-info', event => {
+    if (event.sender !== mainWindow?.webContents || !secureProtocols.isTrustedRendererUrl(event.senderFrame?.url)) return {ok:false};
+    return {ok:true, history:cloneSerializableJson(listeningHistoryRecoveryState),
+      backups:listListeningHistoryBackupFiles().slice(0, 12).map(row => ({name:row.name, day:row.day})),
+      indexPrevious:fs.existsSync(path.join(DATA_DIR, 'library/tracks.json.previous'))};
+  });
   ipcMain.handle('lx-audio-output-protection', async (event, enabled) => {
     if (!secureProtocols.isTrustedRendererUrl(event.senderFrame?.url) || event.sender !== mainWindow?.webContents
       || typeof enabled !== 'boolean' || appIsQuitting || workspaceTransition?.saving) return {ok:false};
@@ -2600,6 +2649,8 @@ async function backupListeningHistoryConfig() {
   try {
     await fs.promises.mkdir(path.dirname(target), { recursive: true });
     await fs.promises.copyFile(getListeningHistoryConfigPath(), staged);
+    const handle = await fs.promises.open(staged, 'r+');
+    try { await handle.sync(); } finally { await handle.close(); }
     await fs.promises.rename(staged, target);
     return { ok: true };
   } catch (error) { return { ok: false, error: String(error?.message || error) }; }

@@ -26,6 +26,7 @@ async function writeJsonObjectAtomic(filePath, entries, { header = null, seriali
       }
     }
     await handle.writeFile(`${chunk}${header ? "}}" : "}"}`);
+    await handle.sync();
     await handle.close();
     handle = null;
     await fs.rename(staged, filePath);

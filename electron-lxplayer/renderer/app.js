@@ -3845,6 +3845,36 @@ const shortcutMethods = {
 };
 
 const dataMethods = {
+  async loadApplicationInfo() {
+    this.applicationInfo = await window.lxEnv?.getApplicationInfo?.() || {};
+  },
+  async previewDiagnostics() {
+    if (this.diagnosticBusy) return;
+    this.diagnosticBusy = true;
+    try {
+      const result = await window.lxEnv?.previewDiagnostics?.(window.__kumikoErrors?.slice(-20) || []);
+      if (!result?.ok) throw Error(result?.error || '诊断信息暂时无法生成。');
+      this.diagnosticPreview = result;
+      await this.loadApplicationInfo();
+    } catch (error) { this.showNotice(error.message, 'error'); }
+    finally { this.diagnosticBusy = false; }
+  },
+  async exportDiagnostics() {
+    if (this.diagnosticBusy || !this.diagnosticPreview.id) return;
+    this.diagnosticBusy = true;
+    try {
+      const result = await window.lxEnv?.exportDiagnostics?.(this.diagnosticPreview.id);
+      if (!result?.ok) throw Error(result?.error || '导出未完成。');
+      if (!result.cancelled) this.showNotice('诊断信息已导出，请核对后自行提交。');
+    } catch (error) { this.showNotice(error.message, 'error'); }
+    finally { this.diagnosticBusy = false; }
+  },
+  async inspectRecovery() {
+    const result = await window.lxEnv?.getRecoveryInfo?.();
+    if (result?.ok) this.recoveryInfo = result;
+    else this.showNotice('备份状态暂时无法读取。', 'error');
+    await this.loadApplicationInfo();
+  },
   handleGlobalEscape(event) {
     if (String(event?.key || "") !== "Escape") return false;
     let handled = !!(
@@ -8630,6 +8660,7 @@ const utilityMethods = {
     if (id === "insights") { this.setView("insights"); return; }
     this.setView("settings");
     this.settingsTab = id;
+    if (id === 'manual') this.loadApplicationInfo().catch(() => {});
     if (id === "storage") this.loadDataLocations();
     if (id === 'storage') this.loadWorkspaces();
     if (id === "song-info") this.openSongInfoBatchSettings();
@@ -11049,6 +11080,10 @@ const kumikoVueApp = createApp({
       featureCatalog: window.FlowaveFeatureModules?.catalog || [],
       moduleFailures: window.FlowaveFeatureModules?.failures || {},
       featureDataLocations: [],
+      applicationInfo: {},
+      diagnosticPreview: {},
+      diagnosticBusy: false,
+      recoveryInfo: null,
       workspaceState: {recent:[]},
       workspaceMessage: '',
       workspaceBusy: false,

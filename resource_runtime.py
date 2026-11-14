@@ -116,15 +116,9 @@ def recipe_asset_path(root, relative):
 
 
 def status(root):
+    from resource_plan import module_plan
     data = catalog(root)
-    groups = {name: ready(managed_dir(root, 'assets', name, item), item) for name, item in data.get('groups', {}).items()}
-    profiles = {name: ready(managed_dir(root, 'runtimes', name, item), item) for name, item in data.get('profiles', {}).items()}
-    result = {}
-    for name, item in data.get('modules', {}).items():
-        entries = [{'id': key, 'name': data['groups'][key]['name'], 'ready': groups[key], 'bytes': sum(row.get('bytes', 0) for row in data['groups'][key].get('files', []))} for key in item.get('groups', [])]
-        entries += [{'id': key, 'name': data['profiles'][key]['name'], 'ready': profiles[key], 'bytes': 0} for key in item.get('profiles', [])]
-        result[name] = {'ready': all(row['ready'] for row in entries), 'items': entries, 'license': item.get('license', ''), 'downloadBytes': sum(row['bytes'] for row in entries if not row['ready'])}
-    return result
+    return {name:module_plan(root, name, data) for name in data.get('modules', {})}
 
 
 def worker_environment(root):

@@ -1,14 +1,18 @@
 Copyright (c) 2026 Kumiko. All rights reserved.
 
-No open-source license is granted for the original code, artwork, documentation,
-or compiled releases in this repository.
+Permission is granted to individuals to download official Flowave releases and
+use the application for personal, non-commercial purposes without a time limit.
+This permission is free of charge and does not require an account.
 
-You may inspect the publicly available source and download official releases for
-personal evaluation. You may not copy, modify, redistribute, sublicense, sell,
-or incorporate the original project materials into another product without
-separate written permission from the copyright holder.
+The original source code, artwork, documentation and compiled releases remain
+copyrighted. No permission is granted to redistribute, modify, sublicense, sell,
+or incorporate these materials into another product without separate written
+permission from the copyright holder. Public source may be inspected.
 
-Third-party software, libraries, models, and assets are not covered by this
-notice. They remain subject to their respective licenses. In particular,
-MERT-v1-330M is distributed by m-a-p under CC BY-NC 4.0 and is not included in
-the main application package.
+Third-party libraries, tools, models and weights remain subject to their own
+licenses. Their attribution, non-commercial and other terms apply separately.
+See THIRD_PARTY_NOTICES.txt and the notices shown when installing each feature.
+
+THE APPLICATION IS PROVIDED "AS IS", WITHOUT WARRANTIES OF ANY KIND, TO THE
+EXTENT PERMITTED BY APPLICABLE LAW. THE COPYRIGHT HOLDER IS NOT LIABLE FOR
+LOSSES ARISING FROM ITS USE, TO THE EXTENT PERMITTED BY APPLICABLE LAW.

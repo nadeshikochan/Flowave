@@ -78,6 +78,8 @@ function locations(data,appHome,layout=dataLayout(data)){
  }
  return [
   {id:'history',name:'听歌记录与备份',path:layout.history,note:'保留时长、次数和推荐学习；移除功能包不会删除。',important:true},
+  {id:'history-backups',name:'听歌记录自动备份',path:path.join(layout.history,'listening-history-backups'),note:'主文件损坏时启动会尝试最近有效备份。人工恢复前先退出软件并保留原工作区。',important:true},
+  {id:'history-snapshots',name:'记录操作前快照',path:path.join(layout.history,'listening-history-snapshots'),note:'保留每日首次保存前及维护操作前的原记录。',important:true},
   {id:'index',name:'曲库索引与歌曲身份',path:path.join(data,'library'),note:'此目录同时包含记录和分析成果。卸载按类别处理，手动整理时请核对具体文件。',important:true},
   {id:'analysis',name:'歌曲分析结果',path:path.join(data,'library','track-analysis'),note:'标签、段落、向量及任务恢复数据。',important:true},
   {id:'stems',name:'分轨与演奏成果',path:path.join(data,'library','stems'),note:'已生成的伴奏分轨。',important:true},

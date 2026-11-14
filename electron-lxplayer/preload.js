@@ -49,6 +49,10 @@ function subscribe(channel, callback) {
 }
 
 contextBridge.exposeInMainWorld("lxEnv", {
+  getApplicationInfo:() => ipcRenderer.invoke('lx-application-info'),
+  previewDiagnostics:errors => ipcRenderer.invoke('lx-diagnostics-preview', errors),
+  exportDiagnostics:id => ipcRenderer.invoke('lx-diagnostics-export', id),
+  getRecoveryInfo:() => ipcRenderer.invoke('lx-recovery-info'),
   getResourceStatus:()=>ipcRenderer.invoke('lx-resource-status'),
   prepareResources:value=>ipcRenderer.invoke('lx-resource-prepare',value),
   onResourceProgress:callback=>subscribe('lx-resource-progress',callback),

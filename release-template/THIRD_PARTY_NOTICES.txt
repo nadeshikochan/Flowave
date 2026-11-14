@@ -6,7 +6,7 @@ Model page: https://huggingface.co/m-a-p/MERT-v1-330M
 License: Creative Commons Attribution-NonCommercial 4.0 International
 License text: https://creativecommons.org/licenses/by-nc/4.0/
 
-MERT-v1-330M 由功能选装入口从原发布者下载。
+MERT-v1-330M 由插件与模型入口从原发布者下载。
 该模型要求署名且限制非商业用途。任何商业使用都需要另行取得权利人授权，
 或改用明确允许相应用途的模型。
 
@@ -23,3 +23,72 @@ Copyright (C) 1997-2026 Jordan Russell.
 Portions Copyright (C) 2000-2026 Martijn Laan.
 https://jrsoftware.org/
 https://github.com/jrsoftware/issrc/blob/is-7_1_1/license.txt
+
+Resource and model notice update, 2026-11-14
+
+The main Flowave application is available for personal, non-commercial use
+without a time limit. Its copyright is retained by Kumiko. Each third-party
+component keeps its own license. Models are obtained from their original
+publishers and are not embedded in the main installer or ZIP.
+
+MERT-v1-330M and MERT-v2-FullSong, m-a-p
+CC BY-NC 4.0, attribution and non-commercial terms apply.
+https://huggingface.co/m-a-p/MERT-v1-330M
+https://huggingface.co/m-a-p/MERT-v2-FullSong
+https://creativecommons.org/licenses/by-nc/4.0/
+
+MuQ-MuLan-large and MuQ-large-msd-iter, OpenMuQ
+Both pinned model cards declare CC BY-NC 4.0.
+https://huggingface.co/OpenMuQ/MuQ-MuLan-large
+https://huggingface.co/OpenMuQ/MuQ-large-msd-iter
+
+XLM-RoBERTa-base, Meta / FacebookAI
+Model card declares MIT.
+https://huggingface.co/FacebookAI/xlm-roberta-base
+
+Essentia Discogs-EffNet and MTG Jamendo classification heads, MTG / UPF
+The publisher licenses MTG models under CC BY-NC-SA 4.0. Attribution,
+non-commercial and ShareAlike terms apply to the licensed material.
+https://essentia.upf.edu/models.html
+https://creativecommons.org/licenses/by-nc-sa/4.0/
+
+SongFormer, ASLP-lab
+Pinned model README declares CC BY 4.0. Retain the source notices.
+https://huggingface.co/ASLP-lab/SongFormer
+https://creativecommons.org/licenses/by/4.0/
+
+MusicFM, minzwon
+Model card declares MIT. Retain the source notices.
+https://huggingface.co/minzwon/MusicFM
+
+SheetSage2, m-a-p
+Model card declares CC BY-NC 4.0.
+https://huggingface.co/m-a-p/SheetSage2
+
+GAME, Team OpenVPI
+Source code is MIT. Checkpoint terms follow the publisher's model release.
+https://github.com/openvpi/GAME
+
+pymss / pymss-core, pymss-project
+The package/model-host repository declares Apache-2.0. This declaration does
+not establish a separate license for every third-party checkpoint it hosts.
+BS-Roformer-SW.ckpt (SHA256 24e7d35ee9c64415673d3fd33e06a67cac2c103c5df6267ba1576459c775916e)
+and model_scnet_ep_36_sdr_10.0891.ckpt currently lack a sufficiently explicit
+checkpoint-specific grant in the reviewed original sources. Their permission
+remains unresolved. The private preview preserves the existing evaluation
+workflow and makes no redistribution or commercial-use grant for those weights.
+https://github.com/pymss-project/pyms
+https://huggingface.co/baicai1145/pymss
+https://github.com/ZFTurbo/Music-Source-Separation-Training/issues/245
+
+FFmpeg, through the imageio-ffmpeg upstream wheel
+The executable is used as a separate process. The upstream wheel retains its
+license material, executable build terms and original source references.
+https://github.com/imageio/imageio-ffmpeg
+https://ffmpeg.org/legal.html
+
+Electron/Chromium, Axios, Sharp/libvips, music-metadata, FastAPI, Starlette,
+Uvicorn, Pydantic, NumPy and the Python environments retain their upstream
+license files. Installed wheel dist-info and bundled license files are retained.
+Exact versions and immutable file identities are specified in the host lock
+files, resources/catalog.json and resources/install-plan.json.

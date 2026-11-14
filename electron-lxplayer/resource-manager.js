@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const {spawn} = require('node:child_process');
+const {readInstallPlan, modulePlan} = require('./resource-plan');
 const ordered = value => Array.isArray(value) ? value.map(ordered) : value && typeof value === 'object'
   ? Object.fromEntries(Object.keys(value).sort().map(key => [key, ordered(value[key])])) : value;
 const revision = value => crypto.createHash('sha256').update(JSON.stringify(ordered(value))).digest('hex');
@@ -22,14 +23,16 @@ class ResourceManager {
   snapshot() {
     let data;
     try { data = this.catalog(); } catch { return {}; }
-    return Object.fromEntries(Object.entries(data.modules).map(([id, item]) => {
-      const items = [
-        ...(item.profiles || []).map(key => ({id: key, name: data.profiles[key].name, ready: this.ready('runtimes', key, data.profiles[key]), bytes: 0})),
-        ...(item.groups || []).map(key => ({id: key, name: data.groups[key].name, ready: this.ready('assets', key, data.groups[key]), bytes: data.groups[key].files.reduce((n, row) => n + row.bytes, 0)})),
-      ];
-      const progress = this.operation?.id === id ? this.operation.progress : this.last[id] || {};
-      return [id, {ready: items.every(row => row.ready), items, license: item.license,
-        downloadBytes: items.filter(row => !row.ready).reduce((n, row) => n + row.bytes, 0),
+    let plan;
+    try { plan = readInstallPlan(this.root, data); } catch (error) {
+      return Object.fromEntries(Object.keys(data.modules).map(id => [id, {ready:false, error:error.message, items:[]} ]));
+    }
+    return Object.fromEntries(Object.keys(data.modules).map(id => {
+      let budget;
+      try { budget = modulePlan(data, plan, id, (kind, key, item) => this.ready(kind, key, item)); }
+      catch (error) { budget = {ready:false, error:error.message, items:[]}; }
+      const progress = this.operation?.id === id ? {...this.operation.budget, ...this.operation.progress} : this.last[id] || {};
+      return [id, {...budget,
         ...progress, running: this.operation?.id === id}];
     }));
   }
@@ -49,6 +52,9 @@ class ResourceManager {
     this.operation = op;
     const send = value => {
       if (this.operation !== op) return;
+      if (value.phase === 'preflight-ready') op.budget = {
+        spaceBudgetBytes:value.spaceBudgetBytes, availableBytes:value.availableBytes, devices:value.devices,
+      };
       op.progress = value;
       if (!sender.isDestroyed()) sender.send('lx-resource-progress', {id, ...value, status: this.snapshot()});
       onProgress(value);

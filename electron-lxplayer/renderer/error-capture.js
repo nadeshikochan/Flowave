@@ -10,6 +10,7 @@ window.addEventListener("error", function onKumikoError(event) {
     stack: event && event.error && event.error.stack ? String(event.error.stack) : "",
   };
   window.__kumikoErrors.push(item);
+  if (window.__kumikoErrors.length > 80) window.__kumikoErrors.shift();
   console.error(`[kumiko-render-error] ${JSON.stringify(item)}`);
 });
 
@@ -21,5 +22,6 @@ window.addEventListener("unhandledrejection", function onKumikoUnhandledRejectio
     stack: reason && reason.stack ? String(reason.stack) : "",
   };
   window.__kumikoErrors.push(item);
+  if (window.__kumikoErrors.length > 80) window.__kumikoErrors.shift();
   console.error(`[kumiko-render-error] ${JSON.stringify(item)}`);
 });

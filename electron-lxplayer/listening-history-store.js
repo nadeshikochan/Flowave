@@ -30,10 +30,16 @@ function writeJsonAtomic(filePath, value, fileSystem = fs) {
   fileSystem.mkdirSync(dir, { recursive: true });
   const nonce = crypto.randomBytes(4).toString("hex");
   const temporaryPath = path.join(dir, `${path.basename(filePath)}.${process.pid}.${nonce}.tmp`);
+  let descriptor;
   try {
-    fileSystem.writeFileSync(temporaryPath, JSON.stringify(value || {}, null, 2), "utf-8");
+    descriptor = fileSystem.openSync(temporaryPath, 'wx');
+    fileSystem.writeFileSync(descriptor, JSON.stringify(value || {}, null, 2), "utf-8");
+    fileSystem.fsyncSync(descriptor);
+    fileSystem.closeSync(descriptor);
+    descriptor = undefined;
     fileSystem.renameSync(temporaryPath, filePath);
   } catch (error) {
+    if (descriptor !== undefined) fileSystem.closeSync(descriptor);
     try {
       if (fileSystem.existsSync(temporaryPath)) fileSystem.unlinkSync(temporaryPath);
     } catch {

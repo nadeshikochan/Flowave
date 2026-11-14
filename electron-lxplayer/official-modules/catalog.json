@@ -10,7 +10,7 @@
           "sha256": "e269ec0f8df2e3636dc15973d2d95e9be3a7d61d03c122820ce34e0850d6f418",
           "bundle": "history-1.0.0.fwm",
           "bytes": 14993,
-          "url": "https://github.com/nadeshikochan/Flowave/releases/download/plugins-v1.0.0/history-1.0.0.fwm"
+          "url": "https://github.com/nadeshikochan/Flowave/releases/download/plugins-v1.1.0/history-1.0.0.fwm"
         }
       ]
     },
@@ -29,7 +29,8 @@
           "version": "1.0.1",
           "sha256": "5a8a3e283bde3ad18bcbebc0aa4061be47ee041ffaa0e83e6c86d41ec3adfad2",
           "bundle": "recommendation-1.0.1.fwm",
-          "bytes": 137338
+          "bytes": 137338,
+          "url": "https://github.com/nadeshikochan/Flowave/releases/download/plugins-v1.1.0/recommendation-1.0.1.fwm"
         }
       ]
     },
@@ -48,7 +49,8 @@
           "version": "1.0.1",
           "sha256": "61039d45ed9256758a1d28f42b8f528b8d4757efc60b8f3d31d3ed71a8333020",
           "bundle": "analysis-1.0.1.fwm",
-          "bytes": 35875
+          "bytes": 35875,
+          "url": "https://github.com/nadeshikochan/Flowave/releases/download/plugins-v1.1.0/analysis-1.0.1.fwm"
         }
       ]
     },
@@ -81,7 +83,7 @@
           "sha256": "4f57370445b32d59682854633cf83b16816ce1e457802fc081e5f7041eacc53e",
           "bundle": "practice-1.0.3.fwm",
           "bytes": 1439574,
-          "url": "https://github.com/nadeshikochan/Flowave/releases/download/plugins-v1.0.0/practice-1.0.3.fwm"
+          "url": "https://github.com/nadeshikochan/Flowave/releases/download/plugins-v1.1.0/practice-1.0.3.fwm"
         }
       ]
     }

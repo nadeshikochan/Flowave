@@ -253,25 +253,16 @@ def _merge_defaults(cfg: Dict[str, Any], defaults: Dict[str, Any]) -> bool:
 
 
 def _write_config_file(cfg: Dict[str, Any]) -> None:
-    APP_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    tmp = APP_CONFIG_PATH.with_name(f"{APP_CONFIG_PATH.name}.{os.getpid()}.tmp")
-    tmp.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
-    tmp.replace(APP_CONFIG_PATH)
+    from config_store import write_config
+    write_config(APP_CONFIG_PATH, cfg)
 
 
 def load_config() -> Dict[str, Any]:
     ensure_runtime_dirs()
     changed = False
-    if APP_CONFIG_PATH.exists():
-        try:
-            cfg = json.loads(APP_CONFIG_PATH.read_text(encoding="utf-8"))
-        except Exception:
-            cfg = copy.deepcopy(DEFAULT_CONFIG)
-            changed = True
-    else:
-        cfg = copy.deepcopy(DEFAULT_CONFIG)
-        changed = True
-    if not isinstance(cfg, dict):
+    from config_store import read_config
+    cfg = read_config(APP_CONFIG_PATH)
+    if cfg is None:
         cfg = copy.deepcopy(DEFAULT_CONFIG)
         changed = True
     changed = _merge_defaults(cfg, DEFAULT_CONFIG) or changed
@@ -2246,7 +2237,7 @@ def update_config(cfg: ConfigUpdate):
             raise HTTPException(status_code=409, detail="请使用音乐库载入操作更改文件夹")
         old_similarity = json.dumps(cfg_dict.get("similarity") or {}, sort_keys=True, ensure_ascii=False)
         # 深度更新，只覆盖传入的字段
-        for k, v in cfg.dict(exclude_none=True).items():
+        for k, v in cfg.model_dump(exclude_none=True).items():
             if isinstance(v, dict):
                 cfg_dict.setdefault(k, {}).update(v)
             else:
