@@ -134,6 +134,8 @@ def download(item, cache, group):
                         if time.monotonic() - _last_progress > .4:
                             emit(phase='download', group=group, file=Path(item['path']).name, done=done, total=size)
                             _last_progress = time.monotonic()
+                if part.stat().st_size != size or digest(part) != expected:
+                    raise ValueError(f"资源校验失败：{Path(item['path']).name}。请重试。")
                 break
             except Exception:
                 if attempt == 3:

@@ -58,7 +58,7 @@ for profile in resources['profiles'].values():
     $configPath = Join-Path $repo "build/desktop-$Mode.json"
     $config = (Get-Content -LiteralPath (Join-Path $electron 'package.json') -Raw -Encoding UTF8 | ConvertFrom-Json).build
     $config.directories.output = Join-Path $electron $output
-    $config.files = @($config.files) + @(@{from=(Join-Path $repo 'build/release-build-info.json');to='build-info.json'})
+    $config.extraFiles = @($config.extraFiles) + @(@{from=(Join-Path $repo 'build/release-build-info.json');to='build-info.json'})
     $electronDist = Join-Path $electron 'node_modules/electron/dist'
     if (Test-Path -LiteralPath (Join-Path $electronDist 'electron.exe')) { $config | Add-Member -NotePropertyName electronDist -NotePropertyValue $electronDist -Force }
     if ($Mode -eq 'installed') {

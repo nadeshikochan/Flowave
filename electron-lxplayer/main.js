@@ -122,7 +122,7 @@ const featureSelection = require('./feature-selection').createFeatureSelection(p
   available:id=>officialPackages.hasActive(id),
 });
 const resourceManager=new (require('./resource-manager').ResourceManager)(APP_HOME,{dataDir:DATA_DIR});
-const applicationInfo = () => require('./release-info').releaseInfo(__dirname);
+const applicationInfo = () => require('./release-info').releaseInfo(__dirname, path.join(APP_HOME, 'build-info.json'));
 const diagnostics = require('./diagnostics').createDiagnostics({
   root:APP_HOME, dataDir:DATA_DIR, info:applicationInfo,
   packages:() => officialPackages.snapshot(), resources:() => resourceManager.snapshot(),

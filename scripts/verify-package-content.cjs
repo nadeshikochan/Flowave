@@ -49,6 +49,9 @@ if (archive) {
     if (!asar.extractFile(archive, path.normalize(bundle.relative)).equals(bundle.bytes))
       throw Error('Packaged official module differs from verified source: ' + bundle.relative);
   }
+  const buildInfo = JSON.parse(fs.readFileSync(path.join(path.dirname(archive), '..', 'build-info.json'), 'utf8').replace(/^\uFEFF/, ''));
+  const packagedVersion = JSON.parse(asar.extractFile(archive, 'package.json').toString('utf8')).version;
+  if (buildInfo.version !== packagedVersion || !/^[0-9a-f]{40}$/.test(buildInfo.commit)) throw Error('Packaged build identity is missing or invalid');
   const entry = JSON.parse(asar.extractFile(archive, 'package.json').toString('utf8')).main;
   if (typeof entry !== 'string' || !names.has(entry)) throw Error('Missing Electron entry point: ' + entry);
   for (const name of names) {
