@@ -40,6 +40,9 @@
 .help-image-button > span { display: block; padding: 24px; color: var(--sub); }
 .user-help figcaption { color: var(--sub); font-size: 12px; line-height: 1.7; padding-top: 10px; }
 .help-figure figcaption span { white-space: nowrap; color: var(--accent); }
+.help-figure-key { list-style: none; padding: 0; margin: 14px 0 0; display: flex; flex-wrap: wrap; gap: 9px 24px; font-size: 13px; color: var(--sub); }
+.help-figure-key li { display: flex; gap: 8px; align-items: baseline; }
+.help-figure-key b { color: var(--accent); font-weight: 600; }
 .help-results > button { display: flex; flex-direction: column; gap: 8px; width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--border); background: none; padding: 24px 0; cursor: pointer; color: var(--text); }
 .help-results > button:hover strong { color: var(--accent); }
 .help-results small, .help-results span { color: var(--sub); font-size: 14px; line-height: 1.7; }
@@ -65,6 +68,7 @@
 .help-feature-list dt { font-weight: 600; }
 .help-feature-list dt small { font-weight: 400; color: var(--sub); margin-left: 12px; }
 .help-feature-list dd { color: var(--sub); margin: 6px 0 0; line-height: 1.7; }
+.help-feature-link { background: none; color: var(--accent); border: 0; font: inherit; font-size: 12px; cursor: pointer; padding: 5px 0 0; }
 .help-status { color: var(--sub); border-left: 2px solid var(--accent); padding-left: 14px; font-size: 13px; line-height: 1.8; }
 .help-error { color: var(--danger); padding: 0 4%; font-size: 14px; }
 .help-image-dialog { max-width: min(1400px, 94vw); max-height: 92vh; padding: 16px; border: 1px solid var(--border); background: var(--panel); color: var(--text); box-shadow: var(--shadow-overlay); }
@@ -85,10 +89,10 @@
   .help-search { order: 3; width: 100%; margin: 0; }
   .help-toolbar > button:last-child { margin-left: auto; }
   .help-menu-toggle { display: block; border-radius: 0; text-align: left; padding-left: 24px; border-bottom: 1px solid var(--border); }
-  .help-reader { display: flex; position: relative; }
-  .help-contents { display: none; position: absolute; inset: 0; z-index: 2; background: var(--panel); }
-  .help-contents.is-open { display: block; }
-  .help-body { flex: 1; }
+  .help-reader { display: flex; flex-direction: column; }
+  .help-contents { display: none; background: var(--panel); }
+  .help-contents.is-open { display: block; flex: 0 0 auto; max-height: 40vh; border-bottom: 1px solid var(--border); }
+  .help-body { flex: 1; min-height: 0; }
   .help-tour-steps { padding: 12px 14px; gap: 12px; justify-content: space-between; flex-wrap: wrap; }
   .help-tour-steps button { font-size: 12px; }
   .help-tour-steps button span { width: 20px; height: 20px; margin-right: 3px; }

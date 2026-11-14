@@ -222,7 +222,7 @@
                 <div class="col-idx">{{ libraryVirtualEnabled ? (libraryStart + idx + 1) : (idx + 1) }}</div>
                 <div class="col-title track-primary">
                   <span class="track-cover-slot" aria-hidden="true">
-                    <img v-if="t.cover_thumb || t.cover" :src="isOnlineToken(t.path) ? onlineCoverUrl(t.cover_thumb || t.cover) : (t.cover_thumb || t.cover)" alt="" class="cover-thumb" loading="lazy" decoding="async">
+                    <img v-if="t.cover_thumb || t.cover" :src="isOnlineToken(t.path) ? onlineCoverUrl(t.cover_thumb || t.cover) : pathToFile(t.cover_thumb || t.cover)" alt="" class="cover-thumb" loading="lazy" decoding="async">
                     <svg v-else viewBox="0 0 24 24" aria-hidden="true"><path d="M9 17V6l10-2v11M9 8l10-2"/><circle cx="6" cy="17" r="3"/><circle cx="16" cy="15" r="3"/></svg>
                   </span>
                   <span class="track-title-text">{{ t.title || t.name || extractName(t.path) }}</span>

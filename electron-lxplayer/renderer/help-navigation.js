@@ -83,6 +83,7 @@
         this.openUserManual(topic || 'start');
       },
       navigateFromHelp(action) {
+        if (action.feature && !this.featureEnabled(action.feature)) { this.openSettingsSection('features'); return; }
         if (action.page) this.openSettingsSection(action.page, action.anchor || '');
         else if (action.view) this.setView(action.view);
       },

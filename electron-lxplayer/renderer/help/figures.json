@@ -1,0 +1,219 @@
+{
+  "library.png": {
+    "query": "view=library",
+    "points": [
+      {
+        "selector": ".nav-primary .nav-btn:first-child",
+        "label": "歌曲与歌单在左侧切换"
+      },
+      {
+        "selector": ".library-toolbar",
+        "label": "在这里搜索歌名、歌手或专辑"
+      },
+      {
+        "selector": ".player .cover",
+        "label": "点击底部封面打开歌词"
+      },
+      {
+        "selector": ".nav-footer button[title^='使用手册']",
+        "label": "使用手册随时可查"
+      }
+    ]
+  },
+  "library-settings.png": {
+    "query": "view=settings&tab=library-settings",
+    "points": [
+      {
+        "selector": ".library-folder-actions .mini",
+        "label": "添加音乐文件夹"
+      },
+      {
+        "selector": ".library-folder-actions .primary",
+        "label": "应用更改后载入曲库"
+      }
+    ]
+  },
+  "packages.png": {
+    "query": "view=settings&tab=features",
+    "points": [
+      {
+        "selector": ".feature-install-header > button",
+        "label": "安装所需功能与匹配资源"
+      },
+      {
+        "selector": ".feature-install-item details summary",
+        "label": "展开查看计算环境与模型状态"
+      }
+    ]
+  },
+  "recommendation.png": {
+    "query": "view=settings&tab=advanced",
+    "points": [
+      {
+        "selector": ".settings-setup-links",
+        "label": "按顺序完成推荐准备"
+      },
+      {
+        "selector": "[data-setting-id='setting-advanced-72ce9b8c3f'] .btns .mini:nth-child(2)",
+        "label": "更新推荐索引"
+      },
+      {
+        "selector": ".settings-subnavigation button:nth-child(2)",
+        "label": "索引完成后进入接歌规则"
+      }
+    ]
+  },
+  "lyrics.png": {
+    "query": "view=library&scene=immersive",
+    "points": [
+      {
+        "selector": ".lyric-back",
+        "label": "返回歌曲列表"
+      },
+      {
+        "selector": ".lyric-tools summary",
+        "label": "歌词工具、音频详情与均衡器"
+      }
+    ]
+  },
+  "details.png": {
+    "query": "view=library&scene=detail-info",
+    "points": [
+      {
+        "selector": ".audio-detail-artists button",
+        "label": "进入这个歌手的歌曲"
+      },
+      {
+        "selector": ".audio-detail-discovery button",
+        "label": "查询这首歌的相似列表"
+      },
+      {
+        "selector": ".audio-detail-format",
+        "label": "采样率、位深、码率和声道"
+      }
+    ]
+  },
+  "analysis.png": {
+    "query": "view=analysis",
+    "points": [
+      {
+        "selector": ".analysis-current-fragment",
+        "label": "当前片段的局部特点"
+      },
+      {
+        "selector": ".analysis-structure",
+        "label": "歌曲段落及当前所在位置"
+      },
+      {
+        "selector": ".analysis-summary",
+        "label": "整曲标签与匹配强度"
+      }
+    ],
+    "clip": ".insights-heading",
+    "clipEnd": ".analysis-summary"
+  },
+  "filters.png": {
+    "query": "view=insights",
+    "clip": ".analysis-filters",
+    "points": [
+      {
+        "selector": ".analysis-filter-choice > button",
+        "label": "点击标签设为包含条件"
+      },
+      {
+        "selector": ".analysis-filter-choice > button:nth-child(2)",
+        "label": "用减号排除该特点"
+      },
+      {
+        "selector": ".analysis-filters > .analysis-actions",
+        "label": "选择是否包含未分析歌曲"
+      }
+    ]
+  },
+  "practice.png": {
+    "query": "view=practice",
+    "clip": ".practice-mixer",
+    "points": [
+      {
+        "selector": ".practice-mixer .practice-actions .primary",
+        "label": "载入已准备的分轨伴奏"
+      },
+      {
+        "selector": ".practice-track input",
+        "label": "分别调整各轨音量"
+      },
+      {
+        "selector": ".practice-track button:last-child",
+        "label": "独听选中的这一轨"
+      }
+    ]
+  },
+  "workspace.png": {
+    "query": "view=settings&tab=storage",
+    "points": [
+      {
+        "selector": "[data-setting-id='setting-workspaces'] .feature-storage-row",
+        "label": "确认当前工作区目录"
+      },
+      {
+        "selector": "[data-setting-id='setting-workspaces'] .btns button:first-child",
+        "label": "新建或打开另一个工作区"
+      },
+      {
+        "selector": "[data-setting-id='setting-storage-locations'] .feature-storage-row button",
+        "label": "打开对应数据的实际目录"
+      }
+    ]
+  },
+  "map.png": {
+    "query": "view=sound-map",
+    "points": [
+      {
+        "selector": ".sound-map-toolbar",
+        "label": "切换全库、单曲与轨迹视角"
+      },
+      {
+        "selector": ".sound-map-stage",
+        "label": "缩放、旋转、平移和选歌"
+      }
+    ]
+  },
+  "sound.png": {
+    "query": "view=settings&tab=general",
+    "openEqualizer": true,
+    "clip": ".equalizer-dialog",
+    "points": [
+      {
+        "selector": ".equalizer-toolbar label",
+        "label": "总开关用于试听对照"
+      },
+      {
+        "selector": ".equalizer-band input",
+        "label": "每个频段分别提升或衰减"
+      },
+      {
+        "selector": ".equalizer-dialog .form-row",
+        "label": "前置增益调整进入处理前的电平"
+      }
+    ]
+  },
+  "processing.png": {
+    "query": "view=insights",
+    "openProcessing": true,
+    "clip": ".analysis-processing",
+    "points": [
+      {
+        "selector": ".analysis-processing select",
+        "label": "选择歌曲标签或段落结构"
+      },
+      {
+        "selector": ".analysis-processing .analysis-actions button",
+        "label": "补齐新增与待更新歌曲"
+      },
+      {
+        "selector": ".analysis-processing > p button",
+        "label": "查看分析结果保存位置"
+      }
+    ]
+  }
+}

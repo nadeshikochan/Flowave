@@ -148,7 +148,9 @@
       "related": [
         "packages",
         "recovery"
-      ]
+      ],
+      "image": "workspace.png",
+      "caption": "工作区与存储示例。实际使用时，此页显示当前工作区和各类数据的位置。"
     },
     {
       "id": "history",

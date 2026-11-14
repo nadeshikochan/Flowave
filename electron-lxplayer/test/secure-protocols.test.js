@@ -44,6 +44,53 @@ test("local media URLs preserve Windows paths and reject non-media files", () =>
   }
 });
 
+test("workspace media requests repair migrated artwork without rereading track metadata", async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "flowave-workspace-artwork-"));
+  const currentCache = path.join(directory, "current workspace 音乐", "cache");
+  const oldCache = path.join(directory, "previous", "data", "cache");
+  const otherCache = path.join(directory, "other workspace", "cache");
+  try {
+    const handlers = new Map();
+    secureProtocols.registerSecureProtocols({
+      protocol: { handle: (scheme, handler) => handlers.set(scheme, handler) },
+      rendererDir: directory,
+      mediaCacheRoot: currentCache,
+    });
+    for (const kind of ["covers", "thumbs"]) {
+      const old = path.join(oldCache, "metadata", kind, "same.jpg");
+      const current = path.join(currentCache, "metadata", kind, "same.jpg");
+      const other = path.join(otherCache, "metadata", kind, "same.jpg");
+      for (const target of [old, current, other]) fs.mkdirSync(path.dirname(target), {recursive:true});
+      fs.writeFileSync(old, "previous workspace");
+      fs.writeFileSync(current, "current workspace");
+      fs.writeFileSync(other, "other workspace");
+      const url = secureProtocols.toLocalMediaUrl(old);
+      for (const sourceExists of [true, false]) {
+        if (!sourceExists) fs.unlinkSync(old);
+        assert.equal(secureProtocols.resolveLocalMediaPath(url, currentCache), current);
+        assert.equal(secureProtocols.resolveLocalMediaPath(url, otherCache), other);
+        const response = await handlers.get("kumiko-media")({url, method:"GET", headers:new Headers()});
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get("content-type"), "image/jpeg");
+        assert.equal(await response.text(), "current workspace");
+      }
+    }
+    const normalImage = path.join(directory, "cover.jpg");
+    fs.writeFileSync(normalImage, "external cover");
+    assert.equal(secureProtocols.resolveLocalMediaPath(secureProtocols.toLocalMediaUrl(normalImage), currentCache), normalImage);
+    const audio = path.join(oldCache, "metadata", "covers", "audio.mp3");
+    fs.mkdirSync(path.dirname(audio), {recursive:true});
+    fs.writeFileSync(audio, "audio must retain its path");
+    assert.equal(secureProtocols.resolveLocalMediaPath(secureProtocols.toLocalMediaUrl(audio), currentCache), audio);
+    const missing = path.join(oldCache, "metadata", "covers", "missing.jpg");
+    assert.equal(secureProtocols.remapWorkspaceArtwork(missing, currentCache), missing);
+    assert.equal(secureProtocols.resolveLocalMediaPath(secureProtocols.toLocalMediaUrl(missing), currentCache), "");
+  } finally {
+    assert(path.resolve(directory).startsWith(path.resolve(os.tmpdir()) + path.sep));
+    fs.rmSync(directory, {recursive:true, force:true});
+  }
+});
+
 test("local media responses support complete, head, and byte-range requests", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kumiko-secure-range-"));
   try {

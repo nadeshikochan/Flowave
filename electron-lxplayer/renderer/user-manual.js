@@ -4,7 +4,7 @@
   let catalogue;
   const tourSteps = [
     {title: '从一首喜欢的歌开始', topic: 'start', image: 'library.png',
-      text: '管理本地音乐、看歌词、按自己的习惯听歌。需要时再安装推荐、分析、练习和记录。',
+      text: '从一首喜欢的歌开始听，点开封面看歌词。选装歌曲推荐后，可以沿当前氛围连续听，遇到不合适的一首时接回此前的感觉，也可以主动换个方向。',
       points: ['左侧切换歌曲和歌单，中间查找音乐。', '双击歌曲播放，底部控制暂停、切歌和音量。', '点击底部封面，进入沉浸歌词。']},
     {title: '添加音乐，就可以听了', topic: 'add-music', image: 'library-settings.png',
       text: '先让 Flowave 找到你的音乐。推荐和分析可以之后再准备。',
@@ -44,10 +44,10 @@
       },
       featureRows() {
         return [
-          {id: 'recommendation', name: '歌曲推荐', text: '沿当前氛围接歌，随时找回或换个感觉。'},
-          {id: 'analysis', name: '歌曲分析', text: '看乐器、风格和段落，组合标签找歌。'},
-          {id: 'practice', name: '演奏练习', text: '准备分轨，调伴奏并循环练习。'},
-          {id: 'history', name: '听歌记录', text: '查看听歌时长、次数和排行。'},
+          {id: 'recommendation', topic:'prepare-recommendation', name: '歌曲推荐', text: '沿当前氛围接歌，随时找回或换个感觉。'},
+          {id: 'analysis', topic:'analysis', name: '歌曲分析', text: '看乐器、风格和段落，组合标签找歌。'},
+          {id: 'practice', topic:'practice', name: '演奏练习', text: '准备分轨，调伴奏并循环练习。'},
+          {id: 'history', topic:'history', name: '听歌记录', text: '查看听歌时长、次数和排行。'},
         ].map(item => ({...item, state: root.FlowaveFeatureModules?.failures?.[item.id] ? '载入失败，前往功能页检查'
           : this.features?.active?.enabled?.[item.id] === true
           ? '当前已启用' : this.features?.packages?.[item.id]?.installed ? '已安装，核对启用状态' : '可按需安装'}));
@@ -93,7 +93,17 @@
           if (this.active) this.$refs.contents?.querySelector('[aria-current="page"]')?.scrollIntoView({block:'nearest'});
         });
       },
-      choose(id) { this.query = ''; this.menuOpen = false; this.$emit('topic', id); },
+      choose(id) {
+        this.query = ''; this.menuOpen = false;
+        if (id === this.topic) this.focusTitle();
+        else this.$emit('topic', id);
+      },
+      closeContents(event) {
+        if (!this.menuOpen) return;
+        event.preventDefault(); event.stopPropagation();
+        this.menuOpen = false;
+        this.$nextTick(() => this.$refs.menuToggle?.focus());
+      },
       goBack() { if (this.position > 0) { this.position--; this.choose(this.history[this.position]); } },
       actionLabel(action) {
         const setting = root.FlowaveSettings?.items.find(item => item.anchor === action.anchor && item.page === action.page);
@@ -130,19 +140,19 @@
               <p class="help-eyebrow">开始使用 · {{tourIndex+1}} / 4</p>
               <h1 ref="heading" tabindex="-1">{{currentStep.title}}</h1>
               <p class="help-lead">{{currentStep.text}}</p>
-              <ol v-if="currentStep.points" class="help-tour-points">
+              <ul v-if="currentStep.points" class="help-tour-points">
                 <li v-for="point in currentStep.points" :key="point">{{point}}</li>
-              </ol>
+              </ul>
               <dl v-if="currentStep.features" class="help-feature-list">
                 <div v-for="item in featureRows" :key="item.id">
                   <dt>{{item.name}}<small>{{item.state}}</small></dt>
                   <dd>{{item.text}}</dd>
+                  <button class="help-feature-link" @click="choose(item.topic);$emit('tour',false)">了解{{item.name}} →</button>
                 </div>
               </dl>
               <p v-if="tourIndex===1" class="help-status">{{musicCount>0 ? '当前曲库已载入 '+musicCount+' 首歌曲，可以开始播放。' : '当前曲库还没有歌曲。前往设置添加音乐，之后可从左下角手册继续查看。'}}</p>
               <p v-if="tourIndex===2" class="help-status">推荐准备顺序<br />安装资源 → 重启启用 → 添加音乐 → 更新索引 → 开启连续推荐</p>
               <div class="help-actions">
-                <button v-if="currentStep.action" class="primary" @click="$emit('navigate',currentStep.action)">{{currentStep.action.label}}</button>
                 <button class="mini ghost" @click="openTourArticle">阅读详细操作 ↗</button>
               </div>
             </div>
@@ -152,12 +162,16 @@
                 <span v-else>图片暂不可用，可继续阅读文字说明。</span>
               </button>
               <figcaption>当前界面示例 · 点击图片放大</figcaption>
+              <ol v-if="catalogue?.figures?.[currentStep.image]" class="help-figure-key" aria-label="图中标注">
+                <li v-for="(point,i) in catalogue.figures[currentStep.image].points" :key="point.label"><b>{{i+1}}</b>{{point.label}}</li>
+              </ol>
             </figure>
           </div>
           <footer class="help-tour-footer">
             <span>稍后可从左下角“使用手册”重新打开。</span>
             <div>
               <button v-if="tourIndex>0" class="mini ghost" @click="advance(-1)">上一步</button>
+              <button v-if="currentStep.action" class="mini" @click="$emit('navigate',currentStep.action)">{{currentStep.action.label}}</button>
               <button v-if="tourIndex<3" class="primary" @click="advance(1)">下一步</button>
               <button v-else class="primary" :disabled="saveBusy" @click="$emit('finish','completed')">{{saveBusy?'正在保存…':'开始使用'}}</button>
             </div>
@@ -165,9 +179,9 @@
           <p v-if="saveError" class="help-error" role="alert">{{saveError}}</p>
         </div>
         <template v-else>
-          <button class="help-menu-toggle mini ghost" :aria-expanded="menuOpen" @click="menuOpen=!menuOpen">章节目录 {{menuOpen?'⌃':'⌄'}}</button>
+          <button ref="menuToggle" class="help-menu-toggle mini ghost" :aria-expanded="menuOpen" @click="menuOpen=!menuOpen">章节目录 {{menuOpen?'⌃':'⌄'}}</button>
           <div class="help-reader">
-            <aside ref="contents" class="help-contents" :class="{'is-open':menuOpen}" aria-label="手册章节">
+            <aside ref="contents" class="help-contents" :class="{'is-open':menuOpen}" aria-label="手册章节" @keydown.esc="closeContents">
               <p>Flowave 操作与参考</p>
               <nav v-if="catalogue">
                 <section v-for="chapter in catalogue.chapters" :key="chapter.id">
@@ -203,6 +217,9 @@
                     <span v-else>图片暂不可用，可继续阅读以下操作。</span>
                   </button>
                   <figcaption>{{article.caption}} <span v-if="!imageFailed">点击放大</span></figcaption>
+                  <ol v-if="catalogue.figures?.[article.image]?.points?.length" class="help-figure-key" aria-label="图中标注">
+                    <li v-for="(point,i) in catalogue.figures[article.image].points" :key="point.label"><b>{{i+1}}</b>{{point.label}}</li>
+                  </ol>
                 </figure>
                 <section v-for="(section,index) in article.sections" :key="index" class="help-section" :id="'help-section-'+index">
                   <h2>{{section.title}}</h2>

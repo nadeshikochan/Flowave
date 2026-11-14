@@ -109,10 +109,23 @@ function resolveRendererAsset(rendererDir, requestUrl) {
   return target;
 }
 
-function resolveLocalMediaPath(requestUrl) {
+function remapWorkspaceArtwork(filePath, cacheRoot) {
+  if (!cacheRoot || !path.isAbsolute(filePath)) return filePath;
+  const normalized = filePath.replace(/\\/g, "/");
+  const match = /\/cache\/metadata\/((?:covers|thumbs)\/[^/]+\.(?:png|jpe?g|webp|avif|gif|bmp))$/i.exec(normalized);
+  if (!match) return filePath;
+  const candidate = path.resolve(cacheRoot, "metadata", ...match[1].split("/"));
+  if (candidate === path.resolve(filePath)) return filePath;
+  try {
+    if (fs.statSync(candidate).isFile()) return candidate;
+  } catch (_) { /* Preserve the original source when this workspace has no copy. */ }
+  return filePath;
+}
+
+function resolveLocalMediaPath(requestUrl, cacheRoot) {
   const decoded = localMediaUrlToPath(requestUrl);
   if (!decoded || !path.isAbsolute(decoded)) return "";
-  const target = path.resolve(decoded);
+  const target = path.resolve(remapWorkspaceArtwork(decoded, cacheRoot));
   if (!ALLOWED_MEDIA_EXTENSIONS.has(path.extname(target).toLowerCase())) return "";
   try {
     if (!fs.statSync(target).isFile()) return "";
@@ -246,7 +259,7 @@ async function createLocalMediaResponse(request, target) {
   return new Response(createMediaBody(stream, request?.signal), { status, headers });
 }
 
-function registerSecureProtocols({ protocol, electronNet, rendererDir, moduleAsset }) {
+function registerSecureProtocols({ protocol, electronNet, rendererDir, moduleAsset, mediaCacheRoot }) {
   protocol.handle(APP_SCHEME, (request) => {
     let requestedPath;try{requestedPath=new URL(request.url).pathname;}catch{return plainResponse(404,'Not found');}
     if(requestedPath.startsWith('/_modules/')){
@@ -272,7 +285,7 @@ function registerSecureProtocols({ protocol, electronNet, rendererDir, moduleAss
     if (!["GET", "HEAD"].includes(String(request.method || "GET").toUpperCase())) {
       return plainResponse(405, "Method not allowed");
     }
-    const target = resolveLocalMediaPath(request.url);
+    const target = resolveLocalMediaPath(request.url, mediaCacheRoot);
     if (!target) return plainResponse(404, "Not found");
     try {
       return await createLocalMediaResponse(request, target);
@@ -302,6 +315,7 @@ module.exports = {
   registerPrivilegedSchemes,
   registerSecureProtocols,
   resolveLocalMediaPath,
+  remapWorkspaceArtwork,
   resolveRendererAsset,
   toLocalMediaUrl,
 };

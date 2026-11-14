@@ -1260,6 +1260,7 @@ app.whenReady().then(async () => {
     protocol,
     electronNet,
     rendererDir: path.join(__dirname, "renderer"),
+    mediaCacheRoot: CACHE_DIR,
     moduleAsset:url=>officialPackages.readAsset(url),
   });
   lyricSidecarRecovery.start({

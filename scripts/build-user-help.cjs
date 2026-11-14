@@ -4,10 +4,12 @@ const path = require('node:path');
 const directory = path.resolve(__dirname, '../electron-lxplayer/renderer/help');
 const order = ['start', 'library', 'recommendation', 'lyrics', 'analysis', 'practice', 'workspace', 'reference'];
 const chapters = order.map(id => JSON.parse(fs.readFileSync(path.join(directory, id + '.json'), 'utf8')));
+const figures = JSON.parse(fs.readFileSync(path.join(directory, 'figures.json'), 'utf8'));
 const text = value => typeof value === 'string' ? value : Array.isArray(value)
   ? value.map(text).join(' ') : value && typeof value === 'object' ? Object.values(value).map(text).join(' ') : '';
 const ids = new Set();
 for (const chapter of chapters) for (const article of chapter.articles) {
+  if (article.image && !figures[article.image]) throw Error('Unknown figure ' + article.image);
   if (ids.has(article.id)) throw Error('Duplicate article ' + article.id);
   ids.add(article.id);
 }
@@ -17,6 +19,7 @@ for (const chapter of chapters) for (const article of chapter.articles) {
 }
 const catalogue = {
   schema: 1,
+  figures: Object.fromEntries(Object.entries(figures).map(([name, figure]) => [name, {points:figure.points.map(({label})=>({label}))}])),
   chapters: chapters.map(({id, title, articles}) => ({id, title,
     articles: articles.map(article => ({id: article.id, title: article.title, summary: article.summary,
       search: text([article.keywords, article.sections])})),
