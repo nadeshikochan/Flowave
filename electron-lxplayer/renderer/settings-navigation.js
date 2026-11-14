@@ -82,6 +82,7 @@ const categories=[
 ];
 const titles={"features":"插件与模型", "storage":"工作区与存储","general": "播放与声音", "recommendation": "接歌规则", "theme": "软件外观", "lyric": "软件内歌词", "desktop-lyric": "桌面歌词", "library-settings": "本地音乐", "source": "在线音源与音质", "downloads": "下载与入库", "shortcuts": "快捷键", "advanced": "准备与索引", "logs": "诊断日志", "manual": "帮助与恢复", "history": "听歌记录", "song-info": "歌曲资料与歌词补全", "folders": "文件夹", "insights": "曲库概览"};
 const items=[
+  {id:'setting-user-help',anchor:'setting-user-help',page:'manual',title:'图文使用手册与入门引导',path:'数据与帮助 / 帮助与恢复',keywords:'使用手册 新手 首次使用 欢迎 教程 功能介绍 帮助 图文'},
   {id:'setting-release-info',anchor:'setting-release-info',page:'manual',title:'软件版本与构建号',path:'数据与帮助 / 帮助与恢复',keywords:'关于 版本号 构建 发布 安装包'},
   {id:'setting-recovery',anchor:'setting-recovery',page:'manual',title:'备份与数据恢复',path:'数据与帮助 / 帮助与恢复',keywords:'记录丢失 损坏 恢复 备份 重装 升级'},
   {id:'setting-diagnostic-export',anchor:'setting-diagnostic-export',page:'logs',title:'导出诊断信息',path:'数据与帮助 / 诊断日志',keywords:'报错 故障 反馈 导出日志 脱敏'},

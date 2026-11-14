@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src http://127.0.0.1:*; img-src 'self' data: blob: kumiko-media: http: https:; media-src 'self' data: blob: kumiko-media: http: https:; font-src 'self' data:; object-src 'none'; base-uri 'none'; frame-src 'none';" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' http://127.0.0.1:*; img-src 'self' data: blob: kumiko-media: http: https:; media-src 'self' data: blob: kumiko-media: http: https:; font-src 'self' data:; object-src 'none'; base-uri 'none'; frame-src 'none';" />
   <title>Flowave</title>
   <link rel="icon" type="image/png" href="assets/app-icon.png" />
   <link rel="stylesheet" href="style.css" />
@@ -125,6 +125,9 @@
         </section>
 
         <div class="nav-footer">
+          <button class="nav-btn" :class="{active:view==='help'}" :aria-current="view==='help' ? 'page' : null" @click="openUserManual('',helpTour && firstUseStatus==='pending')" title="使用手册 · F1">
+            <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M12 5C9 3 5 3 3 4v15c3-1 6-1 9 1 3-2 6-2 9-1V4c-2-1-6-1-9 1Zm0 0v15"/></svg><span>使用手册</span>
+          </button>
           <button class="nav-btn" @click="openSettingsSection('storage','setting-workspaces')" title="工作区">
             <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M3 7V5h6l2 2h10v12H3Z" /></svg>
             <span>工作区</span>
@@ -137,6 +140,7 @@
       </aside>
 
       <section class="main">
+        <user-manual v-if="shouldRenderView('help')" v-show="view==='help'" :active="view==='help'" :topic="helpTopic" :tour="helpTour" :save-busy="helpSaveBusy" :save-error="helpSaveError" :music-count="tracks.length" :features="featureSelection" @topic="helpTopic=$event" @navigate="navigateFromHelp" @back="closeUserManual" @tour="helpTour=$event" @finish="finishFirstUse"></user-manual>
         <nav v-if="view==='insights' || (view==='library' && libraryBrowseMode==='folders')" class="settings-tool-return" aria-label="工具位置"><button class="mini" @click="openSettingsSection('overview')">‹ 返回设置</button><span>曲库工具 / {{view==='insights' ? '曲库概览' : '文件夹'}}</span></nav>
         <music-insights v-if="shouldRenderView('insights')" kind="library" :active="view==='insights' && !showLyric" :base-url="baseUrl" :tracks="tracks" :library-revision="soundMapLibraryRevision" @inspect="openSongAnalysis" @queue="playAnalysisQueue"></music-insights>
         <music-insights v-if="shouldRenderView('analysis')" kind="player" :active="view==='analysis' && !showLyric" :base-url="baseUrl" :tracks="tracks" :path="analysisPinnedPath || currentPath" :playing-path="currentPath" :current-time="view==='analysis' && !showLyric ? Math.floor(currentTime*4)/4 : 0" :library-revision="soundMapLibraryRevision" @back="closeSongAnalysis" @current="analysisPinnedPath=''" @play="playByPath($event)" @seek="seekAnalysisTime"></music-insights>
@@ -489,7 +493,7 @@
 
         <view-boundary class="content settings" v-if="shouldRenderView('settings')" :active="view==='settings'">
           <aside class="settings-navigation" aria-label="设置分类">
-            <header><h1>设置</h1></header>
+            <header><h1>设置</h1><button class="mini ghost" @click="openContextHelp">本页帮助</button></header>
             <div class="settings-finder" role="search"><library-search-input class="search-input" :model-value="settingsOverviewQuery" @commit="settingsOverviewQuery=$event" placeholder="搜索设置" aria-label="搜索具体设置"></library-search-input></div>
             <nav aria-label="偏好设置"><div v-for="category in settingsCategories" :key="category.id" class="settings-nav-group">
               <button :class="['settings-category',{active:!settingsOverviewQuery.trim() && currentSettingsCategory?.id===category.id}]" :aria-current="!settingsOverviewQuery.trim() && currentSettingsCategory?.id===category.id ? 'page' : null" @click="openSettingsCategory(category.id)"><svg class="settings-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path :d="category.icon" /></svg><span class="settings-nav-copy"><strong>{{category.title}}</strong><small>{{category.hint}}</small></span></button>
@@ -1292,51 +1296,10 @@
                 <button class="mini" @click="loadApplicationInfo">查看版本</button>
               </header>
               <p data-setting-id="setting-release-info" class="hint">Flowave {{applicationInfo.version || ''}} · {{applicationInfo.commit ? applicationInfo.commit.slice(0,12) : '开发版本'}}</p>
+              <div class="btns" data-setting-id="setting-user-help"><button class="primary" @click="openUserManual()">打开图文使用手册</button><button class="mini" @click="openUserManual('start',true)">重新查看入门引导</button></div>
+              <p class="hint">按任务查找操作、设置和深入说明。左下角“使用手册”或 F1 可随时打开。</p>
 
               <main class="manual-doc-content">
-              <section id="manual-playback" class="manual-section">
-                <h4>播放本地音乐</h4>
-                <ul>
-                  <li>在“音乐库与在线 / 本地音乐”添加文件夹并应用。</li>
-                  <li>双击歌曲开始播放。</li>
-                  <li>点击底部封面打开歌词。</li>
-                </ul>
-              </section>
-
-              <section id="manual-library" class="manual-section">
-                <h4>搜索与歌单</h4>
-                <ul>
-                  <li>支持歌曲、艺人、专辑、拼音和假名搜索。</li>
-                  <li>右键歌曲可加入或移出歌单。</li>
-                </ul>
-              </section>
-
-              <section id="manual-index" class="manual-section">
-                <h4>启用推荐</h4>
-                <ul>
-                  <li>在“插件与模型”安装歌曲推荐，完成后重启软件。</li>
-                  <li>在“歌曲推荐 / 准备与索引”更新推荐索引，再在“接歌规则”开启连续推荐。</li>
-                  <li>“刷新音乐库”只重新读取音乐目录。</li>
-                </ul>
-              </section>
-
-              <section id="manual-online" class="manual-section">
-                <h4>在线音乐</h4>
-                <ul>
-                  <li>Flowave 不附带音源脚本。</li>
-                  <li>只导入你信任的脚本。</li>
-                </ul>
-              </section>
-
-              <section id="manual-lyrics" class="manual-section">
-                <h4>歌词与快捷键</h4>
-                <ul>
-                  <li>在“歌词”调整软件内歌词和桌面歌词。</li>
-                  <li>锁定桌面歌词后会点击穿透。</li>
-                  <li>快捷键留空时禁用。</li>
-                </ul>
-              </section>
-
               <section id="manual-history" class="manual-section" data-setting-id="setting-recovery">
                 <h4>数据与恢复</h4>
                 <ul>
@@ -1511,7 +1474,7 @@
       </div>
       <div class="player-right">
         <button v-if="showPracticeEntry && featureEnabled('practice')" class="mini icon-btn practice-entry" :class="{active:practiceEnabled || view==='practice'}" type="button" :disabled="!currentPath" @click="openPractice" title="演奏 · 谱面与伴奏控制" aria-label="演奏" :aria-pressed="view==='practice'"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M5 4v16M12 4v16M19 4v16M3 8h4M10 15h4M17 9h4"/><circle cx="5" cy="8" r="2"/><circle cx="12" cy="15" r="2"/><circle cx="19" cy="9" r="2"/></svg></button>
-        <button v-if="featureEnabled('analysis')" class="mini analysis-entry" type="button" :disabled="!currentPath" @click="openSongAnalysis()" title="查看当前歌曲的乐器、风格与能量发展">歌曲分析</button>
+        <button v-if="featureEnabled('analysis')" class="mini analysis-entry" type="button" :disabled="!currentPath" @click="openSongAnalysis()" title="查看当前歌曲的标签、局部特点与段落">歌曲分析</button>
         <button
           type="button"
           class="player-recommend-toggle"
@@ -2113,6 +2076,7 @@
   <script src="practice-metronome.js"></script>
   <script src="recommendation-context.js"></script>
   <script src="settings-navigation.js"></script>
+  <script src="help-navigation.js"></script>
   <script src="scrollbar-visibility.js"></script>
   <script src="module-bootstrap.js"></script>
 </body>

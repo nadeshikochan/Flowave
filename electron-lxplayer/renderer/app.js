@@ -51,7 +51,7 @@ const ONLINE_QUALITY_OPTIONS = Object.freeze([
   { value: "flac24bit", label: "24 位无损", shortLabel: "24 位" },
   { value: "hires", label: "Hi-Res", shortLabel: "Hi-Res" },
 ]);
-const PUBLIC_VIEWS = new Set(["library", "online", "settings", "seeds", "sound-map", "insights", "analysis", "practice"]);
+const PUBLIC_VIEWS = new Set(["library", "online", "settings", "seeds", "sound-map", "insights", "analysis", "practice", "help"]);
 
 const STARTUP_SPLASH_MIN_MS = 2000;
 const STARTUP_SPLASH_MAX_MS = 4000;
@@ -3988,6 +3988,7 @@ const dataMethods = {
     this._startupSplashHideTimer = setTimeout(() => {
       this._startupSplashHideTimer = null;
       this.startupSplashVisible = false;
+      this.maybeOpenFirstUse();
       this.startupSplashHiding = false;
     }, 360);
   },
@@ -10120,7 +10121,7 @@ const watchHandlers = {
   },
   view() {
     this.syncOutputCalibrationConsumers();
-    writeStored(STORAGE_KEYS.LAST_VIEW, String(this.view || "library"));
+    writeStored(STORAGE_KEYS.LAST_VIEW, String((this.view === 'help' ? this.helpReturn?.view : this.view) || "library"));
     if (this.view !== "online") {
       this._onlineRequestGeneration = Number(this._onlineRequestGeneration || 0) + 1;
       this.onlineLoading = false;
@@ -10521,6 +10522,7 @@ function mountedHook() {
     this.closeTrackContextMenu();
   };
   this._onDocKeyDown = (event) => {
+    if (this.handleHelpKey(event)) return;
     if (!this.handlePracticeArrows(event)&&!this.handlePracticeSpace(event)) this.handleGlobalEscape(event);
   };
   window.addEventListener("resize", this._onResize);
@@ -10534,6 +10536,7 @@ function mountedHook() {
   this.$nextTick(() => this.refreshVirtualViewport());
   this.sendLyricOverlay();
   window.__flowaveMounted = true;
+  this.maybeOpenFirstUse();
   const workspaceReady = window.lxEnv?.confirmWorkspaceReady?.();
   if (workspaceReady) workspaceReady.then(result => {
     if (result?.ok === false) this.workspaceMessage = result.error || '默认工作区位置未保存。';
@@ -10737,6 +10740,8 @@ const kumikoVueApp = createApp({
     );
     const storedSongInfoConcurrency = clampNumberAllowZero(storedSongInfoBatch.concurrency, 4, 1, 12);
     return {
+      ...(window.FlowaveHelp?.state() || {}),
+      firstUseStatus: readStoredString('lx-first-use', ''),
       baseUrl: String(backendConfig?.baseUrl || "http://127.0.0.1:29613"),
       showPracticeEntry: readStoredString('lx-practice-entry', '1') !== '0',
       practiceEnabled: false, practiceLoading: false, practiceLoadProgress: '', practiceReturn: null,
@@ -11230,6 +11235,7 @@ const kumikoVueApp = createApp({
   },
   computed: computedProps,
   components: {
+    ...(window.FlowaveHelp ? { UserManual: window.FlowaveHelp.component } : {}),
     'practice-page': window.FlowavePracticeUi || window.FlowavePractice || {render:()=>null},
     ...(window.FlowaveBluetoothCalibration ? {'bluetooth-calibration':window.FlowaveBluetoothCalibration}:{}),
     MusicInsights: window.FlowaveMusicInsights || {render:()=>null},
@@ -11241,6 +11247,7 @@ const kumikoVueApp = createApp({
   mounted: mountedHook,
   beforeUnmount: beforeUnmountHook,
   methods: {
+    ...(window.FlowaveHelp?.methods || {}),
     ...(window.FlowaveFeatureModules?.methods || {}),
     ...practiceMethods,
     ...soundMapMethods,

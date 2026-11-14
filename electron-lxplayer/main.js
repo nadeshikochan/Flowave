@@ -369,6 +369,8 @@ const DEFAULT_LYRIC_SOURCE_CONFIG = {
   externalLyricDir: "",
 };
 let rendererState = loadRendererStateConfig();
+const firstUsePending = !existingFeatureProfile && !Object.hasOwn(rendererState, 'lx-first-use');
+if (firstUsePending) rendererState = {...rendererState, 'lx-first-use': 'pending'};
 audioOutputSafety.setEnabled(rendererState['lx-bluetooth-protection'] === '1');
 let persistedRendererState = rendererState;
 const rendererStateWriter = createCoalescedWriter(async (snapshot) => {
@@ -1243,6 +1245,12 @@ app.on("second-instance", () => {
 });
 
 app.whenReady().then(async () => {
+  // Persist the welcome flag before creating a feature profile, so a failed
+  // renderer startup can offer the same introduction on the following launch.
+  if (firstUsePending) {
+    const saved = await saveRendererStateConfig();
+    if (!saved.ok) console.warn('[help] first-use state could not be saved', saved.error);
+  }
   try{await featureSelection.initialize();}catch(error){console.warn('[features] initial selection save deferred',error.code||'unavailable');}
   try{officialPackages.bootstrapLegacy();}catch(error){console.warn('[modules] registry initialization deferred',error.code||'unavailable');}
   try{officialPackages.collectUnused();}catch(error){console.warn('[modules] old package cleanup deferred',error.code||'unavailable');}

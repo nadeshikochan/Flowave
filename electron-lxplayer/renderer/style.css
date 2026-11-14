@@ -35,6 +35,10 @@
   --space-5: 24px;
 }
 
+.help-loading { padding: 36px; color: var(--text); }
+.settings-navigation > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.settings-navigation > header .mini { padding: 4px 6px; font-size: 11px; }
+
 [data-theme="dark"] {
   --bg: #0f121a;
   --panel: #181c27;
