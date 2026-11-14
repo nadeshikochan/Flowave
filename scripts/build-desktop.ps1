@@ -52,6 +52,8 @@ for profile in resources['profiles'].values():
   Push-Location $electron
   try {
     if (-not $SkipNpmInstall) { Run -exe npm -arguments @('ci') }
+    & npm ls --all --omit=dev --include=optional --json 2>&1 | Set-Content -LiteralPath (Join-Path $repo 'build/runtime-dependencies.json') -Encoding utf8
+    if ($LASTEXITCODE -ne 0) { throw 'Installed production dependencies are incomplete. Run npm ci in this build tree.' }
     $output = 'dist/' + $Mode + '-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
     $configPath = Join-Path $repo "build/desktop-$Mode.json"
     $config = (Get-Content -LiteralPath (Join-Path $electron 'package.json') -Raw -Encoding UTF8 | ConvertFrom-Json).build

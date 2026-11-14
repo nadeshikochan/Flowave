@@ -10,6 +10,7 @@ import time
 
 import numpy as np
 from music_analysis_store import AnalysisStore, recipe_version
+from resource_runtime import source_path
 from analysis_visibility import DISPLAY_LIMITS, visible_groups
 from recipe_compatibility import equivalent_recipes, accepted_recipes
 
@@ -63,7 +64,7 @@ class SemanticLibrary:
         self.failed_at = 0.
         self.row_cache = {}
         self.warming = False
-        implementation = b''.join(Path(__file__).with_name(name).read_bytes().replace(b'\r\n', b'\n')
+        implementation = b''.join(source_path(self.root, name).read_bytes().replace(b'\r\n', b'\n')
                                   for name in ('semantic_library.py', 'analysis_visibility.py'))
         self.aggregate_version = hashlib.sha256(
             implementation + json.dumps(DISPLAY_LIMITS, sort_keys=True).encode() + np.__version__.encode()).hexdigest()
