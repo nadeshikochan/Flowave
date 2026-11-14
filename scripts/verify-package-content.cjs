@@ -49,14 +49,6 @@ if (archive) {
     if (!asar.extractFile(archive, path.normalize(bundle.relative)).equals(bundle.bytes))
       throw Error('Packaged official module differs from verified source: ' + bundle.relative);
   }
-  const lock = JSON.parse(fs.readFileSync(path.join(root, 'electron-lxplayer/package-lock.json'), 'utf8'));
-  for (const [relative, item] of Object.entries(lock.packages)) {
-    if (!relative || item.dev || (item.os && !item.os.includes('win32')) || (item.cpu && !item.cpu.includes('x64'))) continue;
-    const manifest = relative + '/package.json';
-    if (!names.has(manifest)) throw Error('Missing production dependency in ASAR: ' + relative);
-    const installed = JSON.parse(asar.extractFile(archive, path.normalize(manifest)).toString('utf8'));
-    if (installed.version !== item.version) throw Error('Packaged dependency version differs from lock: ' + relative);
-  }
   const entry = JSON.parse(asar.extractFile(archive, 'package.json').toString('utf8')).main;
   if (typeof entry !== 'string' || !names.has(entry)) throw Error('Missing Electron entry point: ' + entry);
   for (const name of names) {
@@ -67,6 +59,20 @@ if (archive) {
       if (![base, base + '.js', base + '.json', base + '/index.js'].some(file => names.has(file)))
         throw Error('Missing packaged dependency: ' + name + ' -> ' + match[2]);
     }
+  }
+  const build = path.join(root, 'build');
+  fs.mkdirSync(build, {recursive:true});
+  const temporary = fs.mkdtempSync(path.join(build, 'packaged-dependencies-'));
+  try {
+    asar.extractAll(archive, temporary);
+    const check = require('node:child_process').spawnSync(process.execPath,
+      [path.join(__dirname, 'check-packaged-dependencies.cjs'), temporary], {encoding:'utf8', windowsHide:true});
+    if (check.status !== 0) throw Error(check.stderr || check.error || 'Packaged dependencies failed to load');
+    console.log(check.stdout.trim());
+  } finally {
+    if (path.dirname(temporary) !== build || !path.basename(temporary).startsWith('packaged-dependencies-'))
+      throw Error('Unexpected dependency-check directory');
+    fs.rmSync(temporary, {recursive:true, force:true});
   }
   for (const name of ['main.js', 'preload.js', 'trace-archive.js', 'resource-manager.js'])
     if (!names.has(name)) throw Error('Missing required host file: ' + name);
