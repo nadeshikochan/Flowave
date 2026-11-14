@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_submodules, collect_dynamic_libs, collect_data_files, copy_metadata
 
 
 hiddenimports = collect_submodules("nnAudio") + [
@@ -11,18 +11,19 @@ hiddenimports = collect_submodules("nnAudio") + [
     "transformers.models.wav2vec2.configuration_wav2vec2",
     "transformers.models.wav2vec2.feature_extraction_wav2vec2",
 ]
-datas = []
+datas = copy_metadata('tinytag') + copy_metadata('pymediainfo')
+datas += collect_data_files('pymediainfo', includes=['License.html'])
 
 a = Analysis(
     ["../index_worker.py"],
     pathex=[".."],
-    binaries=[],
+    binaries=collect_dynamic_libs('pymediainfo'),
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['mutagen'],
     noarchive=False,
     optimize=1,
 )

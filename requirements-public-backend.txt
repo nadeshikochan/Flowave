@@ -1,5 +1,6 @@
 fastapi==0.162.7
-mutagen==1.47.0
+tinytag==2.1.2
+pymediainfo==7.0.1
 numpy==2.2.5
 pydantic==2.14.3
 pyinstaller==6.19.0

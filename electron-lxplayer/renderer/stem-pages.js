@@ -28,7 +28,7 @@
       const worker=async()=>{while(index<this.names.length){
         signal.throwIfAborted();const name=this.names[index++];
         const url=this.base+'/stems/page/'+encodeURIComponent(this.detail.id)+'/'+encodeURIComponent(this.detail.generation)+'/'+encodeURIComponent(name)+'?page='+page+'&sample_rate='+rate;
-        const response=await fetch(url,{signal});
+        const response=await fetch(url,{signal,headers:window.FlowaveBackendAccess?.headers(url)});
         if(!response.ok)throw new Error('伴奏分段无法读取，请切回原曲后重新载入。');
         const raw=await response.arrayBuffer();signal.throwIfAborted();
         if(raw.byteLength!==frames*8)throw new Error('音轨分段时轴不一致，已停止伴奏。');

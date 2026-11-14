@@ -1,4 +1,17 @@
 const virtualViewportRuntimes = new WeakMap();
+const backendConnection = window.lxEnv?.getBackendConfigSync?.() || {};
+window.FlowaveBackendAccess = {
+  headers(url) {
+    if (!backendConnection.accessToken || !backendConnection.baseUrl) return {};
+    return new URL(url, backendConnection.baseUrl).origin === new URL(backendConnection.baseUrl).origin
+      ? {'X-Flowave-Token': backendConnection.accessToken} : {};
+  },
+};
+axios.interceptors?.request.use(config => {
+  const url = new URL(config.url, config.baseURL || backendConnection.baseUrl || location.href);
+  Object.assign(config.headers ||= {}, window.FlowaveBackendAccess.headers(url.href));
+  return config;
+});
 const recommendationWarmups = new WeakMap();
 let soundMapDrainPromise = null;
 let soundMapRetryTimer = null;
@@ -10724,9 +10737,7 @@ function beforeUnmountHook() {
 
 const kumikoVueApp = createApp({
   data() {
-    const backendConfig = window.lxEnv && typeof window.lxEnv.getBackendConfigSync === "function"
-      ? window.lxEnv.getBackendConfigSync()
-      : null;
+    const backendConfig = backendConnection;
     const storedSongInfoBatch = readStoredObject(STORAGE_KEYS.SONG_INFO_BATCH_SETTINGS, {});
     const storedSongInfoFields = storedSongInfoBatch.fields && typeof storedSongInfoBatch.fields === "object"
       ? storedSongInfoBatch.fields

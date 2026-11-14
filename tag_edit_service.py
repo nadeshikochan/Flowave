@@ -3,7 +3,9 @@ import secrets
 import time
 from pathlib import Path
 
-from tag_metadata_adapter import MetadataTagAdapter, clean_updates
+from tag_metadata_adapter import clean_updates
+import importlib.util
+import sys
 from tag_transaction import TagTransactionManager, TagWriteRequest, capture_file_version
 from tag_write_pipeline import TagWritePipeline, TagWritePipelineRequest
 from music_keys import build_artist_title_key
@@ -11,7 +13,15 @@ from music_keys import build_artist_title_key
 
 class TagEditService:
     def __init__(self, snapshot_root, identities, *, now=time.time):
-        self.adapter = MetadataTagAdapter()
+        self.adapter = None
+        # This optional local development tool is excluded from public exports
+        # and frozen programs. Its GPL dependency is not a player dependency.
+        adapter_path = Path(__file__).parent / 'scripts/development/tag_metadata_adapter.py'
+        if not getattr(sys, 'frozen', False) and adapter_path.is_file() and importlib.util.find_spec('mutagen') is not None:
+            spec = importlib.util.spec_from_file_location('flowave_development_tag_adapter', adapter_path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            self.adapter = module.MetadataTagAdapter()
         self.transactions = TagTransactionManager(snapshot_root)
         self.pipeline = TagWritePipeline(transactions=self.transactions, identities=identities,
             song_key_builder=lambda fields: build_artist_title_key(next(iter(fields.get("artists") or fields.get("albumArtists") or []), ""), fields.get("title") or ""))

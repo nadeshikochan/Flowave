@@ -28,6 +28,11 @@ test("backend handshake accepts the same portable data directory case-insensitiv
   assert.equal(result.valid, true);
 });
 
+test('desktop startup rejects an older backend without request admission', () => {
+  assert.equal(validateBackendHealth(health(), {...OPTIONS, accessRequired:true}).valid, false);
+  assert.equal(validateBackendHealth(health({access_required:true}), {...OPTIONS, accessRequired:true}).valid, true);
+});
+
 test("backend handshake rejects another installation of the same product", () => {
   const result = validateBackendHealth(
     health({ data_dir: "D:\\Projects\\Flowave\\data" }),

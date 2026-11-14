@@ -16,14 +16,15 @@
         "sha256": "ecded4d21834b21002bc6e9a2628d21f5c8417fd77a5db14250f1101bcb69dac"
       },
       "lock": "resources/locks/recommendation.txt",
-      "lock_sha256": "54ce1a72ade6100fca92c84e97547f3023912bf3e3bd11d206ecef786b206eff",
+      "lock_sha256": "dc780282e9cb132138efd585f3664347a7a7b284d2915626bfa94e78c7dee880",
       "probe": [
         "torch",
         "torchaudio",
         "transformers",
         "numpy",
         "soundfile",
-        "mutagen"
+        "tinytag",
+        "pymediainfo"
       ],
       "bootstrap_wheels": [
         {
@@ -59,14 +60,15 @@
         "sha256": "ecded4d21834b21002bc6e9a2628d21f5c8417fd77a5db14250f1101bcb69dac"
       },
       "lock": "resources/locks/analysis.txt",
-      "lock_sha256": "c1c4ff65ed6f289759334465bddb5e5ad11d5d89f0ef173feced769dd4806d43",
+      "lock_sha256": "02ab0efe4804d9b9f6f97c17dc597420d224e988d18c753a8d162bc83270165a",
       "probe": [
         "torch",
         "torchaudio",
         "transformers",
         "numpy",
         "soundfile",
-        "mutagen"
+        "tinytag",
+        "pymediainfo"
       ],
       "bootstrap_wheels": [
         {
@@ -106,14 +108,15 @@
         "sha256": "ecded4d21834b21002bc6e9a2628d21f5c8417fd77a5db14250f1101bcb69dac"
       },
       "lock": "resources/locks/practice.txt",
-      "lock_sha256": "7dc35120a05de25533e52e90955ea9221063d2e92cf09a4cd27a18fa4f890f79",
+      "lock_sha256": "32b193b981e21a665c66b1e39826de48350a4a6be8d4d22bffb389b0cb40f085",
       "probe": [
         "torch",
         "torchaudio",
         "transformers",
         "numpy",
         "soundfile",
-        "mutagen"
+        "tinytag",
+        "pymediainfo"
       ],
       "bootstrap_wheels": [
         {
@@ -1418,6 +1421,6 @@
   ],
   "installation_plan": {
     "file": "resources/install-plan.json",
-    "sha256": "37fde8004bee8c16dfa3b62b9664c688579ecc1d714b358140e61d334343058c"
+    "sha256": "fae8e5e51e1eb01f1ff45ffd31b0245063a40205d71d9add87df2724b6d548a6"
   }
 }

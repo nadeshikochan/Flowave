@@ -968,6 +968,15 @@ typing-extensions==4.16.0 \
 urllib3==2.8.0 \
     --hash=sha256:0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3 \
     --hash=sha256:63bf2ead4c879426ebf22ef2a781eeb4aa3b4ae798a0435506f8687fd5bb9b63
-mutagen==1.47.0 \
-    --hash=sha256:719fadef0a978c31b4cf3c956261b3c58b6948b32023078a2117b1de09f0fc99 \
-    --hash=sha256:edd96f50c5907a9539d8e5bba7245f62c9f520aef333d13392a79a4f70aca719
+pymediainfo==7.0.1 \
+    --hash=sha256:01bcaf82b72cefbf4b96f13b2547e1b2e0e734bab7173d7c33f7f01acc07c98b \
+    --hash=sha256:0d5df59ecc615e24c56f303b8f651579c6accab7265715e5d429186d7ba21514 \
+    --hash=sha256:13224fa7590e198763b8baf072e704ea81d334e71aa32a469091460e243893c7 \
+    --hash=sha256:286f3bf6299be0997093254e0f371855bc5cf2aaf8641d19455a011e3ee3a84d \
+    --hash=sha256:3648e2379fa67bd02433d1e28c707df3a53834dd480680615a9fefd2266f1182 \
+    --hash=sha256:cde98112f1ce486589b17a12e5da42085faea996224f7c67fa45b8c1dca719c6
+    # via -r resources/locks/recommendation.in
+tinytag==2.1.2 \
+    --hash=sha256:1a6b7b19c59ac4846b2446ec7a85cfaa17fbee6970592eaa5926702c261bad69 \
+    --hash=sha256:564e573e308d9fa78432493b4987fca1f84fb1f2ce29c586fc54629155e4fca0
+    # via -r resources/locks/recommendation.in

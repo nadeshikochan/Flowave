@@ -34,10 +34,6 @@ idna==3.20 \
     --hash=sha256:a7db850025b95ded1eae8a46181a1a6c56c92c96f0e2b005d9ff8dc0210cab44 \
     --hash=sha256:ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c
     # via anyio
-mutagen==1.47.0 \
-    --hash=sha256:719fadef0a978c31b4cf3c956261b3c58b6948b32023078a2117b1de09f0fc99 \
-    --hash=sha256:edd96f50c5907a9539d8e5bba7245f62c9f520aef333d13392a79a4f70aca719
-    # via -r build/release-readiness-20261114/backend-pins.in
 numpy==2.2.5 \
     --hash=sha256:0255732338c4fdd00996c0421884ea8a3651eea555c3a56b84892b66f696eb70 \
     --hash=sha256:02f226baeefa68f7d579e213d0f3493496397d8f1cff5e2b222af274c86a552a \
@@ -310,3 +306,15 @@ uvicorn==0.54.0 \
     --hash=sha256:505bdb0f318731d45f1f712071fc781a8981f6847a31c902c9f5e652d4f67faf \
     --hash=sha256:a2e33cbfaa0306f8e6b0c13e0cb89d7d7a2da3e62b90c66e18c33d9807b28620
     # via -r build/release-readiness-20261114/backend-pins.in
+pymediainfo==7.0.1 \
+    --hash=sha256:01bcaf82b72cefbf4b96f13b2547e1b2e0e734bab7173d7c33f7f01acc07c98b \
+    --hash=sha256:0d5df59ecc615e24c56f303b8f651579c6accab7265715e5d429186d7ba21514 \
+    --hash=sha256:13224fa7590e198763b8baf072e704ea81d334e71aa32a469091460e243893c7 \
+    --hash=sha256:286f3bf6299be0997093254e0f371855bc5cf2aaf8641d19455a011e3ee3a84d \
+    --hash=sha256:3648e2379fa67bd02433d1e28c707df3a53834dd480680615a9fefd2266f1182 \
+    --hash=sha256:cde98112f1ce486589b17a12e5da42085faea996224f7c67fa45b8c1dca719c6
+    # via -r requirements-public-backend.txt
+tinytag==2.1.2 \
+    --hash=sha256:1a6b7b19c59ac4846b2446ec7a85cfaa17fbee6970592eaa5926702c261bad69 \
+    --hash=sha256:564e573e308d9fa78432493b4987fca1f84fb1f2ce29c586fc54629155e4fca0
+    # via -r requirements-public-backend.txt

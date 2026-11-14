@@ -108,7 +108,8 @@
       "resource-manager.js",
       "resource-plan.js",
       "release-info.js",
-      "diagnostics.js"
+      "diagnostics.js",
+      "backend-access.js"
     ],
     "extraFiles": [
       {

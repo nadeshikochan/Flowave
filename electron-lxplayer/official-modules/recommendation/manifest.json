@@ -1,1 +1,5 @@
-{"id":"recommendation","version":"1.0.1","hostApi":1}
+{
+  "id": "recommendation",
+  "version": "1.0.2",
+  "hostApi": 1
+}

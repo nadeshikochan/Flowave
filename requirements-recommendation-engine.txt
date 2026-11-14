@@ -7,3 +7,5 @@ pyinstaller==6.19.0
 requests==2.32.5
 soundfile==0.13.1
 transformers==4.27.1
+tinytag==2.1.2
+pymediainfo==7.0.1

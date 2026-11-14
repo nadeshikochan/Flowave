@@ -36,6 +36,7 @@ from fastapi.responses import FileResponse, Response
 from fastapi.responses import JSONResponse
 from feature_policy import startup_selection, route_module
 from fastapi.middleware.cors import CORSMiddleware
+from api_access import DesktopAPIAccess, backend_token
 from pydantic import BaseModel
 
 import numpy as np
@@ -105,7 +106,7 @@ app.add_middleware(
     allow_origins=["kumiko-app://renderer"],
     allow_credentials=False,
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type"],
+    allow_headers=["Content-Type", "X-Flowave-Token"],
 )
 RECOMMENDATION_RATE_PATH = LIBRARY_DIR / "recommendation_rate.json"
 FEATURE_SELECTION = startup_selection(CONFIG_DIR / 'features.json')
@@ -121,6 +122,9 @@ async def official_module_admission(request, call_next):
         if not readable_result:
             return JSONResponse(status_code=403, content={'detail':{'code':'FEATURE_DISABLED','module':module,'message':'此功能已停用，可在设置的功能选装中启用，下次启动生效。'}})
     return await call_next(request)
+
+
+app.add_middleware(DesktopAPIAccess, token=backend_token(DATA_DIR))
 
 LISTENING_HISTORY_PATH = LISTENING_HISTORY_DIR / "listening_history.json"
 def _create_sound_map_service():
@@ -2407,8 +2411,8 @@ class TagEditUndoRequest(BaseModel):
 
 
 def _tag_edit_available_locked():
-    if getattr(sys, "frozen", False):
-        raise HTTPException(403, "公开版资料写入仍待依赖许可与打包验收，目前仅在源码开发版开放")
+    if getattr(sys, "frozen", False) or TAG_EDIT_SERVICE.adapter is None:
+        raise HTTPException(403, "当前版本未提供音频文字资料写入，可继续查找资料和保存独立歌词")
     if INDEX_PREPARATION.running or ACTIVE_WORKER_PROCESS is not None or MUSIC_ANALYSIS_SERVICE.running or STEM_SERVICE.running or PRACTICE_SERVICE.running:
         raise HTTPException(409, "请等待音乐处理任务完成后保存资料")
     if state.get('library_refresh_in_progress') or state.get('startup_sync_in_progress'):
@@ -2433,7 +2437,7 @@ def _tag_edit_error(exc):
 
 @app.get('/tracks/tags/capabilities')
 def track_tag_capabilities():
-    return {'editable': not getattr(sys, 'frozen', False), 'formats': ['mp3', 'flac', 'm4a', 'ogg']}
+    return {'editable': not getattr(sys, 'frozen', False) and TAG_EDIT_SERVICE.adapter is not None, 'formats': ['mp3', 'flac', 'm4a', 'ogg']}
 
 
 @app.post('/tracks/tags/prepare')
@@ -3753,6 +3757,7 @@ def health():
         "ok": True,
         "service": SERVICE_ID,
         "protocol_version": SERVICE_PROTOCOL_VERSION,
+        "access_required": True,
         "features_signature": FEATURE_SELECTION['signature'],
         "features_error": FEATURE_SELECTION['error'],
         "model_loaded": False,

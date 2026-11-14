@@ -16,7 +16,7 @@
     },
     "recommendation": {
       "name": "歌曲推荐",
-      "latest": "1.0.1",
+      "latest": "1.0.2",
       "releases": [
         {
           "version": "1.0.0",
@@ -31,6 +31,12 @@
           "bundle": "recommendation-1.0.1.fwm",
           "bytes": 137338,
           "url": "https://github.com/nadeshikochan/Flowave/releases/download/plugins-v1.1.0/recommendation-1.0.1.fwm"
+        },
+        {
+          "version": "1.0.2",
+          "sha256": "a046bca7c5d231f80969242b7086cd23e1f0e50ea062cfe0eb719804c2bbee59",
+          "bundle": "recommendation-1.0.2.fwm",
+          "bytes": 142022
         }
       ]
     },
@@ -56,7 +62,7 @@
     },
     "practice": {
       "name": "演奏练习",
-      "latest": "1.0.3",
+      "latest": "1.0.4",
       "releases": [
         {
           "version": "1.0.0",
@@ -84,6 +90,12 @@
           "bundle": "practice-1.0.3.fwm",
           "bytes": 1439574,
           "url": "https://github.com/nadeshikochan/Flowave/releases/download/plugins-v1.1.0/practice-1.0.3.fwm"
+        },
+        {
+          "version": "1.0.4",
+          "sha256": "6a68abd2d6cfd5d8709c35c26a53621306621720a7d870741f9f26892e41497f",
+          "bundle": "practice-1.0.4.fwm",
+          "bytes": 1439710
         }
       ]
     }

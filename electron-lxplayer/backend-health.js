@@ -19,6 +19,9 @@ function validateBackendHealth(payload, options = {}) {
   if (payload.ok !== true) {
     return { valid: false, detail: "服务尚未就绪" };
   }
+  if (options.accessRequired && payload.access_required !== true) {
+    return {valid: false, detail: '后台请求准入版本过旧，请完全退出旧程序后重试'};
+  }
   if (options.featureSignature && payload.features_signature !== options.featureSignature) {
     return {valid:false,detail:'功能选择与当前软件不一致，请完全退出旧后台后重试'};
   }

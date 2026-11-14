@@ -93,11 +93,17 @@ license files. Installed wheel dist-info and bundled license files are retained.
 Exact versions and immutable file identities are specified in the host lock
 files, resources/catalog.json and resources/install-plan.json.
 
-Mutagen 1.47.0, Christoph Reiter and contributors
-GPL-2.0-or-later. Copyright and full license are preserved in the bundled
-mutagen dist-info/COPYING. Corresponding upstream source is available at
-https://github.com/quodlibet/mutagen/tree/release-1.47.0
-The backend currently imports Mutagen for reading music metadata. Disabling
-tag writing does not remove that dependency. Compatibility of this combined
-application with the main restrictive license remains an open release issue.
-This private evaluation preview does not assert public-distribution clearance.
+TinyTag 2.1.2, TinyTag contributors
+MIT. The upstream copyright and license are retained in the wheel metadata.
+https://github.com/tinytag/tinytag/tree/2.1.2
+
+pymediainfo 7.0.1, pymediainfo contributors
+MIT. The Windows wheel includes MediaInfo, licensed under BSD-2-Clause.
+The upstream wheel metadata and MediaInfo License.html are retained, including
+the notices for components incorporated into the library.
+https://github.com/sbraz/pymediainfo/tree/7.0.1
+https://mediaarea.net/en/MediaInfo/License
+
+The official backend and model environments use these libraries for reading
+metadata. Mutagen and the optional private development tag-writing adapter
+are excluded from the official distribution and its dependency locks.

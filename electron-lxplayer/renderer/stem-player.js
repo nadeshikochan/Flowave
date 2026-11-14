@@ -183,7 +183,7 @@
     let total = 0, index = 0, failure = null;
     async function load(name) {
       const url = base + '/stems/audio/' + encodeURIComponent(detail.id) + '/' + encodeURIComponent(detail.generation) + '/' + name;
-      const response = await fetch(url, { signal: controller.signal });
+      const response = await fetch(url, { signal: controller.signal, headers: window.FlowaveBackendAccess?.headers(url) });
       if (!response.ok) throw new Error('分轨无法读取，请刷新结果或重新分离。');
       const encoded = await response.arrayBuffer();
       controller.signal.throwIfAborted();

@@ -85,7 +85,8 @@ async function open() {
     await sleep(200);
   }
   assert.equal(await evaluate('!window.__kumikoApp.startupSplashVisible && !document.querySelector(".startup-splash")'), true, 'Splash did not close');
-  const health = await (await fetch(`http://127.0.0.1:${backend}/health`)).json();
+  const health = await evaluate("(async () => (await axios.get(window.__kumikoApp.baseUrl + '/health')).data)()");
+  assert.equal(health.access_required, true, 'Backend request admission is missing');
   assert.equal(path.resolve(health.data_dir), dataFolder, 'Backend used another profile');
   const close = async () => {
     try {

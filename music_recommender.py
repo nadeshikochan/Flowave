@@ -315,30 +315,8 @@ def relink_index_paths(index: "Index", audio_files: List[Path]) -> Tuple["Index"
     return updated, relocated
 
 def get_song_key(path: Path) -> str:
-    """
-    用“歌手 + 歌名”作为唯一键：
-    - 优先读音频元数据（artist/title）
-    - 缺失则用文件名（不含扩展名）
-    键统一小写、去首尾空格，尽量避免重复计算。
-    """
-    artist = ""
-    title = ""
-    try:
-        from mutagen import File as MutagenFile
-
-        mf = MutagenFile(str(path), easy=True)
-        if mf:
-            arts = mf.get("artist") or mf.get("albumartist")
-            if arts:
-                artist = str(arts[0])
-            titles = mf.get("title")
-            if titles:
-                title = str(titles[0])
-    except Exception:
-        pass
-    if not title:
-        title = path.stem
-    return build_artist_title_key(artist, title)
+    from music_keys import get_song_key as read_song_key
+    return read_song_key(path)
 
 def load_wave(path: Path) -> Tuple[torch.Tensor, int]:
     """

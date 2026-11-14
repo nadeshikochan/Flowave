@@ -99,6 +99,8 @@ try {
   dialog.showErrorBox('无法打开软件数据目录', String(error.message || error));
   app.exit(1);
 }
+const backendAccessToken = require('./backend-access').backendToken(DATA_DIR);
+const backendHttp = axios.create({proxy: false, maxRedirects: 0, headers: {'X-Flowave-Token': backendAccessToken}});
 const tracePersistence = require("./trace-persistence").createTracePersistence(path.join(DATA_DIR, "library", "listening-traces"));
 const CONFIG_DIR = path.join(DATA_DIR, "config");
 const {WorkspaceStore, restartArguments} = require('./workspaces');
@@ -185,7 +187,7 @@ for (const source of ["wy", "tx", "kg", "kw"]) {
 }
 const tagEditor = createTagEditor({
   request: async (action, payload) => {
-    try { return (await axios.post(`${BACKEND_URL}/tracks/tags/${action}`, payload, { timeout: 0 })).data; }
+    try { return (await backendHttp.post(`${BACKEND_URL}/tracks/tags/${action}`, payload, { timeout: 0 })).data; }
     catch (error) { throw new Error(error.response?.status === 404 ? "后台版本尚不支持资料保存，请退出软件后重新启动当前版本" : String(error.response?.data?.detail || "资料保存服务暂时不可用")); }
   },
   onChanged: (trackPath, resourceId) => metadata.invalidateTrackMetadata({ trackPath, resourceId }),
@@ -382,7 +384,7 @@ const traceArchive = require('./trace-archive').createTraceArchive({
   getState: () => rendererState, setState: value => { rendererState = value; },
   saveState: saveRendererStateConfig, flushState: () => rendererStateWriter.flush(), journal: tracePersistence,
   request: async payload => {
-    try { return (await axios.post(`${BACKEND_URL}/listening-traces/view`, payload, {timeout: 30000})).data; }
+    try { return (await backendHttp.post(`${BACKEND_URL}/listening-traces/view`, payload, {timeout: 30000})).data; }
     catch (error) {
       const detail = error.response?.data?.detail;
       const failure = new Error(detail?.message || (typeof detail === 'string' ? detail : '轨迹服务暂时不可用，请重试'));
@@ -627,7 +629,7 @@ function sleep(ms) {
 
 async function readBackendHealth(timeout = 900, baseUrl = BACKEND_URL) {
   try {
-    const response = await axios.get(`${baseUrl}/health`, {
+    const response = await backendHttp.get(`${baseUrl}/health`, {
       timeout,
       validateStatus: () => true,
       proxy: false,
@@ -640,6 +642,7 @@ async function readBackendHealth(timeout = 900, baseUrl = BACKEND_URL) {
       protocolVersion: BACKEND_PROTOCOL_VERSION,
       dataDir: DATA_DIR,
       featureSignature: featureSelection.signature,
+      accessRequired: true,
     });
     return {
       reachable: true,
@@ -1756,12 +1759,14 @@ function registerIpc() {
     event.returnValue = traceArchive.snapshot();
   });
   ipcMain.on("lx-backend-config-get-sync", (event) => {
+    if (!secureProtocols.isTrustedRendererUrl(event.senderFrame?.url)) { event.returnValue = {}; return; }
     event.returnValue = {
       baseUrl: BACKEND_URL,
       host: BACKEND_HOST,
       port: BACKEND_PORT,
       service: BACKEND_SERVICE_ID,
       protocolVersion: BACKEND_PROTOCOL_VERSION,
+      accessToken: backendAccessToken,
     };
   });
   ipcMain.handle("lx-renderer-state-set", async (_event, payload) => {
@@ -1892,7 +1897,7 @@ function registerIpc() {
   });
   ipcMain.handle("lx-song-tags-capabilities", async () => {
     if (app.isPackaged) return { editable: false };
-    try { return (await axios.get(`${BACKEND_URL}/tracks/tags/capabilities`, { timeout: 3000 })).data; }
+    try { return (await backendHttp.get(`${BACKEND_URL}/tracks/tags/capabilities`, { timeout: 3000 })).data; }
     catch (_) { return { editable: false }; }
   });
   ipcMain.handle("lx-song-info-query", async (_event, payload) => {
@@ -2863,6 +2868,11 @@ function ensureControlServer() {
     if (req.method !== "POST" || req.url !== "/control-music") {
       res.writeHead(404, { "Content-Type": "application/json; charset=utf-8" });
       res.end(JSON.stringify({ success: false, message: "Not Found" }));
+      return;
+    }
+    if (!require('./backend-access').authenticatedLocalRequest(req.headers, backendAccessToken)) {
+      res.writeHead(403, {"Content-Type": "application/json; charset=utf-8"});
+      res.end(JSON.stringify({success: false, message: '本机服务请求未获授权'}));
       return;
     }
     let body = "";

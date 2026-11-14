@@ -58,43 +58,29 @@ def list_audio_files(folder: Path) -> List[Path]:
     return [p for p in folder.rglob("*") if p.suffix.lower() in exts]
 
 
-def _song_key_id3(fileobj, **kwargs):
-    from mutagen.easyid3 import EasyID3
-    from mutagen.id3 import Frames, Frames_2_2
-
-    # The key needs three text frames. Skip decoding pictures and embedded lyrics.
-    frames = {name: Frames[name] for name in ("TIT2", "TPE1", "TPE2")}
-    frames.update({name: Frames_2_2[name] for name in ("TT2", "TP1", "TP2")})
-    tags = EasyID3()
-    tags.load(fileobj, known_frames=frames, **kwargs)
-    return tags
-
-
 def get_song_key(path: Path) -> str:
+    from tinytag import TinyTag
+    from pymediainfo import MediaInfo
+
     artist = ""
     title = ""
     try:
-        from mutagen import File as MutagenFile
-
-        if path.suffix.lower() == ".mp3":
-            from mutagen.mp3 import EasyMP3
-
-            try:
-                mf = EasyMP3(str(path), ID3=_song_key_id3)
-            except Exception:
-                # Preserve format sniffing for mislabeled files and legacy errors.
-                mf = MutagenFile(str(path), easy=True)
-        else:
-            mf = MutagenFile(str(path), easy=True)
-        if mf:
-            arts = mf.get("artist") or mf.get("albumartist")
-            if arts:
-                artist = str(arts[0])
-            titles = mf.get("title")
-            if titles:
-                title = str(titles[0])
+        with path.open('rb') as stream:
+            tag = TinyTag.get(file_obj=stream, duration=False, image=False)
+        artist = tag.artist or tag.albumartist or ''
+        title = tag.title or ''
+        if any('\x80' <= character <= '\xff' for character in artist + title):
+            # Resolve ambiguous legacy single-byte text with the format-aware
+            # reader, preserving the original Unicode metadata when present.
+            raise ValueError('Legacy text requires format-aware metadata reading')
     except Exception:
-        pass
+        # MediaInfo covers APE and format-sniffing fallback without decoding audio.
+        try:
+            general = next(track for track in MediaInfo.parse(str(path)).tracks if track.track_type == 'General')
+            artist = general.performer or general.album_performer or ''
+            title = general.track_name or ''
+        except Exception:
+            pass
     if not title:
         title = path.stem
     return build_artist_title_key(artist, title)
