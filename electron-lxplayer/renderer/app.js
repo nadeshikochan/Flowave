@@ -5329,8 +5329,8 @@ const dataMethods = {
     if (overwrite) {
       const confirmed = await this.requestConfirmation({
         title: "重建推荐索引",
-        message: "重新分析全部歌曲并生成新索引。",
-        detail: "现有索引会保留到新索引完成，播放不受影响。",
+        message: "重新提取全库声音向量，并补齐语义、标签和地图数据。",
+        detail: "已有有效语义和标签会复用。处理按阶段保存，失败或取消保留已完成结果及旧备份。",
         confirmLabel: "开始重建",
       });
       if (!confirmed) return;
@@ -5340,16 +5340,18 @@ const dataMethods = {
     this.indexTaskStatus = { running: true, last_started_at: Date.now() / 1000, progress: { stage: "starting" } };
     this.pollIndexTaskStatus();
     try {
-      await axios.post(`${this.baseUrl}/index`, { overwrite, folder: null });
+      const {data} = await axios.post(`${this.baseUrl}/index`, { overwrite, folder: null });
       await this.loadTracks();
       this.buildFolderPlaylists();
-      this.showNotice(overwrite ? "索引已重建。" : "索引已更新。");
+      if (data.cancelled) this.showNotice("任务已取消，已保存的结果保留。");
+      else this.showNotice("声音索引、语义与标签、地图数据已准备完成。");
     } catch (e) {
       console.warn("索引任务失败", e);
       this.showNotice(this.getOperationUserMessage(e, "索引失败"), "error");
     } finally {
       this._indexRequestActive = false;
       await this.pollIndexTaskStatus();
+      window.FlowaveAnalysisData?.catalog(this.baseUrl,true).catch(()=>{});
     }
   },
   async pollIndexTaskStatus() {
@@ -5379,13 +5381,13 @@ const dataMethods = {
     const status = this.indexTaskStatus || {};
     if (!status.last_started_at) return "";
     const progress = status.progress || {};
-    const stages = { starting: "正在准备", scanning: "正在扫描歌曲", identity: "正在核对歌曲变化", embedding: "正在分析歌曲", model: "正在加载分析模型", inference: "正在使用模型分析", checkpoint: "正在保存阶段进度", publishing: "正在校验并保存索引" };
-    const stage = status.running ? (stages[progress.stage] || "正在处理") : (status.last_ok ? "索引处理完成" : status.cancel_requested ? "任务已取消，旧索引保留" : "索引处理失败，旧索引保留");
+    const stages = { starting: "正在准备", scanning: "正在扫描歌曲", identity: "正在核对歌曲变化", embedding: "正在分析歌曲", model: "正在加载分析模型", inference: "正在使用模型分析", checkpoint: "正在保存阶段进度", publishing: "正在校验并保存索引", features:"正在提取语义与标签", map:"正在生成声音地图" };
+    const stage = status.running ? (stages[progress.stage] || "正在处理") : (status.last_ok ? (status.preparation_steps ? "推荐曲库准备完成" : "索引处理完成") : status.cancel_requested ? "任务已取消，已保存结果保留" : "准备未全部完成，已保存结果保留");
     const total = Number(progress.total) || 0;
     const done = Number(progress.done) || 0;
     const elapsed = Math.max(0, Math.floor(((status.last_finished_at && !status.running ? status.last_finished_at * 1000 : this.indexTaskNow) - status.last_started_at * 1000) / 1000));
-    const device = progress.device === "cuda" ? `GPU · ${progress.device_name || "显卡加速"}` : progress.device === "cpu" ? `CPU · ${progress.device_reason === "cpu_only" ? "当前计算组件不支持显卡加速" : "显卡加速不可用"}` : "正在检测计算设备";
-    return [stage, total ? `${done} / ${total} 首（当前阶段 ${Math.floor(done / total * 100)}%）` : "", device,
+    const device = status.preparation_phase === "map" ? "CPU · 地图布局" : progress.device === "cuda" ? `GPU · ${progress.device_name || "显卡加速"}` : progress.device === "cpu" ? `CPU · ${progress.device_reason === "cpu_only" ? "当前计算组件不支持显卡加速" : "显卡加速不可用"}` : "正在检测计算设备";
+    return [status.preparation_step ? `第 ${status.preparation_step} / ${status.preparation_steps} 阶段` : "", stage, total ? `${done} / ${total} 首（当前阶段 ${Math.floor(done / total * 100)}%）` : "", status.running || progress.device ? device : "",
       `复用 ${progress.reused || 0} 首 · 新分析 ${progress.embedded || 0} 首 · 失败 ${progress.failed || 0} 首`,
       `已用时 ${Math.floor(elapsed / 60)} 分 ${elapsed % 60} 秒`, this.indexTaskStatusUnavailable ? "暂时无法获取最新进度，正在重连" : ""].filter(Boolean).join("；");
   },
@@ -5395,7 +5397,7 @@ const dataMethods = {
   async cancelIndexTask() {
     try {
       const { data } = await axios.post(`${this.baseUrl}/index/cancel`);
-      this.showNotice(data?.cancel_requested ? "正在取消，旧索引仍可使用。" : "当前没有索引任务。");
+      this.showNotice(data?.cancel_requested ? "正在取消，已保存结果会保留。" : "当前没有索引任务。");
     } catch (e) {
       console.warn("取消索引任务失败", e);
       this.showNotice(this.getOperationUserMessage(e, "取消索引任务失败"), "error");
@@ -5404,7 +5406,7 @@ const dataMethods = {
   async scanIndexMetaOnly() {
     this.loading = true;
     try {
-      await axios.post(`${this.baseUrl}/index`, { overwrite: false, meta_only: true, folder: null });
+      await axios.post(`${this.baseUrl}/index`, { overwrite: false, meta_only: true, prepare_features: false, folder: null });
       await this.loadTracks();
       this.buildFolderPlaylists();
       this.showNotice("元数据已刷新。");

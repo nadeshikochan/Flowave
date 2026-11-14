@@ -1,6 +1,8 @@
 (function(root){
  'use strict';
  const {shallowReactive,markRaw}=root.Vue;
+ // hostApi 1 also supports older hosts which do not ship the shared reader.
+ if(!root.FlowaveAnalysisData){
  const store=shallowReactive({rows:markRaw([]),task:{state:'idle'},revision:0,loaded:false,base:'',structure:{available:false,message:'正在确认段落分析组件。'}});
  let pending=null,catalogGeneration=0;
  async function catalog(base,force=false){
@@ -10,6 +12,8 @@
    pending=request;try{await request;}finally{if(pending===request)pending=null;}
  }
  root.FlowaveAnalysisData={store,catalog};
+ }
+ const {store,catalog}=root.FlowaveAnalysisData;
  const names={instrument:'乐器与音色',genre:'风格',mood:'氛围',theme:'主题'};
  const structureNames={intro:'前奏',verse:'主歌','pre-chorus':'预副歌',chorus:'副歌',bridge:'桥段',inst:'器乐段',outro:'尾奏',silence:'静默区间'};
  function time(value){value=Math.max(0,Number(value)||0);return Math.floor(value/60)+':'+String(Math.floor(value%60)).padStart(2,'0');}

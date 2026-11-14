@@ -311,8 +311,10 @@ class SoundMapService:
             self.started = time.monotonic()
             return {'status': 'building', 'phase': 'neighbors', 'done': 0, 'total': len(ids)}
 
-    def close(self):
+    def close(self, generation=None):
         with self.lock:
+            if generation is not None and self.source_generation != generation:
+                return
             if self.process is not None and self.process.poll() is None:
                 self.process.terminate()
                 try:

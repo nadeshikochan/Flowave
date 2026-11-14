@@ -35,7 +35,7 @@
     },
     "analysis": {
       "name": "歌曲分析",
-      "latest": "1.0.0",
+      "latest": "1.0.1",
       "releases": [
         {
           "version": "1.0.0",
@@ -43,6 +43,12 @@
           "bundle": "analysis-1.0.0.fwm",
           "bytes": 35659,
           "url": "https://github.com/nadeshikochan/Flowave/releases/download/plugins-v1.0.0/analysis-1.0.0.fwm"
+        },
+        {
+          "version": "1.0.1",
+          "sha256": "61039d45ed9256758a1d28f42b8f528b8d4757efc60b8f3d31d3ed71a8333020",
+          "bundle": "analysis-1.0.1.fwm",
+          "bytes": 35875
         }
       ]
     },

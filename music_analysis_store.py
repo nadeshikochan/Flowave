@@ -1,7 +1,7 @@
 """Small transactional result database. No audio/model imports in the API process."""
 from contextlib import closing, contextmanager
 from pathlib import Path
-from resource_runtime import asset_path, source_path
+from resource_runtime import recipe_asset_path, source_path
 import json,sqlite3,time,hashlib
 from analysis_vocab import VERSION
 from analysis_visibility import visible_payload
@@ -73,6 +73,18 @@ class AnalysisStore:
         # Explicit, reviewed optimization compatibility; never rewrite result provenance.
         if old==new:return
         with self.connect() as con:con.execute('INSERT OR REPLACE INTO recipe_compatibility VALUES (?,?)',(old,new))
+    def preserve_recipe_compatibility(self,root):
+        """Persist reviewed equivalents before legacy component files are removed."""
+        if not self.path.is_file():return 0
+        current=recipe_version(root)
+        equivalents=equivalent_recipes(root,current)
+        with self.connect() as con:
+            candidates={row[0] for row in con.execute('SELECT DISTINCT recipe FROM results')}
+            candidates.update(row[0] for row in con.execute('SELECT new FROM recipe_compatibility'))
+            aliases=sorted((candidates & equivalents)-{current})
+            con.executemany('INSERT OR REPLACE INTO recipe_compatibility VALUES (?,?)',
+                            [(old,current) for old in aliases])
+        return len(aliases)
     def catalog(self):
         with self.connect() as con:rows=con.execute('SELECT id,source,recipe,summary,updated FROM results').fetchall()
         return {r[0]:{'source':r[1],'recipe':r[2],**self.project(json.loads(r[3])),'updated':r[4]} for r in rows}
@@ -99,7 +111,7 @@ def recipe_version(root):
     """Fingerprint implementation + exact model manifests without loading neural weights."""
     root=Path(root);digest=hashlib.sha256(VERSION.encode())
     for name in ('analysis_features.py','analysis_vocab.py','analysis_audio.py','music_analysis_worker.py','models/Essentia-tagging/download-manifest.json','models/MuQ-MuLan-download.json'):
-        digest.update((asset_path(root,name) if name.startswith('models/') else source_path(root,name)).read_bytes())
-    component=asset_path(root,'data/components/music-analysis/manifest.json')
+        digest.update((recipe_asset_path(root,name) if name.startswith('models/') else source_path(root,name)).read_bytes())
+    component=recipe_asset_path(root,'data/components/music-analysis/manifest.json')
     if component.is_file():digest.update(component.read_bytes())
     return digest.hexdigest()

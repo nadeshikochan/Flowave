@@ -374,6 +374,10 @@ def install(root, module):
                 install_profile(root, name, data['profiles'][name], cache)
             for name in item.get('groups', []):
                 install_group(root, name, data['groups'][name], cache)
+            if module in ('recommendation', 'analysis'):
+                from music_analysis_store import AnalysisStore
+                store = AnalysisStore(resolve_data_dir(root) / 'library/track-analysis/results.sqlite3')
+                store.preserve_recipe_compatibility(root)
         finally:
             lock.seek(0)
             msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)

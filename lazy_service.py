@@ -28,11 +28,11 @@ class DeferredService:
         with self._lock:
             return bool(self._value is not None and self._value.pending_for(*args, **kwargs))
 
-    def close(self):
+    def close(self, *args, **kwargs):
         with self._lock:
             value = self._value
         if value is not None:
-            value.close()
+            value.close(*args, **kwargs)
 
     def __getattr__(self, name):
         return getattr(self._get(), name)

@@ -87,7 +87,7 @@ def runtime_python(root, profile, required=True):
         if legacy.is_file():
             return legacy
     if required:
-        raise ValueError('必要的计算环境尚未准备好，请在功能选装中安装所需资源。')
+        raise ValueError('必要的计算环境尚未准备好，请在插件与模型中完成安装。')
     return None
 
 
@@ -99,6 +99,20 @@ def worker_command(root, profile, name, *arguments):
     return [str(python), '-I', '-X', 'utf8', '-c',
             'import runpy,sys;sys.path.insert(0,sys.argv[1]);sys.argv=sys.argv[2:];runpy.run_path(sys.argv[0],run_name="__main__")',
             str(source), str(source / name), *map(str, arguments)]
+
+
+def recipe_asset_path(root, relative):
+    """Read pinned recipe metadata independently of downloaded model weights."""
+    actual = asset_path(root, relative)
+    if actual.is_file():
+        return actual
+    for group in catalog(root).get('groups', {}).values():
+        entry = group.get('metadata', {}).get(relative)
+        if entry:
+            file = Path(root) / entry['file']
+            if file.is_file() and hashlib.sha256(file.read_bytes()).hexdigest() == entry['sha256']:
+                return file
+    return actual
 
 
 def status(root):

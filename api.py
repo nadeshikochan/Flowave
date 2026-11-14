@@ -44,6 +44,7 @@ import vector_store
 from music_library_roots import configured_roots, normalize_roots, roots_key, scan_roots, contains as root_contains
 from lazy_service import DeferredService
 from resource_runtime import worker_command, runtime_python, source_path, worker_environment
+from recommendation_preparation import RecommendationPreparation
 from listening_trace_service import ListeningTraceService
 from listening_trace_store import TraceConflict
 import sqlite3
@@ -283,7 +284,7 @@ def load_config() -> Dict[str, Any]:
     return cfg
 
 
-def _run_worker(args: List[str]) -> Dict[str, Any]:
+def _run_worker(args: List[str], preparation_id=None) -> Dict[str, Any]:
     global ACTIVE_WORKER_PROCESS
     script = source_path(APP_HOME, "index_worker.py")
     exe_candidates = [
@@ -307,6 +308,9 @@ def _run_worker(args: List[str]) -> Dict[str, Any]:
     else:
         cmd = [sys.executable, str(script), *args]
     with WORKER_PROCESS_LOCK:
+        preparation = globals().get('INDEX_PREPARATION')
+        if preparation and preparation.running and (preparation.identifier != preparation_id or preparation.cancelled):
+            raise RuntimeError('曲库准备正在进行或已取消，请等待当前任务结束。')
         if MUSIC_ANALYSIS_SERVICE.running or STEM_SERVICE.running or PRACTICE_SERVICE.running:
             raise RuntimeError("音乐分析或分轨正在使用显卡，请先取消该任务再更新推荐索引")
         if ACTIVE_WORKER_PROCESS is not None:
@@ -2094,6 +2098,7 @@ class IndexRequest(BaseModel):
     folder: Optional[str] = None  # 若提供则覆盖默认 AUDIO_DIR
     overwrite: bool = False       # 是否覆盖已有 .pt
     meta_only: bool = False       # 仅重建元数据，不重算向量
+    prepare_features: bool = True # 同时补齐推荐语义、标签和地图缓存
 
 
 class TracksRescanRequest(BaseModel):
@@ -2204,6 +2209,10 @@ def startup_event():
 
 
 def shutdown_event():
+    try:
+        INDEX_PREPARATION.cancel()
+    except Exception as exc:
+        print(f"[shutdown][warn] cancel preparation failed: {exc}")
     PRACTICE_SERVICE.close()
     MUSIC_ANALYSIS_SERVICE.close()
     STEM_SERVICE.close()
@@ -2304,30 +2313,44 @@ def update_paths(req: PathsUpdate):
 
 @app.post("/index")
 def rebuild_index(req: IndexRequest):
-    """
-    扫描目录并构建/增量索引。
-    overwrite=False 时复用已有 .pt，只补缺少的歌曲；True 时全量重建。
-    meta_only=True 时仅刷新元数据（已移除元数据功能，行为同补充索引）。
-    """
-    with state_lock:
-        roots = configured_roots(state['config'])
-        if not roots:
-            raise HTTPException(status_code=400, detail="请先添加音乐文件夹")
-        if req.folder and roots_key([req.folder]) != roots_key([roots[0]]):
-            raise HTTPException(status_code=409, detail="请先载入音乐文件夹列表，再更新索引")
-        if state.get('library_index_roots') or state.get('library_refresh_in_progress'):
-            raise HTTPException(status_code=409, detail="音乐库正在更新，请稍后重试")
-        if any(not Path(root).is_dir() for root in roots):
-            raise HTTPException(status_code=400, detail="部分音乐文件夹不可用，旧索引已保留")
-        state['library_index_roots'] = roots
-    try:
-        _run_worker(["build", "--folder", roots[0], "--folders-json", json.dumps(roots, ensure_ascii=False), *(["--overwrite"] if req.overwrite else [])])
+    full_preparation = req.prepare_features and not req.meta_only
+    with WORKER_PROCESS_LOCK:
+        if INDEX_PREPARATION.running or ACTIVE_WORKER_PROCESS is not None or MUSIC_ANALYSIS_SERVICE.running or STEM_SERVICE.running or PRACTICE_SERVICE.running:
+            raise HTTPException(status_code=409, detail="已有音乐处理任务，请等待完成或先取消。")
+        with state_lock:
+            roots = configured_roots(state['config'])
+            if not roots:
+                raise HTTPException(status_code=400, detail="请先添加音乐文件夹")
+            if req.folder and roots_key([req.folder]) != roots_key([roots[0]]):
+                raise HTTPException(status_code=409, detail="请先载入音乐文件夹列表，再更新索引")
+            if state.get('library_index_roots') or state.get('library_refresh_in_progress') or state.get('startup_sync_in_progress'):
+                raise HTTPException(status_code=409, detail="音乐库正在更新，请稍后重试")
+            if any(not Path(root).is_dir() for root in roots):
+                raise HTTPException(status_code=400, detail="部分音乐文件夹不可用，旧索引已保留")
+            state['library_index_roots'] = roots
+        preparation_id = INDEX_PREPARATION.begin() if full_preparation else None
+    def refresh_index():
         with state_lock:
             _load_local_resource_index_locked()
             _sync_local_view_locked(Path(roots[0]))
-            return {"ok": True, "count": len(state["resource_index"]), "worker": WORKER_STATUS.copy()}
+    def build_index():
+        if full_preparation:
+            runtime_python(APP_HOME, 'recommendation')
+            MUSIC_ANALYSIS_SERVICE.check_resources('tags')
+        _run_worker(["build", "--folder", roots[0], "--folders-json", json.dumps(roots, ensure_ascii=False), *(["--overwrite"] if req.overwrite else [])], preparation_id=preparation_id)
+    try:
+        if full_preparation:
+            INDEX_PREPARATION.run(build_index, refresh_index)
+        else:
+            build_index()
+            refresh_index()
+        return {"ok":True, "count":len(state["resource_index"]), "worker":INDEX_PREPARATION.status() if full_preparation else WORKER_STATUS.copy()}
+    except InterruptedError:
+        return {"ok":False, "cancelled":True, "worker":INDEX_PREPARATION.status()}
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"索引任务失败：{exc}")
+        if full_preparation and INDEX_PREPARATION.cancelled:
+            return {"ok":False, "cancelled":True, "worker":INDEX_PREPARATION.status()}
+        raise HTTPException(status_code=500, detail=f"推荐曲库准备未完成：{exc}")
     finally:
         with state_lock:
             state.pop('library_index_roots', None)
@@ -2335,6 +2358,7 @@ def rebuild_index(req: IndexRequest):
 
 @app.get("/index/status")
 def index_status():
+    worker_status = INDEX_PREPARATION.status()
     with state_lock:
         return {
             "local_count": len(state["resource_index"]),
@@ -2342,14 +2366,14 @@ def index_status():
             "local_format": "numpy-json" if LOCAL_TRACKS_PATH.exists() and LOCAL_EMBEDDINGS_PATH.exists() else "missing",
             "online_format": "numpy-json" if ONLINE_EMBEDDINGS_META_PATH.exists() and ONLINE_EMBEDDINGS_PATH.exists() else "missing",
             "migration": _migration_state,
-            "worker_status": WORKER_STATUS.copy(),
+            "worker_status": worker_status,
         }
 
 
 @app.post("/index/cancel")
 def cancel_index():
     try:
-        return _cancel_active_worker()
+        return INDEX_PREPARATION.cancel()
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -2394,7 +2418,7 @@ class TagEditUndoRequest(BaseModel):
 def _tag_edit_available_locked():
     if getattr(sys, "frozen", False):
         raise HTTPException(403, "公开版资料写入仍待依赖许可与打包验收，目前仅在源码开发版开放")
-    if ACTIVE_WORKER_PROCESS is not None or MUSIC_ANALYSIS_SERVICE.running or STEM_SERVICE.running or PRACTICE_SERVICE.running:
+    if INDEX_PREPARATION.running or ACTIVE_WORKER_PROCESS is not None or MUSIC_ANALYSIS_SERVICE.running or STEM_SERVICE.running or PRACTICE_SERVICE.running:
         raise HTTPException(409, "请等待音乐处理任务完成后保存资料")
     if state.get('library_refresh_in_progress') or state.get('startup_sync_in_progress'):
         raise HTTPException(409, "音乐库正在更新，请稍后保存")
@@ -2719,6 +2743,27 @@ RECOMMEND_VECTOR_CACHE = recommendation_engine.VectorCache()
 STEM_SERVICE = DeferredService(_create_stem_service)
 PRACTICE_ANALYSIS_STORE = DeferredService(_create_practice_store)
 PRACTICE_SERVICE = DeferredService(_create_practice_service)
+def _prepare_recommendation_cache(cancelled):
+    with state_lock:
+        entries = list((state.get('local_resource_map') or {}).items())
+    if not entries:
+        return 0
+    RECOMMEND_SEMANTIC_LIBRARY.warm(entries)
+    while True:
+        if cancelled():
+            raise InterruptedError('任务已取消，已保存的分析结果保留。')
+        vectors, status = RECOMMEND_SEMANTIC_LIBRARY.get(entries)
+        if status == 'ready' and RECOMMEND_SEMANTIC_LIBRARY.current(vectors):
+            return len(vectors)
+        if status in ('missing','unavailable'):
+            raise ValueError('推荐特征缓存尚未准备成功，分析结果已保留，请重试更新索引。')
+        time.sleep(.1)
+
+
+INDEX_PREPARATION = RecommendationPreparation(MUSIC_ANALYSIS_SERVICE, SOUND_MAP_SERVICE,
+    lambda: _sound_map_snapshot(), lambda: WORKER_STATUS.copy(), _cancel_active_worker,
+    prepare_consumer=_prepare_recommendation_cache)
+
 
 
 @app.get('/practice/analysis')
@@ -2798,7 +2843,7 @@ def practice_track(path: str):
 @app.post('/practice/start')
 def practice_start(body: PracticeJobRequest):
     with WORKER_PROCESS_LOCK:
-        if ACTIVE_WORKER_PROCESS is not None or MUSIC_ANALYSIS_SERVICE.running:
+        if INDEX_PREPARATION.running or ACTIVE_WORKER_PROCESS is not None or MUSIC_ANALYSIS_SERVICE.running:
             raise HTTPException(409,'推荐索引或音乐分析正在使用显卡，请等待完成。')
         with state_lock:
             if state.get('library_refresh_in_progress') or state.get('startup_sync_in_progress'):
@@ -2858,7 +2903,7 @@ def stems_library():
 @app.post('/stems/start')
 def stems_start(body: StemJobRequest):
     with WORKER_PROCESS_LOCK:
-        if ACTIVE_WORKER_PROCESS is not None or MUSIC_ANALYSIS_SERVICE.running or PRACTICE_SERVICE.running:
+        if INDEX_PREPARATION.running or ACTIVE_WORKER_PROCESS is not None or MUSIC_ANALYSIS_SERVICE.running or PRACTICE_SERVICE.running:
             raise HTTPException(409, '推荐索引或音乐分析正在使用显卡，请等待完成。')
         with state_lock:
             if state.get('library_refresh_in_progress') or state.get('startup_sync_in_progress'):
@@ -2923,6 +2968,14 @@ class MusicAnalysisJobRequest(BaseModel):
     target: Literal["tags", "structure"] = "tags"
 
 
+@app.get('/index/features')
+def recommendation_features():
+    try:
+        return MUSIC_ANALYSIS_SERVICE.catalog()
+    except Exception:
+        raise HTTPException(503, '推荐特征暂时无法读取，已有数据保留。')
+
+
 @app.get("/analysis/catalog")
 def analysis_catalog():
     try:
@@ -2949,8 +3002,8 @@ def analysis_task():
 @app.post("/analysis/start")
 def analysis_start(body: MusicAnalysisJobRequest):
     with WORKER_PROCESS_LOCK:
-        if STEM_SERVICE.running or PRACTICE_SERVICE.running:
-            raise HTTPException(409, '分轨正在使用显卡，请等待完成或先取消。')
+        if INDEX_PREPARATION.running or STEM_SERVICE.running or PRACTICE_SERVICE.running:
+            raise HTTPException(409, '曲库准备或分轨正在使用显卡，请等待完成或先取消。')
         if ACTIVE_WORKER_PROCESS is not None:
             raise HTTPException(409, "推荐索引正在处理，请等待完成再开始音乐分析。")
         with state_lock:
@@ -3718,9 +3771,9 @@ def health():
         "index_ready": bool(state.get("resource_index")),
         "local_index_count": len(state.get("resource_index") or {}),
         "online_index_count": len(state.get("online_index") or {}),
-        "worker_status": WORKER_STATUS.copy(),
+        "worker_status": INDEX_PREPARATION.status(),
         "active_tasks": [name for name, active in (
-            ("推荐索引", bool(WORKER_STATUS.get("running"))),
+            ("推荐曲库准备", INDEX_PREPARATION.running or bool(WORKER_STATUS.get("running"))),
             ("歌曲分析", MUSIC_ANALYSIS_SERVICE.running),
             ("分轨", STEM_SERVICE.running),
             ("演奏分析", PRACTICE_SERVICE.running),

@@ -100,13 +100,15 @@ class SemanticLibrary:
         return result
 
     def revision(self, entries):
-        return [self.stamp(), recipe_version(self.root), self.sources(entries)]
+        stamp = self.stamp()
+        recipe = None if stamp[0] is None or stamp[1] == 0 else recipe_version(self.root)
+        return [stamp, recipe, self.sources(entries)]
 
     def warm(self, entries):
         """Explicit consumer preparation, without blocking the UI or loading models."""
         entries = tuple(entries)
         with self.lock:
-            if self.warming or self.building or not entries:
+            if self.warming or self.building or not entries or not self.database.exists():
                 return
             self.warming = True
         def run():
@@ -127,11 +129,12 @@ class SemanticLibrary:
         if not entries:
             return {}, 'missing'
         try:
-            stamp, recipe = self.stamp(), recipe_version(self.root)
+            stamp = self.stamp()
+            if stamp[0] is None or stamp[1] == 0:
+                return {}, 'missing'
+            recipe = recipe_version(self.root)
         except (OSError, sqlite3.DatabaseError):
             return {}, 'unavailable'
-        if stamp[0] is None:
-            return {}, 'missing'
         key = (entries, stamp, recipe)
         sources = self.sources(entries)
         with self.lock:

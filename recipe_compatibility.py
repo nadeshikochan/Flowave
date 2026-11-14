@@ -6,7 +6,8 @@ inference content and model manifests. In-flight publication keeps its raw recip
 import hashlib
 from functools import lru_cache
 from pathlib import Path
-from resource_runtime import asset_path, source_path
+from resource_runtime import asset_path, recipe_asset_path, source_path, catalog
+from runtime_paths import resolve_data_dir
 
 # These substitutions restore the preceding release's resource lookups. They
 # retain every inference statement and current model manifest in the digest.
@@ -52,7 +53,7 @@ def equivalent_recipes(root, current, target='tags'):
                  'music_analysis_worker.py', 'models/Essentia-tagging/download-manifest.json',
                  'models/MuQ-MuLan-download.json']
         optional = 'data/components/music-analysis/manifest.json'
-        if asset_path(root,optional).is_file():
+        if recipe_asset_path(root,optional).is_file():
             names.append(optional)
     elif target == 'structure':
         from music_structure import RECIPE_ID
@@ -62,7 +63,8 @@ def equivalent_recipes(root, current, target='tags'):
     else:
         raise ValueError('Unknown analysis recipe target')
     try:
-        contents = tuple((asset_path(root,name) if name.startswith(("models/","data/")) else source_path(root,name)).read_bytes() for name in names)
+        metadata = recipe_asset_path if target == 'tags' else asset_path
+        contents = tuple((metadata(root,name) if name.startswith(("models/","data/")) else source_path(root,name)).read_bytes() for name in names)
     except OSError:
         return frozenset((current,))
     raw = hashlib.sha256(prefix.encode())
@@ -72,11 +74,27 @@ def equivalent_recipes(root, current, target='tags'):
     if raw.hexdigest() != current:
         return frozenset((current,))
     alternatives = []
+    reviewed_metadata = catalog(root).get('recipe_metadata_compatibility', []) if target == 'tags' else []
+    data = resolve_data_dir(root)
     for name, value in zip(names, contents):
         previous = value.replace(b'\r\n', b'\n')
         for new, old in _PREVIOUS_RESOURCE_LOOKUPS.get(name, ()):
             previous = previous.replace(new.encode(), old.encode())
-        alternatives.append((value, previous))
+        options = [value, previous]
+        # Reviewed metadata pairs retain identical model files and provider code.
+        # Serialization differences alone must not invalidate saved analyses.
+        if reviewed_metadata:
+            legacy_files = (data / name[5:],) if name.startswith('data/') else (
+                data / 'components/resources/legacy' / name, root / name)
+            for pair in reviewed_metadata:
+                if pair['path'] != name or hashlib.sha256(value).hexdigest() != pair['current_sha256']:
+                    continue
+                for legacy in legacy_files:
+                    if legacy.is_file():
+                        raw = legacy.read_bytes()
+                        if len(raw) == pair['legacy_bytes'] and hashlib.sha256(raw).hexdigest() == pair['legacy_sha256']:
+                            options.append(raw)
+        alternatives.append(tuple(options))
     return _newline_variants(prefix, tuple(alternatives))
 
 

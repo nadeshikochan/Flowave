@@ -511,6 +511,7 @@
                   <label v-if="packageState(item.id)?.installed" class="quiet-switch"><input class="ui-toggle" type="checkbox" :checked="featureSelected(item.id)" :disabled="featureSaving || !!featureSelection.error" @change="selectFeature(item.id,$event.target.checked,$event)" :aria-label="'下次启动启用'+item.name" /></label>
                 </div>
                 <p v-if="moduleFailures[item.id] || packageState(item.id)?.error || packageState(item.id)?.warning" class="error" role="alert">{{moduleFailures[item.id] || packageState(item.id)?.error || packageState(item.id)?.warning}}</p>
+                <p class="hint" v-if="item.id==='recommendation'">包含 MERT、MuQ 和标签处理资源，歌曲分析页面可另行选装。</p>
                 <p class="hint" v-if="item.id!=='history' && !resourceState(item.id).ready">模型与工具约 {{packageSize(resourceState(item.id).downloadBytes)}}，运行环境自动安装；需要 NVIDIA 显卡。已下载内容会复用。</p>
                 <div v-if="packageState(item.id) && !packageState(item.id).installed" class="feature-installed-actions"><small>安装后下次启动启用</small><button class="mini ghost" :disabled="featureSaving || !!featureSelection.packages.error" @click="manageFeaturePackage(item.id,'import')">从文件安装…</button></div>
                 <div v-if="packageState(item.id)?.installed" class="feature-installed-actions"><small>当前{{featureEnabled(item.id)?'已启用':'已停用'}}<template v-if="featureSelected(item.id)!==featureEnabled(item.id)"> · 下次启动{{featureSelected(item.id)?'启用':'停用'}}</template></small><div class="btns"><button class="mini" v-if="packageState(item.id).installed.version!==packageState(item.id).latest" :disabled="featureSaving" @click="manageFeaturePackage(item.id,'install')">更新至 {{packageState(item.id).latest}}</button><button class="mini ghost" :disabled="featureSaving" @click="manageFeaturePackage(item.id,'import')">从文件安装…</button><button class="mini ghost" :disabled="featureSaving" @click="manageFeaturePackage(item.id,'remove')">移除{{item.name}}</button></div></div>
@@ -831,14 +832,14 @@
                   <button class="settings-search-result" @click="openSettingsSection('library-settings')"><strong>添加音乐文件夹</strong><small>选择本地歌曲所在的目录并应用</small></button>
                   <button class="settings-search-result" @click="openSettingsSection('recommendation')"><strong>开启连续推荐</strong><small>索引完成后，调整接歌与防重复规则</small></button>
                 </div>
-                <p class="settings-section-note">基础推荐使用 MERT 索引。歌曲分析生成的 MuQ 和标签会补充推荐信息，可在曲库概览处理。</p>
-                <button class="mini" @click="openSettingsSection('insights')">前往曲库分析</button>
+                <p class="settings-section-note">更新索引会依次准备 MERT 声音向量、MuQ 语义与标签、声音地图。已有有效结果会复用。</p>
+                <button v-if="featureEnabled('analysis')" class="mini" @click="openSettingsSection('insights')">查看曲库分析</button>
               </section>
               <section v-if="settingsTab==='advanced'" class="settings-card" data-setting-id="setting-advanced-72ce9b8c3f">
                 <div class="settings-card-title">
                   <div>
                     <h3>推荐索引</h3>
-                    <p>新增音乐后更新索引。任务失败时保留已有索引。</p>
+                    <p>新增音乐后更新，补齐声音、语义、标签和地图数据。失败时保留已保存结果。</p>
                   </div>
                 </div>
                 <div class="btns">
@@ -2094,6 +2095,7 @@
   <script src="lyric-ambient.js"></script>
   <script src="folder-browser.js"></script>
   <script src="feature-modules.js"></script>
+  <script src="music-feature-data.js"></script>
   <script src="section-colors.js"></script>
   <script src="practice-output.js"></script><script src="practice-timing.js"></script>
   <script src="practice-metronome.js"></script>

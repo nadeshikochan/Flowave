@@ -19,6 +19,11 @@ class MusicAnalysisService:
         return max((tags,structure),key=lambda t:t.get('started',0))
     def _store(self,target):return self.structure_store if target=='structure' else self.store
     def _recipe(self,target):return structure_recipe(self.root) if target=='structure' else recipe_version(self.root)
+    def check_resources(self,target='tags'):
+        python=runtime_python(self.root,'analysis')
+        for name in (() if target=='structure' else ('Essentia-tagging/discogs-effnet-bsdynamic-1.onnx','MuQ-MuLan-large/pytorch_model.bin','MuQ-large-msd-iter/model.safetensors','xlm-roberta-base/model.safetensors')):
+            if not asset_path(self.root,'models/'+name).is_file():raise ValueError('推荐与标签计算资源不完整，请在插件与模型中完成安装。')
+        return python
     def pending_for(self, resource_ids, target='tags'):
         """Read-only dependency check; never starts or resumes model work."""
         with self.lock:
@@ -73,7 +78,7 @@ class MusicAnalysisService:
         try:valid=result['source']==row['source'] and result['recipe'] in self.store.accepted_recipes(recipe_version(self.root),root=self.root)
         except OSError:valid=False
         return {'status':'ready' if valid else 'outdated','id':rid,**result,'structure':structure}
-    def start(self,mode,ids,target='tags'):
+    def start(self,mode,ids,target='tags',*,allow_empty=False):
         with self.lock:
             if self.running:raise ValueError('已有音乐处理任务，请等待完成或先取消。')
             if mode not in ('all','missing','selected','resume','retry'):raise ValueError('不支持的音乐处理操作。')
@@ -83,6 +88,7 @@ class MusicAnalysisService:
             if target=='structure':
                 capability=structure_availability(self.root)
                 if not capability['available']:raise ValueError(capability['message'])
+            if target=='tags':self.store.preserve_recipe_compatibility(self.root)
             recipe=self._recipe(target);current=self.snapshot();stored=self._store(target).catalog()
             if mode=='resume':ids=previous.get('pending',[])
             if mode=='retry':ids=[r['id'] for r in previous.get('failures',[])]
@@ -95,14 +101,14 @@ class MusicAnalysisService:
                 accepted=self._store(target).accepted_recipes(recipe,root=self.root,target=target)
                 rows=[r for r in rows if not (stored.get(r['id'],{}).get('source')==r['source'] and stored.get(r['id'],{}).get('recipe') in accepted)]
             if not rows:
+                if allow_empty and mode=='missing' and current:
+                    return {'state':'completed','target':target,'total':0,'done':0,'success':0,'failed':0,'reused':len(current),'skipped':True}
                 raise ValueError(f'当前曲库的{label}均已有有效结果，无需补充处理。' if mode=='missing' and current else '待处理歌曲已不在当前曲库，请重新读取曲库。' if wanted else '当前曲库没有歌曲。')
             # Continuing pending work must not discard failures from the same task.
             row_ids={r['id'] for r in rows};current_ids={r['id'] for r in current}
             carried_failures={f['id']:f for f in previous.get('failures',[])
                               if f.get('id') in current_ids and f['id'] not in row_ids} if mode=='resume' else {}
-            python=runtime_python(self.root,'analysis')
-            for name in (() if target=='structure' else ('Essentia-tagging/discogs-effnet-bsdynamic-1.onnx','MuQ-MuLan-large/pytorch_model.bin','MuQ-large-msd-iter/model.safetensors','xlm-roberta-base/model.safetensors')):
-                if not asset_path(self.root,'models/'+name).is_file():raise ValueError('音乐分析模型不完整，请先准备分析组件。')
+            python=self.check_resources(target)
             self.folder=self.data/'cache/analysis-jobs'/uuid.uuid4().hex;self.folder.mkdir(parents=True)
             manifest={'rows':rows,'models':str(asset_path(self.root,'models/MuQ-MuLan-large').parent),'recipe':recipe,'target':target}
             (self.folder/'job.json').write_text(json.dumps(manifest,ensure_ascii=False),encoding='utf-8')

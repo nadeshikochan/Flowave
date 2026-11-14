@@ -1345,12 +1345,14 @@
     "recommendation": {
       "groups": [
         "audio-tools",
-        "mert"
+        "mert",
+        "analysis-models"
       ],
       "profiles": [
-        "recommendation"
+        "recommendation",
+        "analysis"
       ],
-      "license": "MERT：CC BY-NC 4.0，仅非商业用途。"
+      "license": "MERT：CC BY-NC 4.0，仅非商业用途。MuQ与Essentia来源许可随资源保留。"
     },
     "analysis": {
       "groups": [
@@ -1392,6 +1394,26 @@
       "url": "https://download-r2.pytorch.org/whl/cu126/torchvision-0.22.0%2Bcu126-cp313-cp313-win_amd64.whl",
       "bytes": 6334173,
       "sha256": "4976d5b9893e9973934a765da27b0f1f6a00ac533c28fea8db1636de90036998"
+    }
+  ],
+  "recipe_metadata_compatibility": [
+    {
+      "path": "data/components/music-analysis/manifest.json",
+      "current_sha256": "02d2cf272b7ec00f35255f477c2f95d79a583c1e8eefa188aa097fc88618a7bb",
+      "legacy_sha256": "58e572ae51c80123eac8feb6b1b97024d6239bdd2c8ff7d1587e1ddaaae22260",
+      "legacy_bytes": 457328
+    },
+    {
+      "path": "models/MuQ-MuLan-download.json",
+      "current_sha256": "471014f34a1cabf4062700f2a6fbb3d1a2a729ba808d88d8ef64c4338f45cdd0",
+      "legacy_sha256": "9d4b9f5659203ec3644c6830620fe9d6c1b6446f10328365a2d110857df9f9ce",
+      "legacy_bytes": 4449
+    },
+    {
+      "path": "models/Essentia-tagging/download-manifest.json",
+      "current_sha256": "f3415856d40d63e7891c02e82c7b7f60d9b1f66875de4583e782fea158770e31",
+      "legacy_sha256": "3c1065e8f16cfe3aa79b54fc59741d32102790146d850ab98fca09fdbf579475",
+      "legacy_bytes": 2389
     }
   ]
 }
