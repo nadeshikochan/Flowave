@@ -3356,7 +3356,7 @@ test("history performance snapshot, query cache and pagination preserve behavior
 });
 
 
-function createEffectsRenderer() {
+function createEffectsRenderer(options = {}) {
   const slots = [], fades = [];
   const real = require("../renderer/audio-effects");
   const engine = { context: {}, tail: null, resume: async () => true, gain() {}, apply() {}, setVolume() {},
@@ -3364,7 +3364,7 @@ function createEffectsRenderer() {
     release(element) { element.pause(); element.removeAttribute("src"); },
     fade(outgoing, incoming, seconds) { this.tail = outgoing; fades.push({ outgoing, incoming, seconds }); },
   };
-  const harness = createRendererHarness({ audioEffects: { ...real, Engine: function () { return engine; } },
+  const harness = createRendererHarness({ ...options, audioEffects: { ...real, Engine: function () { return engine; } },
     makeAudio(first) { const slot = slots.length ? new FakeAudio() : first; slot.readyState = 3; slots.push(slot); return slot; } });
   harness.app.audioEffects = real.normalize({ crossfade: true, seconds: 3 });
   harness.app.filteredTracks = [{ path: "C:/Music/A.mp3" }, { path: "C:/Music/B.mp3" }, { path: "C:/Music/C.mp3" }];
@@ -3403,6 +3403,76 @@ test("natural overlap commits the prepared slot once and subsequent manual switc
   assert.equal(fades.length, 1);
   assert.equal(app.currentPath, "C:/Music/C.mp3");
 });
+
+test("crossfade handoff reserves its incoming slot while background recommendation prepares", async () => {
+  const vueContext = { console };
+  nodeVm.runInNewContext(fs.readFileSync(path.join(__dirname, '../renderer/vendor/vue.global.prod.js'), 'utf8'), vueContext);
+  const { app: initial, capturedConfig, slots, fades } = createEffectsRenderer({ markRaw: vueContext.Vue.markRaw });
+  const renderer = vueContext.Vue.createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode: () => null, nextSibling: () => null });
+  const data = Object.fromEntries(Object.entries(initial).filter(([, value]) => typeof value !== 'function'));
+  const instance = renderer.createApp({ data: () => data, render: () => null,
+    methods: { ...capturedConfig.methods, queueUiSnapshotSave() {}, syncMediaSessionPlaybackState() {},
+      syncKaraokeProgressTicker() {}, updateMediaSessionMetadata() {}, scheduleRecommendPrefetch() {},
+      getRecommendationPolicyStamp: () => 'handoff-policy', getRecommendationPreparationStamp() { return this.currentPath + this.playbackGeneration; },
+      getAdjacentMertSimilarity: () => .99, filterAdjacentRecommendation: value => value, hasFreshRecCache: () => true,
+      takePreparedRecommendation: () => null } });
+  const app = instance.mount({});
+  let release;
+  try {
+    await app.playByPath('C:/Music/A.mp3');
+    app.useRecommend = true;
+    app.recCache = {like_list:[{path:'C:/Music/B.mp3',probability:1}],diagnostic:{details:{model:'muq+mert'}}};
+    slots[0].currentTime = 170;
+    await app.prepareNaturalCrossfade(app.naturalQueueStamp());
+    assert.match(slots[1].src, /B\.mp3$/);
+    app.resumeEffectsEngine = () => new Promise(resolve => { release = resolve; });
+    slots[0].currentTime = 178;
+    app.checkNaturalCrossfade();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(typeof release, 'function');
+    const background = await app.prepareRecommendationAudio('recover', {
+      like_list:[{path:'C:/Music/C.mp3',probability:1}],diagnostic:{details:{model:'muq+mert'}}});
+    assert.notEqual(background.element, slots[1], 'background preparation reused the slot being handed off');
+    release();
+    for (let i=0;i<8;i++) await new Promise(resolve => setImmediate(resolve));
+    assert.equal(app.currentPath, 'C:/Music/B.mp3');
+    assert.match(slots[1].currentSrc, /B\.mp3$/);
+    assert.equal(app._committedAudioSource, slots[1].currentSrc);
+    assert.equal(app.isAudioEventForCommittedSource(), true, 'progress events must reach the displayed song');
+    assert.equal(fades.length, 1);
+  } finally {
+    release?.();
+    app.pauseByManual('handoff-test-cleanup');
+    instance.unmount();
+  }
+});
+
+for (const phase of ['before-play', 'during-play']) {
+  test(`changed crossfade source ${phase} cannot publish a wrong song or history`, async () => {
+    const { app, slots, fades } = createEffectsRenderer();
+    await app.playByPath('C:/Music/A.mp3');
+    slots[0].currentTime = 170;
+    await app.prepareNaturalCrossfade(app.naturalQueueStamp());
+    let release;
+    if (phase === 'before-play') app.resumeEffectsEngine = () => new Promise(resolve => { release = resolve; });
+    else slots[1].play = () => new Promise(resolve => { slots[1].paused = false; release = resolve; });
+    try {
+      slots[0].currentTime = 178;
+      app.checkNaturalCrossfade();
+      await new Promise(resolve => setImmediate(resolve));
+      assert.equal(typeof release, 'function');
+      slots[1].src = 'file:///C:/Music/C.mp3';
+      slots[1].load();
+      release();
+      for (let i=0;i<8;i++) await new Promise(resolve => setImmediate(resolve));
+      assert.equal(app.currentPath, 'C:/Music/A.mp3');
+      assert.equal(app.playHistory.includes('C:/Music/B.mp3'), false);
+      assert.equal(app.isAudioEventForCommittedSource(), true);
+      assert.equal(slots[0].paused, false);
+      assert.equal(fades.length, 0);
+    } finally { release?.(); app.pauseByManual('source-guard-test-cleanup'); }
+  });
+}
 
 
 test("manual switch wins while incoming crossfade play is pending", async () => {

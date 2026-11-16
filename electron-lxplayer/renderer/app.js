@@ -408,6 +408,19 @@ function recommendationPacketPending(data) {
   return ['building','unavailable'].includes(d?.semantic_status)||['index_building','analysis_building','analysis_inputs_pending'].includes(d?.preparation_status)||d?.reason==='context_preparing';
 }
 
+function occupiedAudioSlots(runtime) {
+  const tickets = [
+    ...(runtime?.media?.values() || []),
+    ...(runtime?.preparing?.values() || []),
+    ...(runtime?.claimed || []),
+  ];
+  return new Set([
+    audio, naturalFade?.element, inflightNaturalFade?.element,
+    audioEngine?.tail, audioEngine?.releasingTail,
+    ...tickets.map(ticket => ticket.element),
+  ]);
+}
+
 function recommendationPacketQuality(data, intent) {
   const rows = intent === 'change' ? data?.dislike_list : data?.like_list;
   if (!rows?.length || data?.missing || recommendationPacketPending(data)) return -1;
@@ -790,8 +803,8 @@ const audioEffectsMethods = {
       this.releasePreparedRecommendation(ready);ready=null;
     }
     if(ready?.ready&&ready.element){this.recommendationJobs.claimed.delete(ready);ready.actionTicket=false;ready.stamp=stamp;ready.revision=revision;ready.queue=this.filteredTracks;naturalFade=ready;this.soundMapTraceRevision++;this.checkNaturalCrossfade();return;}
-    const held=new Set([...this.recommendationJobs?.media?.values()||[],...this.recommendationJobs?.preparing?.values()||[]].map(t=>t.element));
-    const element = audioSlots.find(slot => slot !== audio&&!held.has(slot));
+    const occupied = occupiedAudioSlots(this.recommendationJobs);
+    const element = audioSlots.find(slot => !occupied.has(slot));
     if (!element || audioEngine.tail || audioEngine.releasingTail) return;
     const reserved = { stamp, element, from: audio, revision, queue: this.filteredTracks, ready: false };
     naturalFade = reserved;
@@ -1368,12 +1381,21 @@ const playbackMethods = {
       await this.resumeEffectsEngine();
       this.assertCurrentPlaybackTransition(transition);
       if (prepared) {
-        if (prepared.from !== outgoing || audio !== outgoing || (prepared.actionTicket ? prepared.origin !== this.currentPath || prepared.playbackGeneration !== preparedGeneration : prepared.stamp !== this.naturalQueueStamp())) throw new Error("自动接歌状态已变化");
+        if (prepared.path !== targetPath || prepared.from !== outgoing || audio !== outgoing || (prepared.actionTicket ? prepared.origin !== this.currentPath || prepared.playbackGeneration !== preparedGeneration : prepared.stamp !== this.naturalQueueStamp())) throw new Error("自动接歌状态已变化");
+        const expectedSource = String(prepared.started?.actualSource || "");
+        const assertPreparedSource = () => {
+          this.assertCurrentPlaybackTransition(transition);
+          if (!expectedSource || String(prepared.element.src || "") !== expectedSource
+              || String(prepared.element.currentSrc || prepared.element.src || "") !== expectedSource) {
+            throw new Error("预备歌曲音源已变化，已取消接管");
+          }
+        };
+        assertPreparedSource();
         audioEngine?.gain(prepared.element,0);
         await prepared.element.play();
         this.assertCurrentPlaybackTransition(transition);
         await AudioEffects.waitReady(prepared.element, () => this.assertCurrentPlaybackTransition(transition), 1200);
-        this.assertCurrentPlaybackTransition(transition);
+        assertPreparedSource();
         rollbackSnapshot.position = Number(outgoing.currentTime) || rollbackSnapshot.position;
       }
       if (previousSession) {
@@ -5776,8 +5798,7 @@ const dataMethods = {
     if(reusable(pending)){pending.recommendationContext=data;return pending.promise;}
     const path=pickRecommendPathByPolicy({recCache:data},key);if(!path||rt.failed.has(path))return null;
     if(pending){pending.canceled=true;rt.preparing.delete(intent);this.releasePreparedRecommendation(pending);}
-    const occupied=new Set([audio,naturalFade?.element,audioEngine?.tail,audioEngine?.releasingTail,
-      ...[...rt.media.values(),...rt.preparing.values(),...rt.claimed].map(t=>t.element)]);
+    const occupied = occupiedAudioSlots(rt);
     const element=audioSlots.find(slot=>!occupied.has(slot));
     if(!element){
       rt.waitingAudio.set(intent,{data,base});
