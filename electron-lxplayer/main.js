@@ -22,7 +22,7 @@ const onlineProviders = require("./online/providers");
 const listeningHistoryOps = require("./listening-history-ops");
 const listeningHistoryStore = require("./listening-history-store");
 const secureProtocols = require("./secure-protocols");
-const { revealLocalTrack } = require("./local-file-actions");
+const { revealLocalTrack, createSongTrash } = require("./local-file-actions");
 const { writeJsonObjectAtomic, createCoalescedWriter } = require("./async-json-writer");
 const backendHealth = require("./backend-health");
 const {AudioOutputMonitor}=require('./audio-output-monitor');
@@ -209,6 +209,37 @@ const lyricQueryCache = new SongInfoQueryCache({
 const lyricSidecarStore = new LyricSidecarStore({
   snapshotRoot: path.join(CONFIG_DIR, "song-info", "lyric-sidecar-transactions"),
   resolveAudioRoot: audioPath => loadLibraryAudioRoot(audioPath),
+});
+const songTrash = createSongTrash({
+  trashItem: file => shell.trashItem(file),
+  getRoots: loadLibraryAudioRoots,
+  withLyricLock: (file, operation) => lyricSidecarStore.withLock(file, operation),
+  async ensureIdle(file) {
+    const status = await readBackendHealth();
+    if (status.valid && status.health?.track_trash !== true)
+      throw Error("后台版本暂不支持删除歌曲，请完整退出软件后再启动。");
+    if (workspaceTransition || appIsQuitting || !status.valid || !status.health?.startup_sync?.ready
+        || !Array.isArray(status.health?.active_tasks) || status.health.active_tasks.length
+        || batchSongInfoTasks.activeTaskId) throw Error("音乐库或处理任务正在更新，请稍后再删除歌曲。");
+    if (!(await tagEditor.waitForTarget(file)).released) throw Error("歌曲资料正在保存，请稍后重试。");
+  },
+  async verifyTrack(file, resourceId) {
+    if (typeof file !== "string" || !path.isAbsolute(file)) throw Error("只能删除曲库中的本地歌曲。");
+    const { data } = await backendHttp.get(`${BACKEND_URL}/tracks?scope=local`, { timeout: 5000 });
+    if (data.identity_status?.write_blocked) throw Error("曲库身份数据暂时无法更新，已保留歌曲。");
+    const matches = (data.items || []).filter(item => item.path === file);
+    if (matches.length !== 1 || !matches[0].resource_id
+        || (resourceId && resourceId !== matches[0].resource_id))
+      throw Error("歌曲身份已变化或曲库尚未就绪，请刷新音乐库后重试。");
+    return matches[0].resource_id;
+  },
+  async onTrashed(file, resourceId) {
+    const [result] = await Promise.allSettled([
+      backendHttp.post(`${BACKEND_URL}/tracks/retire-trashed`, { track_path: file, resource_id: resourceId }, { timeout: 15000 }),
+      metadata.invalidateLyricSources(file, resourceId),
+    ]);
+    if (result.status === "rejected" || !result.value.data?.ok) throw Error("曲库更新失败");
+  },
 });
 const lyricProviderRegistry = new LyricProviderRegistry({
   cache: lyricQueryCache,
@@ -1388,6 +1419,7 @@ app.on("before-quit", (event) => {
     lyricOverlayWindow.close();
   }
   quitCleanupPromise = (async () => {
+    await songTrash.drain();
     await resourceManager.close();
     await officialModuleOperation?.closed;
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -1543,6 +1575,7 @@ async function publishCurrentWorkspace() {
 
 async function assertWorkspaceIdle() {
   if (appIsQuitting) throw Error('软件正在退出，工作区选择保持原样。');
+  if (songTrash.running) throw Error('歌曲正在移到回收站，请稍候。');
   if (officialModuleOperation || resourceManager.operation) throw Error('请先完成或取消功能包安装，再切换工作区。');
   if (startupBackgroundBusy) throw Error('启动图片正在保存，请稍后再切换。');
   const status = await readBackendHealth();
@@ -1796,6 +1829,16 @@ function registerIpc() {
     if (!secureProtocols.isTrustedRendererUrl(event.senderFrame?.url)) return {ok:false,message:"无法从当前页面定位文件。"};
     return revealLocalTrack(filePath, {shell});
   });
+  const handleSongTrash = (channel, operation) => ipcMain.handle(channel, async (event, payload) => {
+    if (event.sender !== mainWindow?.webContents || !secureProtocols.isTrustedRendererUrl(event.senderFrame?.url)
+        || workspaceTransition || appIsQuitting) return {ok:false,message:"当前无法删除歌曲。"};
+    try { return await operation(payload); }
+    catch (error) {
+      return {ok:false,message: error?.code ? "无法核对歌曲文件，请刷新音乐库后重试。" : error.message};
+    }
+  });
+  handleSongTrash("lx-song-trash-prepare", payload => songTrash.prepare(payload?.path, payload?.resourceId));
+  handleSongTrash("lx-song-trash-commit", token => songTrash.commit(token));
   const trustedTrace = (event, fn) => {
     if (!secureProtocols.isTrustedRendererUrl(event.senderFrame?.url)) throw new Error('当前页面无法读取轨迹');
     return fn();

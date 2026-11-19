@@ -712,6 +712,71 @@ test("list loop and shuffle follow displayed search results while recommendation
   assert.equal((await app.playFromPlaylistNext()).ok, false);
 });
 
+test("delete song waits for confirmation and releases only the selected audio", async () => {
+  const vueContext = {console};
+  nodeVm.runInNewContext(fs.readFileSync(path.join(__dirname, "../renderer/vendor/vue.global.prod.js"), "utf8"), vueContext);
+  const a = "C:\\Music\\A.mp3", b = "C:\\Music\\B.mp3";
+  const commits = [];
+  let planned, approved = false;
+  const {capturedConfig, fakeAudio} = createRendererHarness({
+    markRaw:vueContext.Vue.markRaw,
+    lxEnv:{
+      prepareSongTrash:async ({path:file}) => {
+        planned = file;
+        return {ok:true, token:file, path:file, files:[{file, kind:"音频"}]};
+      },
+      commitSongTrash:async token => {
+        assert.equal(token, planned);
+        commits.push({token, source:fakeAudio.src});
+        return {ok:true,moved:1,remaining:[]};
+      },
+    },
+  });
+  const renderer = vueContext.Vue.createRenderer({
+    createComment:()=>({}), insert(){}, remove(){}, parentNode:()=>null, nextSibling:()=>null,
+  });
+  const instance = renderer.createApp({
+    data:capturedConfig.data, render:()=>null,
+    methods:{
+      ...capturedConfig.methods,
+      requestConfirmation:async ({detail}) => { assert.ok(detail.includes(planned)); return approved; },
+      showNotice(message) { assert.match(message, /已移到回收站/); },
+      updateMediaSessionMetadata(){}, syncMediaSessionPlaybackState(){}, sendLyricOverlay(){},
+      async loadTracks({trashedPath}) { this.trackByPath.delete(trashedPath); return true; },
+      buildFolderPlaylists(){},
+    },
+  });
+  const app = instance.mount({});
+  try {
+    app.currentPath = a;
+    app.useRecommend = false;
+    app.trackByPath.set(a, {path:a,title:"A",resourceId:"a"});
+    app.trackByPath.set(b, {path:b,title:"B",resourceId:"b"});
+    app.trackContextMenu.path = a;
+    await app.deleteTrackFromLibrary();
+    assert.deepEqual(commits, []);
+    assert.equal(fakeAudio.paused, false);
+    approved = true;
+    app.trackContextMenu.path = b;
+    await app.deleteTrackFromLibrary();
+    assert.deepEqual(commits, [{token:b,source:"file:///C:/Music/A.mp3"}]);
+    assert.equal(app.currentPath, a);
+    app.trackContextMenu.path = a;
+    await app.deleteTrackFromLibrary();
+    assert.deepEqual(commits[1], {token:a,source:""});
+    assert.equal(app.currentPath, "");
+    assert.equal(fakeAudio.paused, true);
+    app.trashedTrackIds = new Set(["a"]);
+    app.playlists = [{id:"saved",tracks:[a],trackRefs:[{path:a,resourceId:"a"}]}];
+    app.currentPlaylist = "saved";
+    assert.equal(app.getCurrentPlaylistTracks().length, 0);
+    app.playHistory = ["C:\\Music\\Older.mp3", a, b];
+    app.playHistoryRefs = [{resourceId:"older"},{resourceId:"a"},{resourceId:"b"}];
+    app.currentPath = b;
+    assert.equal(app.getPreviousPlayedPath(), "C:\\Music\\Older.mp3");
+  } finally { instance.unmount(); }
+});
+
 test("playByPath commits identity, history, and last track only after audio starts", async () => {
   const { app, rendererState } = createRendererHarness();
 

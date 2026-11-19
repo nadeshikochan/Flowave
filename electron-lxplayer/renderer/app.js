@@ -899,6 +899,7 @@ const playbackMethods = {
   },
   async resumeCurrentPathPlayback() {
     if (!this.currentPath) return;
+    if (this.songTrashPath && this.songTrashPath === this.normalizeComparablePath(this.currentPath)) return;
     if (this.pendingPlaybackTransition) throw new Error("正在切换歌曲，请稍候");
     const expectedPath = String(this.currentPath);
     const expectedGeneration = Number(this.playbackGeneration) || 0;
@@ -1005,6 +1006,7 @@ const playbackMethods = {
     this.setPauseState("interruption", source);
   },
   async resumeByUserAction(source = "user") {
+    if (this.songTrashPath && this.songTrashPath === this.normalizeComparablePath(this.currentPath)) return;
     this.cancelWearResume();
     const revision = this.outputSafetyRevision = Number(this.outputSafetyRevision || 0) + 1;
     this.playbackIntent = "play";
@@ -1325,6 +1327,10 @@ const playbackMethods = {
     throw new Error(`在线播放失败(source=${playSource}) ${errors.join(" | ")}`);
   },
   async playByPath(path, pushHistory = true, source = "manual", options = {}) {
+    if (this.songTrashPath && this.songTrashPath === this.normalizeComparablePath(path)) {
+      this.releasePreparedRecommendation?.(options.prepared);
+      return {ok:false,policyRejected:true,error:"这首歌正在移到回收站。"};
+    }
     if(this.soundMapRollbackActive)return {ok:false,canceled:true};
     const policyPacket=options.recommendationContext||options.prepared?.recommendationContext;
     const expectedIntent=source==='dislike_next'?'change':options.trigger==='like_button'?'recover':this.getDefaultRecommendationIntent();
@@ -2055,7 +2061,6 @@ const lyricMethods = {
     this._desktopLyricSettingsSaveTimer = setTimeout(() => {
       this._desktopLyricSettingsSaveTimer = null;
       this.persistDesktopLyricSettings();
-      if (this.desktopLyricCoverColor) this.updateDesktopLyricCoverPalette();
       this.sendLyricOverlay();
     }, 120);
   },
@@ -2430,8 +2435,8 @@ const lyricMethods = {
     };
   },
   getLyricOverlaySettingsPayload() {
-    const hasCover = !!this.getDesktopLyricCoverSource();
-    const coverColors = this.desktopLyricCoverColor && hasCover ? this.desktopLyricCoverPalette : null;
+    const palette = this.desktopLyricCoverPalette;
+    const coverColors = palette && palette.source === this.desktopLyricPaletteSource ? palette.colors : null;
     return {
       locked: !!this.desktopLyricLocked,
       fontSize: this.desktopLyricMainFontSize,
@@ -2447,53 +2452,36 @@ const lyricMethods = {
       switchScrollMs: Math.max(120, Number(this.lyricSwitchScrollMs) || DEFAULT_LYRIC_SWITCH_SCROLL_MS),
     };
   },
-  getDesktopLyricCoverSource() {
-    return String(this.currentCoverFull || this.currentCover || "").trim();
-  },
-  remapMovedMetadataCacheUrl(src) {
-    const raw = String(src || "").trim();
-    const marker = "/data/cache/metadata/";
-    if (!/^file:\/\//i.test(raw)) return raw;
-    const normalized = raw.replace(/\\/g, "/");
-    const idx = normalized.toLowerCase().lastIndexOf(marker);
-    if (idx < 0) return raw;
-    const appRoot = String(window.location?.href || "").split("/electron-lxplayer/renderer/")[0];
-    if (!appRoot) return raw;
-    return `${appRoot}${marker}${normalized.slice(idx + marker.length)}`;
-  },
-  async updateDesktopLyricCoverPalette() {
-    const src = this.remapMovedMetadataCacheUrl(this.getDesktopLyricCoverSource());
-    const cacheKey = `v3:${src}`;
-    const requestId = (this._desktopLyricCoverPaletteRequestId || 0) + 1;
-    this._desktopLyricCoverPaletteRequestId = requestId;
-    if (!this.desktopLyricCoverColor || !src) {
+  async updateDesktopLyricCoverPalette(source) {
+    const request = ++this.desktopLyricPaletteGeneration;
+    const cache = this.desktopLyricPaletteCache;
+    if (cache.has(source)) {
+      this.desktopLyricCoverPalette = { source, colors: cache.get(source) };
+      this.sendLyricOverlay();
+      return;
+    }
+    if (this.desktopLyricCoverPalette) {
       this.desktopLyricCoverPalette = null;
       this.sendLyricOverlay();
-      return;
     }
-    if (this._desktopLyricCoverPaletteCache?.has(cacheKey)) {
-      this.desktopLyricCoverPalette = this._desktopLyricCoverPaletteCache.get(cacheKey);
-      this.sendLyricOverlay();
-      return;
-    }
+    if (!source) return;
     try {
-      const palette = await this.extractCoverLyricPalette(src);
-      if (requestId !== this._desktopLyricCoverPaletteRequestId) return;
-      this._desktopLyricCoverPaletteCache.set(cacheKey, palette);
-      this.desktopLyricCoverPalette = palette;
+      const colors = await this.extractCoverLyricPalette(source);
+      if (request !== this.desktopLyricPaletteGeneration || source !== this.desktopLyricPaletteSource || this.$?.isUnmounted) return;
+      if (cache.size >= 64) cache.delete(cache.keys().next().value);
+      cache.set(source, colors);
+      this.desktopLyricCoverPalette = { source, colors };
       this.sendLyricOverlay();
     } catch (e) {
-      if (requestId !== this._desktopLyricCoverPaletteRequestId) return;
+      if (request !== this.desktopLyricPaletteGeneration || source !== this.desktopLyricPaletteSource || this.$?.isUnmounted) return;
       console.warn("桌面歌词封面取色失败", e?.message || e);
-      this.desktopLyricCoverPalette = null;
-      this.sendLyricOverlay();
     }
   },
   extractCoverLyricPalette(src) {
     return new Promise((resolve, reject) => {
       const img = new Image();
-      const remappedSrc = this.remapMovedMetadataCacheUrl(src);
-      if (/^https?:/i.test(src)) {
+      // The local media scheme is a separate origin from the app renderer.
+      if (/^(?:kumiko-media|https?):/i.test(src)) {
         img.crossOrigin = "anonymous";
       }
       img.onload = () => {
@@ -2512,7 +2500,7 @@ const lyricMethods = {
         }
       };
       img.onerror = () => reject(new Error("cover load failed"));
-      img.src = remappedSrc;
+      img.src = src;
     });
   },
   buildLyricPaletteFromPixels(data) {
@@ -2547,7 +2535,8 @@ const lyricMethods = {
         score: bucket.vivid,
       }))
       .sort((a, b) => b.score - a.score);
-    const base = candidates[0] || { r: 128, g: 212, b: 255 };
+    const base = candidates[0];
+    if (!base) return null;
     const active = this.adjustRgbForLyric(base, { saturation: 1.45, lightness: 0.62, minSaturation: 0.55, maxSaturation: 0.95 });
     const inactive = this.adjustRgbForLyric(base, { saturation: 0.22, lightness: 0.86, minSaturation: 0.08, maxSaturation: 0.28 });
     const meta = this.adjustRgbForLyric(base, { saturation: 0.18, lightness: 0.72, minSaturation: 0.06, maxSaturation: 0.24 });
@@ -4781,6 +4770,7 @@ const dataMethods = {
   },
   makeTrackReference(path, previous = null) {
     const trackPath = String(path || previous?.path || "");
+    if (this.trashedTrackIds?.has(previous?.resourceId)) return { ...previous, path: trackPath };
     const track = this.trackByPath.get(trackPath)
       || (previous?.resourceId ? this.trackByResourceId.get(String(previous.resourceId)) : null);
     return {
@@ -4792,6 +4782,7 @@ const dataMethods = {
   resolveTrackReference(reference, fallbackPath = "") {
     const ref = reference && typeof reference === "object" ? reference : {};
     const resourceId = String(ref.resourceId || ref.resource_id || "");
+    if (this.trashedTrackIds?.has(resourceId)) return "";
     if (resourceId) {
       const byResource = this.trackByResourceId.get(resourceId);
       if (byResource?.path) return String(byResource.path);
@@ -4935,6 +4926,7 @@ const dataMethods = {
       axios.get(`${this.baseUrl}/online/catalog`).catch(() => ({ data: { catalog: {} } })),
     ]);
     if (loadGeneration !== this._trackLoadGeneration) return false;
+    this.trashedTrackIds = markSearchRaw(new Set(data.trashed_resource_ids || []));
     const catalog = catalogData?.catalog || {};
     Object.keys(catalog).forEach((token) => {
       const c = catalog[token] || {};
@@ -4961,7 +4953,7 @@ const dataMethods = {
         },
       };
     });
-    const items = data.tracks || [];
+    const items = (data.tracks || []).filter(trackPath => trackPath !== options.trashedPath);
     const identityByPath = new Map(
       (Array.isArray(data.items) ? data.items : [])
         .filter((item) => item?.path)
@@ -5013,7 +5005,7 @@ const dataMethods = {
     this.searchIndexReady = false;
     this.searchIndexBuilding = false;
     this.queueSearchIndexRebuild(650);
-    if (!this.currentPath && this.tracks.length) {
+    if (!this.currentPath && this.tracks.length && !options.trashedPath) {
       this.currentPath = this.tracks[0].path;
     }
     let startupTargetPath = "";
@@ -6992,6 +6984,88 @@ const playlistMethods = {
       if (!result?.ok) this.showNotice(result?.message || "无法打开文件位置。", "error");
     } catch (_) { this.showNotice("无法打开文件位置。", "error"); }
   },
+  async deleteTrackFromLibrary() {
+    const file = String(this.trackContextMenu?.path || "");
+    const track = this.trackByPath?.get(file);
+    this.closeTrackContextMenu();
+    if (!track || this.isOnlineToken(file) || this.songTrashBusy) return;
+    this.songTrashBusy = true;
+    try {
+      const prepared = await window.lxEnv.prepareSongTrash({path:file, resourceId:track.resourceId});
+      if (!prepared?.ok) throw Error(prepared?.message || "无法核对歌曲文件。");
+      const confirmed = await this.requestConfirmation({
+        title: "删除歌曲",
+        message: `将「${track.title || this.extractName(file)}」及以下文件移到回收站？`,
+        detail: prepared.files.map(({file, kind}) => `${kind} · ${file}`).join("\n")
+          + "\n\n共用或无法确认归属的文件，以及听歌记录和已建索引会保留。",
+        confirmLabel: "移到回收站",
+        tone: "danger",
+      });
+      if (!confirmed) return;
+      const target = this.normalizeComparablePath(prepared.path);
+      const isTarget = value => this.normalizeComparablePath(value) === target;
+      if (this.pendingPlaybackTransition && (isTarget(this.currentPath) || isTarget(this.pendingPlaybackTransition.targetPath))) {
+        throw Error("歌曲正在切换，请切换完成后重试。");
+      }
+      this.songTrashPath = target;
+      this.cancelRecommendPrefetch();
+      if (isTarget(naturalFade?.path)) this.cancelNaturalCrossfade();
+      for (const ticket of this.recommendationJobs?.claimed || []) {
+        if (isTarget(ticket.path)) { ticket.canceled = true; this.releasePreparedRecommendation(ticket); }
+      }
+      const wasCurrent = isTarget(this.currentPath);
+      if (wasCurrent) {
+        const previousTime = this.getListeningMediaTime();
+        this.flushListeningSession("delete-track", {deferSave:true});
+        this.pauseByManual("delete-track");
+        this.disablePractice(false);
+        this.playbackGeneration = playbackTransitionCoordinator.invalidate();
+        this._pendingSeekTime = previousTime > 0 ? previousTime : null;
+        this._committedAudioSource = "";
+        audio.removeAttribute("src");
+        audio.load();
+      } else if (audioEngine?.tail?.src === this.pathToFile(file)) {
+        audioEngine.stopTail(audio, true);
+        overlapRecovery = null;
+      }
+      const result = await window.lxEnv.commitSongTrash(prepared.token);
+      if (!result?.ok) throw Error(result?.message || "歌曲未移到回收站。");
+      if (wasCurrent && isTarget(this.currentPath)) {
+        this.currentPath = "";
+        this.currentTrackRef = null;
+        this.currentTime = 0;
+        this._pendingSeekTime = null;
+        this.applyTrackPresentation(null);
+        this.syncMediaSessionPlaybackState();
+        this.sendLyricOverlay();
+      }
+      if (isTarget(this.selectedPath)) this.selectedPath = "";
+      if (isTarget(this.audioDetail?.path)) this.closeAudioDetail();
+      const lastPath = readStoredString(STORAGE_KEYS.LAST_TRACK, "");
+      if (isTarget(lastPath)) {
+        removeStored(STORAGE_KEYS.LAST_TRACK);
+        removeStored(STORAGE_KEYS.LAST_TRACK_REF);
+      }
+      this.recCache = null;
+      this.recCacheFor = null;
+      this.cancelRecommendPrefetch();
+      this.recommendationJobs?.caches?.clear();
+      let refreshed = false;
+      try {
+        refreshed = await this.loadTracks({preserveView:true, trashedPath:prepared.path});
+        this.buildFolderPlaylists();
+      } catch (_) { /* The file was already moved, so report the refresh separately. */ }
+      if (this.useRecommend && this.currentPath) this.scheduleRecommendPrefetch();
+      const remaining = result.remaining.length ? `，有 ${result.remaining.length} 个关联文件未移走` : "";
+      const refresh = result.refreshFailed || !refreshed ? "。曲库未完全更新，请刷新音乐库" : "";
+      this.showNotice(`已移到回收站 ${result.moved} 个文件${remaining}${refresh}。`, remaining || refresh ? "error" : "info", 6500);
+    } catch (error) {
+      this.showNotice(error.message || "无法删除歌曲。", "error");
+    } finally {
+      this.songTrashPath = "";
+      this.songTrashBusy = false;
+    }
+  },
   normalizeComparablePath(value) {
     return String(value || "")
       .replace(/\\/g, "/")
@@ -7027,6 +7101,7 @@ const playlistMethods = {
       const seen = new Set(), paths = [];
       storedQueue.tracks.slice(0,5000).forEach((path,i)=>{
         if(typeof path!=="string")return;
+        if (this.trashedTrackIds?.has(storedQueue.trackRefs?.[i]?.resourceId)) return;
         const resolved=this.resolveTrackReference(storedQueue.trackRefs?.[i],path)||path;
         const key=this.detailTrackKey(resolved);if(seen.has(key))return;seen.add(key);paths.push(resolved);
       });
@@ -7305,11 +7380,6 @@ const playlistMethods = {
     this.closeOnlineContextMenu();
     this.closePlaylistContextMenu();
     this.prepareContextMenu("trackContextMenuRoot",this.trackContextMenu);
-  },
-  playFromTrackContextMenu() {
-    const path = this.trackContextMenu.path;
-    this.closeTrackContextMenu();
-    if (path) this.playByPath(path);
   },
   prepareContextMenu(refName, state) {
     if (!document.activeElement?.closest?.('[role="menu"]')) this._contextMenuReturnFocus = document.activeElement;
@@ -8226,7 +8296,7 @@ const playlistMethods = {
     if (this.libraryBrowseMode === "folders") return this.folderBrowserDirectory.tracks.map(path => this.trackByPath?.get(path)).filter(Boolean);
     const pl = this.playlists.find((p) => p.id === this.currentPlaylist);
     if (!pl || !Array.isArray(pl.tracks)) return this.tracks;
-    return pl.tracks.map((p) => (
+    return pl.tracks.filter((_path, index) => !this.trashedTrackIds?.has(pl.trackRefs?.[index]?.resourceId)).map((p) => (
       this.trackByPath?.get(p)
       || this.onlineTrackMap[p]
       || this.prepareTrackForList({ path: p, name: this.extractName(p), artist: "", album: "" }, { buildDoc: false })
@@ -9662,7 +9732,12 @@ const utilityMethods = {
     // 从尾部开始找“当前曲目”最近一次出现，再取其前一首
     const curIdx = hist.lastIndexOf(this.currentPath);
     if (curIdx <= 0) return "";
-    return hist[curIdx - 1] || "";
+    const refs = this.playHistoryRefs || [];
+    const offset = Math.max(0, hist.length - refs.length);
+    for (let index = curIdx - 1; index >= 0; index -= 1) {
+      if (!this.trashedTrackIds?.has(refs[index - offset]?.resourceId) && hist[index]) return hist[index];
+    }
+    return "";
   },
   buildMetadataFillPlan() {
     const pending = this.tracks.filter(track => track && !track._metaLoaded);
@@ -10107,6 +10182,10 @@ const computedProps = {
       this.desktopLyricCurrentOnly = value === "single";
     },
   },
+  desktopLyricPaletteSource() {
+    if (!this.desktopLyricEnabled || !this.desktopLyricCoverColor) return "";
+    return this.pathToFile(String(this.currentCoverFull || this.currentCover || "").trim());
+  },
   lyricCanShowMain() {
     return this.lyricDisplayMode === "original" || this.lyricDisplayMode === "both";
   },
@@ -10183,16 +10262,14 @@ const watchHandlers = {
   },
   currentCover() {
     this.syncLyricAmbient();
-    if (this.desktopLyricCoverColor) this.updateDesktopLyricCoverPalette();
     this.queueUiSnapshotSave();
   },
   currentCoverFull() {
     this.syncLyricAmbient();
-    if (this.desktopLyricCoverColor) this.updateDesktopLyricCoverPalette();
     this.queueUiSnapshotSave();
   },
-  desktopLyricCoverColor() {
-    this.updateDesktopLyricCoverPalette();
+  desktopLyricPaletteSource(source) {
+    this.updateDesktopLyricCoverPalette(source);
   },
   showLyric() { this.syncLyricAmbient(); this.syncOutputCalibrationConsumers(); },
   desktopLyricEnabled() { this.syncOutputCalibrationConsumers(); },
@@ -10346,9 +10423,6 @@ function mountedHook() {
   this.loadCustomPlaylists();
   audioEngine?.apply(this.audioEffects);
   this.restoreUiSnapshot();
-  if (this.desktopLyricCoverColor) {
-    this.updateDesktopLyricCoverPalette();
-  }
   this.setupMediaSessionIntegration();
   const bindSlotEvent = (name, handler) => {
     slotEventHandlers.push([name, handler]);
@@ -10862,6 +10936,9 @@ const kumikoVueApp = createApp({
       },
       tracks: [], // [{path,name,artist,album,duration,durationText}]
       trackByPath: markSearchRaw(new Map()),
+      trashedTrackIds: markSearchRaw(new Set()),
+      songTrashBusy: false,
+      songTrashPath: "",
       trackByResourceId: markSearchRaw(new Map()),
       trackResourcesBySongKey: markSearchRaw(new Map()),
       _localMetadataRevision: 0,
@@ -11274,8 +11351,8 @@ const kumikoVueApp = createApp({
       desktopLyricStroke: clampNumberAllowZero(readStoredNumber(STORAGE_KEYS.DESKTOP_LYRIC_STROKE, DEFAULT_DESKTOP_LYRIC_STROKE), DEFAULT_DESKTOP_LYRIC_STROKE, 0, 1.5),
       desktopLyricCoverColor: readStoredBool(STORAGE_KEYS.DESKTOP_LYRIC_COVER_COLOR, true),
       desktopLyricCoverPalette: null,
-      _desktopLyricCoverPaletteCache: new Map(),
-      _desktopLyricCoverPaletteRequestId: 0,
+      desktopLyricPaletteCache: markSearchRaw(new Map()),
+      desktopLyricPaletteGeneration: 0,
       desktopLyricCurrentOnly: readStoredBool(STORAGE_KEYS.DESKTOP_LYRIC_CURRENT_ONLY, DEFAULT_DESKTOP_LYRIC_CURRENT_ONLY),
       desktopLyricOpen: false,
       lyricFontOptions: [

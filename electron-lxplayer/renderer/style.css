@@ -4047,6 +4047,10 @@ input[type="range"] {
   margin-top: 6px;
   color: var(--sub);
   font-size: 12px;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  max-height: min(270px, 40vh);
+  overflow-y: auto;
 }
 
 .confirm-modal .btns {

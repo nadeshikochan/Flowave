@@ -115,6 +115,8 @@ contextBridge.exposeInMainWorld("lxEnv", {
   resetRecommendationBehavior: () => ipcRenderer.invoke("lx-listening-history-reset-recommendation-behavior"),
   resetListeningHistory: () => ipcRenderer.invoke("lx-listening-history-reset"),
   showSongInFolder: (trackPath) => ipcRenderer.invoke("lx-show-song-in-folder", trackPath),
+  prepareSongTrash: (payload) => ipcRenderer.invoke("lx-song-trash-prepare", payload),
+  commitSongTrash: (token) => ipcRenderer.invoke("lx-song-trash-commit", token),
   openAnalysisData: () => ipcRenderer.invoke("lx-open-analysis-data"),
   windowControl: (action) => ipcRenderer.invoke("lx-window-control", action),
   installModel: () => ipcRenderer.invoke("lx-install-model"),

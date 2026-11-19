@@ -825,7 +825,10 @@ TAG_EDIT_SERVICE = TagEditService(LIBRARY_DIR / "tag-transactions", _TagEditIden
 
 def _resource_records_by_path_locked() -> Dict[str, List[vector_store.LocalVectorRecord]]:
     records_by_path: Dict[str, List[vector_store.LocalVectorRecord]] = {}
+    trashed_ids = track_identity_registry.trashed_resource_ids()
     for record in (state.get("resource_index") or {}).values():
+        if record.resource_id in trashed_ids:
+            continue
         path_key = normalize_resource_path(record.path)
         if path_key:
             records_by_path.setdefault(path_key, []).append(record)
@@ -852,7 +855,11 @@ def _relink_resource_records_locked(*, allow_song_key_fallback: bool = True) -> 
 
     updated: vector_store.LocalVectorRecords = {}
     relocated = 0
+    trashed_ids = track_identity_registry.trashed_resource_ids()
     for mapping_key, record in records.items():
+        if record.resource_id in trashed_ids:
+            updated[mapping_key] = record
+            continue
         identity = identities_by_id.get(str(record.resource_id or ""))
         if identity is None:
             exact = identities_by_path.get(record.path)
@@ -2102,6 +2109,11 @@ class TracksRescanRequest(BaseModel):
     audio_dirs: Optional[List[str]] = None
 
 
+class TrashedTrackRequest(BaseModel):
+    track_path: str
+    resource_id: str
+
+
 class SeedUpsertRequest(BaseModel):
     id: Optional[str] = None
     name: str
@@ -2502,6 +2514,39 @@ def undo_track_tags(body: TagEditUndoRequest):
             raise
         except Exception as exc:
             raise _tag_edit_error(exc) from exc
+
+
+@app.post("/tracks/retire-trashed")
+def retire_trashed_track(req: TrashedTrackRequest):
+    """Acknowledge an already recycled file and remove its live library references."""
+    with state_lock:
+        target = req.track_path
+        identity = state["track_identities_by_path"].get(target) or {}
+        if not req.resource_id or identity.get("resource_id") != req.resource_id or not any(
+            root_contains(root, target) for root in configured_roots(state["config"])
+        ):
+            raise HTTPException(409, "歌曲已移出曲库或身份已变化")
+        try:
+            Path(target).lstat()
+        except FileNotFoundError:
+            pass
+        except OSError as exc:
+            raise HTTPException(409, "无法确认原音频已移到回收站") from exc
+        else:
+            raise HTTPException(409, "原路径仍有文件，请重新查看")
+        try:
+            track_identity_registry.mark_trashed(req.resource_id, target)
+        except (TrackIdentityError, OSError) as exc:
+            raise HTTPException(409, "无法保存歌曲的回收状态") from exc
+        state["library_refresh_generation"] = int(state.get("library_refresh_generation") or 0) + 1
+        state["library_refresh_in_progress"] = False
+        state["audio_files"] = [file for file in state["audio_files"] if str(file) != target]
+        state["path_key_cache"].pop(target, None)
+        state["track_identities_by_path"].pop(target, None)
+        state["track_identity_status"] = track_identity_registry.status()
+        _rebuild_local_index_cache_locked()
+        _load_recommendation_rate_locked()
+        return {"ok": True}
 
 
 @app.post("/tracks/rescan")
@@ -3209,6 +3254,7 @@ def list_tracks(scope: Literal["local", "all"] = "local"):
         return {
             "tracks": local_tracks + sorted_online,
             "items": local_items + online_items,
+            "trashed_resource_ids": sorted(track_identity_registry.trashed_resource_ids()),
             "identity_status": copy.deepcopy(state.get("track_identity_status") or {}),
         }
 
@@ -3768,6 +3814,7 @@ def health():
         "local_index_count": len(state.get("resource_index") or {}),
         "online_index_count": len(state.get("online_index") or {}),
         "worker_status": INDEX_PREPARATION.status(),
+        "track_trash": True,
         "active_tasks": [name for name, active in (
             ("推荐曲库准备", INDEX_PREPARATION.running or bool(WORKER_STATUS.get("running"))),
             ("歌曲分析", MUSIC_ANALYSIS_SERVICE.running),

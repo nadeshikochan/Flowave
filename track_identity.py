@@ -109,6 +109,7 @@ def _coerce_entry(resource_id: str, raw: Any) -> dict[str, Any]:
         "size": max(0, int(raw.get("size") or 0)),
         "mtime_ns": max(0, int(raw.get("mtime_ns") or 0)),
         "missing": bool(raw.get("missing", False)),
+        **({"trashed": True} if raw.get("trashed") is True else {}),
         "created_at": max(0.0, float(raw.get("created_at") or 0.0)),
         "updated_at": max(0.0, float(raw.get("updated_at") or 0.0)),
     }
@@ -199,6 +200,22 @@ class TrackIdentityRegistry:
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
             return copy.deepcopy(self._payload)
+
+    def mark_trashed(self, resource_id: str, path: str) -> None:
+        with self._lock:
+            payload = copy.deepcopy(self._payload)
+            entry = payload["tracks"].get(resource_id)
+            if not entry or entry["current_path"] != path:
+                raise TrackIdentityError("歌曲身份已变化")
+            if entry.get("trashed"):
+                return
+            entry.update(missing=True, trashed=True, updated_at=float(self._clock()))
+            payload["revision"] += 1
+            self._save_locked(payload)
+
+    def trashed_resource_ids(self) -> set[str]:
+        with self._lock:
+            return {rid for rid, entry in self._payload["tracks"].items() if entry.get("trashed")}
 
     def status(self) -> dict[str, Any]:
         with self._lock:
@@ -303,6 +320,8 @@ class TrackIdentityRegistry:
                 current_key = normalize_resource_path(entry.get("current_path") or "")
                 if current_key:
                     by_current_path[current_key].append(resource_id)
+                if entry.get("trashed"):
+                    continue
                 fingerprint = str(entry.get("content_fingerprint") or "").strip()
                 if not is_audio_payload_identity(fingerprint):
                     fingerprint = ""
@@ -335,7 +354,7 @@ class TrackIdentityRegistry:
                     hinted_path = normalize_resource_path(hinted_entry.get("current_path") or "")
                     # 调用方只可把当前未观察到的旧路径重定位到新路径；已被本轮观察占用的
                     # 身份仍按精确路径处理，避免提示覆盖另一首实际存在的歌曲。
-                    if hinted_path != path_key and hinted_path not in observed_paths:
+                    if not hinted_entry.get("trashed") and hinted_path != path_key and hinted_path not in observed_paths:
                         resource_id = hinted_resource_id
                 exact_candidates = [value for value in by_current_path.get(path_key, []) if value not in used_ids]
                 if not resource_id and len(exact_candidates) == 1:
@@ -343,7 +362,14 @@ class TrackIdentityRegistry:
                     old_fingerprint = str(candidate.get("content_fingerprint") or "")
                     if not is_audio_payload_identity(old_fingerprint):
                         old_fingerprint = ""
-                    if not old_fingerprint or not observation.content_fingerprint or old_fingerprint == observation.content_fingerprint:
+                    if candidate.get("trashed"):
+                        if old_fingerprint and observation.content_fingerprint:
+                            matches = old_fingerprint == observation.content_fingerprint
+                        else:
+                            matches = observation.size == candidate["size"] and observation.mtime_ns == candidate["mtime_ns"]
+                    else:
+                        matches = not old_fingerprint or not observation.content_fingerprint or old_fingerprint == observation.content_fingerprint
+                    if matches:
                         resource_id = exact_candidates[0]
 
                 if not resource_id and observation.content_fingerprint:
@@ -409,6 +435,7 @@ class TrackIdentityRegistry:
                     if any(entry.get(key) != value for key, value in updates.items()):
                         updates["updated_at"] = now
                     entry.update(updates)
+                    entry.pop("trashed", None)
                     if was_missing:
                         restored += 1
                 else:
