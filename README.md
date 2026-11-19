@@ -46,7 +46,7 @@ Flowave 是一款 Windows 本地音乐播放器。支持曲库和歌单、逐字
 
 ## 文档与反馈
 
-- [使用指南](docs/使用指南.md) · [隐私与数据](docs/隐私与数据.md) · [从源码运行](docs/源码运行与构建.md)
+- [在线使用手册](https://flowave-manual.kumiko233.chatgpt.site) · [使用指南](docs/使用指南.md) · [隐私与数据](docs/隐私与数据.md) · [从源码运行](docs/源码运行与构建.md)
 - [提交问题](https://github.com/nadeshikochan/Flowave/issues/new)时请附上软件版本和复现步骤。诊断导出位于「设置 → 数据与帮助 → 诊断日志」。
 - 安全问题请通过[安全政策](SECURITY.md)中的方式报告。
 

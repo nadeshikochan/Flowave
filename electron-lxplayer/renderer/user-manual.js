@@ -31,6 +31,11 @@
     computed: {
       currentStep() { return tourSteps[this.tourIndex]; },
       currentChapter() { return this.catalogue?.chapters.find(chapter => chapter.articles.some(article => article.id === this.topic)); },
+      neighbors() {
+        const articles = this.catalogue?.chapters.flatMap(chapter => chapter.articles) || [];
+        const index = articles.findIndex(article => article.id === this.topic);
+        return index < 0 ? {} : {previous: articles[index - 1], next: articles[index + 1]};
+      },
       results() {
         const q = this.query.normalize('NFKC').toLowerCase().trim();
         if (!q || !this.catalogue) return [];
@@ -105,6 +110,11 @@
         this.$nextTick(() => this.$refs.menuToggle?.focus());
       },
       goBack() { if (this.position > 0) { this.position--; this.choose(this.history[this.position]); } },
+      goToSection(index) {
+        const section = this.$refs.body?.querySelector('#help-section-' + index);
+        section?.scrollIntoView({block: 'start'});
+        section?.focus({preventScroll: true});
+      },
       actionLabel(action) {
         const setting = root.FlowaveSettings?.items.find(item => item.anchor === action.anchor && item.page === action.page);
         return setting?.path || root.FlowaveSettings?.titles[action.page] || '';
@@ -182,7 +192,6 @@
           <button ref="menuToggle" class="help-menu-toggle mini ghost" :aria-expanded="menuOpen" @click="menuOpen=!menuOpen">章节目录 {{menuOpen?'⌃':'⌄'}}</button>
           <div class="help-reader">
             <aside ref="contents" class="help-contents" :class="{'is-open':menuOpen}" aria-label="手册章节" @keydown.esc="closeContents">
-              <p>Flowave 操作与参考</p>
               <nav v-if="catalogue">
                 <section v-for="chapter in catalogue.chapters" :key="chapter.id">
                   <h2>{{chapter.title}}</h2>
@@ -208,20 +217,18 @@
               </div>
               <p v-else-if="loading" class="help-article" role="status">正在载入章节…</p>
               <article v-else-if="article" class="help-article">
-                <div class="help-breadcrumb"><button v-if="position>0" class="mini ghost" @click="goBack">‹ 上一篇</button><span>{{currentChapter?.title}}</span><span>离线手册</span></div>
+                <div class="help-breadcrumb"><button v-if="position>0" class="mini ghost" @click="goBack">‹ 返回上次阅读</button><span>{{currentChapter?.title}}</span></div>
                 <h1 ref="heading" tabindex="-1">{{article.title}}</h1>
                 <p class="help-lead">{{article.summary}}</p>
-                <figure v-if="article.image" class="help-figure">
-                  <button class="help-image-button" :disabled="imageFailed" @click="showImage(imagePath(article.image),article.caption)">
-                    <img v-if="!imageFailed" :src="imagePath(article.image)" :alt="article.caption" loading="lazy" decoding="async" @error="imageFailed=true" />
-                    <span v-else>图片暂不可用，可继续阅读以下操作。</span>
-                  </button>
-                  <figcaption>{{article.caption}} <span v-if="!imageFailed">点击放大</span></figcaption>
-                  <ol v-if="catalogue.figures?.[article.image]?.points?.length" class="help-figure-key" aria-label="图中标注">
-                    <li v-for="(point,i) in catalogue.figures[article.image].points" :key="point.label"><b>{{i+1}}</b>{{point.label}}</li>
-                  </ol>
-                </figure>
-                <section v-for="(section,index) in article.sections" :key="index" class="help-section" :id="'help-section-'+index">
+                <p v-if="article.entry" class="help-entry"><strong>入口</strong>{{article.entry}}</p>
+                <details v-if="article.sections.length > 1" :key="article.id" class="help-outline">
+                  <summary>本页目录</summary>
+                  <nav aria-label="本页目录">
+                    <button v-for="(section,index) in article.sections" :key="index" class="help-text-link" @click="goToSection(index)">{{section.title}}</button>
+                  </nav>
+                </details>
+                <template v-for="(section,index) in article.sections" :key="index">
+                <section class="help-section" :id="'help-section-'+index" tabindex="-1">
                   <h2>{{section.title}}</h2>
                   <p v-for="(paragraph,i) in section.paragraphs" :key="'p'+i">{{paragraph}}</p>
                   <ol v-if="section.steps" class="help-steps">
@@ -240,11 +247,25 @@
                     <button v-for="link in section.links" :key="link.id" @click="choose(link.id)">{{link.label}} →</button>
                   </nav>
                 </section>
+                <figure v-if="index===0 && article.image" class="help-figure">
+                  <button class="help-image-button" :disabled="imageFailed" @click="showImage(imagePath(article.image),article.caption)">
+                    <img v-if="!imageFailed" :src="imagePath(article.image)" :alt="article.caption" loading="lazy" decoding="async" @error="imageFailed=true" />
+                    <span v-else>图片暂不可用，可继续阅读以下操作。</span>
+                  </button>
+                  <figcaption>{{article.caption}} <span v-if="!imageFailed">点击放大</span></figcaption>
+                  <ol v-if="catalogue.figures?.[article.image]?.points?.length" class="help-figure-key" aria-label="图中标注">
+                    <li v-for="(point,i) in catalogue.figures[article.image].points" :key="point.label"><b>{{i+1}}</b>{{point.label}}</li>
+                  </ol>
+                </figure>
+                </template>
                 <footer v-if="article.related?.length" class="help-related">
-                  <h2>继续阅读</h2>
+                  <h2>相关操作</h2>
                   <button v-for="id in article.related" :key="id" @click="choose(id)">{{articleTitle(id)}} →</button>
                 </footer>
-                <p class="help-edition">适用于当前随附版本 · 界面图片使用示例数据 · 各操作以当前启用状态为准</p>
+                <nav class="help-pagination" aria-label="相邻文章">
+                  <button v-if="neighbors.previous" class="help-text-link" @click="choose(neighbors.previous.id)"><small>上一篇</small>{{neighbors.previous.title}}</button>
+                  <button v-if="neighbors.next" class="help-text-link" @click="choose(neighbors.next.id)"><small>下一篇</small>{{neighbors.next.title}}</button>
+                </nav>
               </article>
             </main>
           </div>

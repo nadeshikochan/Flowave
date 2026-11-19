@@ -6,19 +6,25 @@
 .help-search input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .help-reader { display: grid; grid-template-columns: 224px minmax(0, 1fr); flex: 1; min-height: 0; }
 .help-contents { overflow: auto; padding: 22px 14px 50px 22px; border-right: 1px solid var(--border); }
-.help-contents > p { color: var(--sub); font-size: 12px; margin: 0 10px 24px; }
-.help-contents section { margin-bottom: 22px; }
+.help-contents section { margin-bottom: 16px; }
 .help-contents h2 { font-size: 13px; font-weight: 650; margin: 0 10px 6px; }
-.help-contents button { display: block; width: 100%; text-align: left; background: transparent; border: 0; color: var(--sub); font: inherit; font-size: 13px; padding: 9px 10px; line-height: 1.5; cursor: pointer; border-radius: 5px; }
+.help-contents button { display: block; width: 100%; text-align: left; background: transparent; border: 0; color: var(--sub); font: inherit; font-size: 13px; padding: 6px 10px; line-height: 1.5; cursor: pointer; border-radius: 5px; }
 .help-contents button.active { color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); font-weight: 600; }
 .help-contents button:hover, .help-links button:hover, .help-related button:hover { color: var(--accent); }
 .help-body { overflow: auto; min-width: 0; scroll-behavior: auto; }
-.help-article { max-width: 940px; margin: 0 auto; padding: 32px clamp(24px, 4vw, 66px) 64px; line-height: 1.85; font-size: 15px; }
-.help-breadcrumb { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; color: var(--sub); font-size: 12px; margin-bottom: 26px; }
-.help-breadcrumb > span + span { margin-left: auto; }
+.help-article { max-width: 880px; margin: 0 auto; padding: 30px clamp(24px, 4vw, 54px) 52px; line-height: 1.8; font-size: 15px; }
+.help-breadcrumb { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; color: var(--sub); font-size: 13px; margin-bottom: 12px; }
 .help-article h1, .help-tour h1 { font-size: clamp(25px, 2.7vw, 36px); font-weight: 650; letter-spacing: -.025em; line-height: 1.35; margin: 0 0 16px; outline: none; }
-.help-lead { color: var(--sub); font-size: 16px; line-height: 1.8; margin: 0 0 28px; }
-.help-section { margin: 38px 0 0; }
+.help-lead { color: var(--sub); font-size: 16px; line-height: 1.7; margin: 0 0 17px; }
+.help-entry { border-left: 3px solid var(--accent); background: var(--panel-2); margin: 0 0 12px; padding: 8px 12px; font-size: 14px; }
+.help-entry strong { color: var(--accent); margin-right: 10px; }
+.help-outline { color: var(--sub); font-size: 14px; }
+.help-outline summary { cursor: pointer; }
+.help-outline nav { display: flex; flex-wrap: wrap; gap: 0 16px; padding-left: 14px; }
+.help-text-link { border: 0; background: transparent; color: var(--accent); padding: 4px 0; font: inherit; text-align: left; cursor: pointer; }
+.help-text-link:hover { text-decoration: underline; }
+.help-section { margin: 28px 0 0; scroll-margin-top: 14px; }
+.help-section:focus { outline: none; }
 .help-section h2, .help-related h2 { font-size: 20px; line-height: 1.5; font-weight: 600; margin: 0 0 14px; }
 .help-section p { margin: 0 0 16px; }
 .help-steps { margin: 0 0 20px; padding-left: 25px; }
@@ -33,8 +39,10 @@
 .help-links, .help-related { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .help-links button, .help-related button { background: none; border: 0; color: var(--accent); font: inherit; text-align: left; padding: 4px 0; cursor: pointer; }
 .help-related { border-top: 1px solid var(--border); margin-top: 44px; padding-top: 28px; }
-.help-edition { margin-top: 42px; font-size: 12px; color: var(--sub); }
-.help-figure { margin: 28px 0 36px; }
+.help-pagination { display: flex; justify-content: space-between; gap: 16px; border-top: 1px solid var(--border); margin-top: 28px; padding-top: 14px; }
+.help-pagination small { display: block; color: var(--sub); }
+.help-pagination > button:last-child { text-align: right; margin-left: auto; }
+.help-figure { margin: 20px 0 28px; }
 .help-image-button { display: block; width: 100%; padding: 0; border: 1px solid var(--border); border-radius: 2px; background: var(--panel-2); cursor: zoom-in; overflow: hidden; }
 .help-image-button img { width: 100%; height: auto; display: block; }
 .help-image-button > span { display: block; padding: 24px; color: var(--sub); }
