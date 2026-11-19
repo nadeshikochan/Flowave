@@ -2,7 +2,11 @@
 
 # Flowave
 
-Flowave 是一款 Windows 本地音乐播放器。支持曲库和歌单、逐字歌词、桌面歌词、均衡器和交叉淡化。安装歌曲推荐后，可以顺着当前风格听下去，也可以用「找回感觉」调整方向，或用「换个感觉」切到另一组歌曲。
+**从一首喜欢的歌开始，顺着这个感觉听下去。**
+
+Flowave 是一款按听感推荐的 Windows 本地音乐播放器。安装歌曲推荐后，可以连续播放听感相近的歌曲，用「接回之前的感觉」调整方向，或用「换个感觉」切到另一组歌曲。支持曲库和歌单、逐字歌词、桌面歌词、均衡器和交叉淡化。
+
+Flowave is a local music player for Windows that recommends similar-sounding tracks for continuous listening.
 
 ## 下载
 
