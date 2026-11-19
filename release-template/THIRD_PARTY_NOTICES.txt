@@ -75,8 +75,7 @@ not establish a separate license for every third-party checkpoint it hosts.
 BS-Roformer-SW.ckpt (SHA256 24e7d35ee9c64415673d3fd33e06a67cac2c103c5df6267ba1576459c775916e)
 and model_scnet_ep_36_sdr_10.0891.ckpt currently lack a sufficiently explicit
 checkpoint-specific grant in the reviewed original sources. Their permission
-remains unresolved. The private preview preserves the existing evaluation
-workflow and makes no redistribution or commercial-use grant for those weights.
+remains unresolved. Flowave downloads these weights from the listed host and does not bundle them. Consult the checkpoint authors before redistribution or commercial use.
 https://github.com/pymss-project/pyms
 https://huggingface.co/baicai1145/pymss
 https://github.com/ZFTurbo/Music-Source-Separation-Training/issues/245
