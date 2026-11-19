@@ -27,7 +27,7 @@ function wait(ms, signal) {
   });
 }
 
-function sanitizeLyricEvidence(raw = {}) {
+function sanitizeLyricIdentity(raw) {
   const evidence = normalizeLyricEvidence(raw);
   return {
     title: evidence.title,
@@ -35,6 +35,14 @@ function sanitizeLyricEvidence(raw = {}) {
     album: evidence.album,
     durationSeconds: evidence.durationSeconds,
   };
+}
+
+function sanitizeLyricEvidence(raw = {}) {
+  const evidence = sanitizeLyricIdentity(raw);
+  if (raw?.alternatives?.length && Array.isArray(raw.alternatives)) {
+    evidence.alternatives = raw.alternatives.slice(0, 1).map(sanitizeLyricIdentity);
+  }
+  return evidence;
 }
 
 function cacheKey(provider, evidence, locale) {

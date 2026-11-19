@@ -8,6 +8,7 @@ const {
   screen,
   Menu,
   protocol,
+  nativeImage,
   net: electronNet,
 } = require("electron");
 const path = require("path");
@@ -59,9 +60,13 @@ const { createMusicPlatformProvider } = require("./song-info/music-platform-prov
 const { SongInfoService } = require("./song-info/song-info-service");
 const { CoverArtAssetStore } = require("./song-info/cover-art-asset-store");
 const { BatchSongInfoTaskManager } = require("./song-info/batch-task-manager");
-const { LyricSidecarStore } = require("./song-info/lyric-sidecar-store");
+const { LyricSidecarStore, AUDIO_EXTENSIONS } = require("./song-info/lyric-sidecar-store");
 const { createLyricSidecarRecoveryGate } = require("./song-info/lyric-sidecar-recovery");
 const { LyricSaveService } = require("./song-info/lyric-save-service");
+const { LibraryEdits } = require("./song-info/library-edits");
+const { exportEnhancedLrc } = require("./lyrics/unified-lyric");
+const { decodeLyricBuffer } = require("./lyrics/local-source-resolver");
+const { isContainedPath } = require("./lyrics/mirrored-lyric-paths");
 const { lyricFileLocation } = require("./song-info/lyric-file-location");
 const { createTagEditor } = require("./song-info/tag-editor");
 const { LyricProviderRegistry } = require("./lyrics/provider-registry");
@@ -103,6 +108,7 @@ const backendAccessToken = require('./backend-access').backendToken(DATA_DIR);
 const backendHttp = axios.create({proxy: false, maxRedirects: 0, headers: {'X-Flowave-Token': backendAccessToken}});
 const tracePersistence = require("./trace-persistence").createTracePersistence(path.join(DATA_DIR, "library", "listening-traces"));
 const CONFIG_DIR = path.join(DATA_DIR, "config");
+const libraryEdits = new LibraryEdits(path.join(CONFIG_DIR, "song-info", "library-edits.json"));
 const {WorkspaceStore, restartArguments} = require('./workspaces');
 const workspaces = new WorkspaceStore({appHome:APP_HOME, mode:distribution.mode, version:app.getVersion()});
 let workspaceTransition = null;
@@ -195,7 +201,7 @@ const tagEditor = createTagEditor({
 });
 const songInfoService = new SongInfoService({
   registry: songInfoRegistry,
-  getMeta: (trackPath) => metadata.getMeta(trackPath),
+  getMeta: (trackPath, options) => metadata.getMeta(trackPath, options),
 });
 const lyricQueryCache = new SongInfoQueryCache({
   filePath: path.join(CACHE_DIR, "song-info", "lyric-queries.json"),
@@ -231,11 +237,11 @@ lyricProviderRegistry.register(createLocalLibraryLyricProvider({
 // 公网歌词来源须完成服务、缓存与保存三项审核后才能在此注册。
 const lyricLookupService = new LyricLookupService({
   registry: lyricProviderRegistry,
-  getMeta: (trackPath) => {
+  getMeta: (trackPath, options) => {
     metadata.setLibraryAudioRoot(loadLibraryAudioRoots());
-    return metadata.getMeta(trackPath);
+    return metadata.getMeta(trackPath, options);
   },
-  inspectSidecar: (trackPath) => lyricSidecarStore.inspect(trackPath),
+  inspectSidecar: (trackPath, options) => lyricSidecarStore.inspect(trackPath, options),
 });
 const coverArtAssetStore = new CoverArtAssetStore({
   rootDir: path.join(CACHE_DIR, "song-info", "assets"),
@@ -312,6 +318,7 @@ const batchSongInfoTasks = new BatchSongInfoTaskManager({
         includeTranslation,
         includeRomanization,
         format,
+        expectedTargetVersion: result?.targetVersion,
       });
       return await lyricSaveService.commit({
         confirmationId: prepared.confirmationId,
@@ -346,7 +353,7 @@ const DEFAULT_SHORTCUTS = {
   open_search: { accelerator: "Control+F", scope: "window", label: "打开搜索" },
 };
 const DEFAULT_LYRIC_OVERLAY_CONFIG = {
-  bounds: { x: 288, y: 0, width: 1090, height: 214 },
+  bounds: { width: 1090, height: 214 },
   settings: {
     locked: true,
     fontSize: 62,
@@ -1068,16 +1075,55 @@ const win = new BrowserWindow({
   ensureControlServer();
 }
 
+function resolveLyricOverlayBounds(bounds, resetPosition = false) {
+  const defaults = DEFAULT_LYRIC_OVERLAY_CONFIG.bounds;
+  const width = Math.max(360, Number.isFinite(bounds?.width) ? Math.round(bounds.width) : defaults.width);
+  const height = Math.max(110, Number.isFinite(bounds?.height) ? Math.round(bounds.height) : defaults.height);
+  const hasPosition = Number.isFinite(bounds?.x) && Number.isFinite(bounds?.y);
+  const rect = { x: hasPosition ? Math.round(bounds.x) : 0, y: hasPosition ? Math.round(bounds.y) : 0, width, height };
+  if (!resetPosition && hasPosition) {
+    // Coordinates are in Electron's DIP space, including negative monitor origins.
+    const matching = screen.getDisplayMatching(rect).workArea;
+    if (rect.x < matching.x + matching.width && rect.x + width > matching.x
+      && rect.y < matching.y + matching.height && rect.y + height > matching.y) {
+      const fittedWidth = Math.min(width, matching.width);
+      const fittedHeight = Math.min(height, matching.height);
+      return {
+        x: Math.max(matching.x, Math.min(rect.x, matching.x + matching.width - fittedWidth)),
+        y: Math.max(matching.y, Math.min(rect.y, matching.y + matching.height - fittedHeight)),
+        width: fittedWidth,
+        height: fittedHeight,
+      };
+    }
+  }
+  const workArea = screen.getPrimaryDisplay().workArea;
+  const fittedWidth = Math.min(width, workArea.width);
+  return {
+    x: workArea.x + Math.floor((workArea.width - fittedWidth) / 2),
+    y: workArea.y,
+    width: fittedWidth,
+    height: Math.min(height, workArea.height),
+  };
+}
+
+function keepLyricOverlayOnScreen() {
+  const win = lyricOverlayWindow;
+  if (!win || win.isDestroyed()) return;
+  const bounds = win.getBounds();
+  const next = resolveLyricOverlayBounds(bounds);
+  if (next.x !== bounds.x || next.y !== bounds.y || next.width !== bounds.width || next.height !== bounds.height) {
+    win.setBounds(next);
+    scheduleSaveLyricOverlayConfig();
+  }
+}
+
 function createLyricOverlayWindow() {
   if (lyricOverlayWindow && !lyricOverlayWindow.isDestroyed()) {
     return lyricOverlayWindow;
   }
-  const savedBounds = lyricOverlayState.bounds || {};
+  const bounds = resolveLyricOverlayBounds(lyricOverlayState.bounds);
   lyricOverlayWindow = new BrowserWindow({
-    width: Number(savedBounds.width) || 760,
-    height: Number(savedBounds.height) || 200,
-    x: Number.isFinite(savedBounds.x) ? savedBounds.x : undefined,
-    y: Number.isFinite(savedBounds.y) ? savedBounds.y : undefined,
+    ...bounds,
     minWidth: 360,
     minHeight: 110,
     frame: false,
@@ -1107,6 +1153,9 @@ function createLyricOverlayWindow() {
       ...lyricOverlayState.settings,
       locked: lyricOverlayState.locked,
     });
+  });
+  lyricOverlayWindow.on("close", () => {
+    lyricOverlayState.bounds = lyricOverlayWindow.getBounds();
   });
   lyricOverlayWindow.on("closed", () => {
     scheduleSaveLyricOverlayConfig();
@@ -1196,8 +1245,9 @@ function saveLyricOverlayConfig() {
       settings: lyricOverlayState.settings || {},
       locked: !!lyricOverlayState.locked,
     });
+    return true;
   } catch {
-    // ignore
+    return false;
   }
 }
 
@@ -1259,6 +1309,12 @@ app.whenReady().then(async () => {
   try{officialPackages.collectUnused();}catch(error){console.warn('[modules] old package cleanup deferred',error.code||'unavailable');}
   writePackagedSmokeStage("when-ready");
   Menu.setApplicationMenu(null);
+  screen.on("display-removed", keepLyricOverlayOnScreen);
+  screen.on("display-metrics-changed", (_event, _display, metrics) => {
+    if (metrics.some(metric => ["bounds", "workArea", "scaleFactor", "rotation"].includes(metric))) {
+      keepLyricOverlayOnScreen();
+    }
+  });
   secureProtocols.registerSecureProtocols({
     protocol,
     electronNet,
@@ -1348,7 +1404,7 @@ app.on("before-quit", (event) => {
       } catch (error) { saveFailures.push(error); console.warn("[history] final renderer snapshot unavailable", { code: String(error?.code || "") }); }
       finally { clearTimeout(timeout); }
     }
-    return Promise.allSettled([traceArchive.flush(), metadata.flushMetadataCache(), listeningHistoryPersistence.flush(), startupBackground.pending, featureSelection.flush(), officialPackages.flush()]);
+    return Promise.allSettled([traceArchive.flush(), metadata.flushMetadataCache(), listeningHistoryPersistence.flush(), startupBackground.pending, featureSelection.flush(), officialPackages.flush(), libraryEdits.tail]);
   })().then((results) => {
     for (const result of results) {
       if (result.status === "rejected") {
@@ -1541,6 +1597,7 @@ async function changeWorkspace(event, value) {
     const failed = results.find(result => result.status === 'rejected');
     if (failed) throw failed.reason;
     await tagEditor.drain();
+    await libraryEdits.tail;
     const lyrics = await lyricSaveService.drain({timeoutMs:15000});
     if (!lyrics.drained) throw Error('歌词仍在保存，请稍后切换。');
     await assertWorkspaceIdle();
@@ -1859,16 +1916,34 @@ function registerIpc() {
     }
     return { canceled: false, path: ret.filePaths[0], ...getLyricSourceConfigPayload() };
   });
+  const isSongInfoSender = event =>
+    event.sender === mainWindow?.webContents && secureProtocols.isTrustedRendererUrl(event.senderFrame?.url);
+  async function validateSongInfoPath(trackPath) {
+    if (typeof trackPath !== "string" || !path.isAbsolute(trackPath)
+      || !AUDIO_EXTENSIONS.has(path.extname(trackPath).toLowerCase())) throw new Error("请选择曲库中的本地歌曲");
+    const roots = loadLibraryAudioRoots().filter(root => isContainedPath(root, trackPath));
+    const [actual, stat, actualRoots] = await Promise.all([
+      fs.promises.realpath(trackPath),
+      fs.promises.stat(trackPath),
+      Promise.all(roots.map(root => fs.promises.realpath(root).catch(() => ""))),
+    ]);
+    if (!stat.isFile() || !actualRoots.some(root => root && isContainedPath(root, actual))) {
+      throw new Error("歌曲不在当前曲库文件夹内");
+    }
+    return trackPath;
+  }
   ipcMain.handle("lx-get-song-info", async (_event, trackPath, options = {}) => {
     if (!trackPath) return null;
     try {
       metadata.setLibraryAudioRoot(loadLibraryAudioRoots());
-      return await metadata.getMeta(trackPath, {
+      const info = await metadata.getMeta(trackPath, {
         includeLyricsModel: options?.includeLyricsModel === true,
         includeLyrics: options?.includeLyrics !== false,
         includeAudioDetails: options?.includeAudioDetails === true,
         resourceId: String(options?.resourceId || ""),
       });
+      try { return await libraryEdits.apply(info, trackPath, String(options?.resourceId || "")); }
+      catch (_) { return { ...info, libraryEditsUnavailable: true }; }
     } catch (_) {
       return {
         path: trackPath,
@@ -1881,6 +1956,64 @@ function registerIpc() {
         lyrics: "",
       };
     }
+  });
+  ipcMain.handle("lx-song-info-library-edit", async (event, payload = {}) => {
+    if (!isSongInfoSender(event) || workspaceTransition) return { ok: false, message: "当前无法编辑歌曲资料" };
+    try {
+      const trackPath = await validateSongInfoPath(payload.trackPath);
+      let coverFile;
+      if (payload.cover === "clear") coverFile = "";
+      if (payload.cover === "pick") {
+        const picked = await dialog.showOpenDialog(mainWindow, {
+          title: "选择歌曲封面", properties: ["openFile"],
+          filters: [{ name: "图片", extensions: ["png", "jpg", "jpeg", "webp"] }],
+        });
+        if (picked.canceled || !picked.filePaths.length) return { ok: false, cancelled: true };
+        if (workspaceTransition) return { ok: false, message: "工作区正在切换" };
+        const file = picked.filePaths[0];
+        if ((await fs.promises.stat(file)).size > 15 * 1024 * 1024) throw new Error("请选择小于 15 MiB 的图片");
+        let image = nativeImage.createFromPath(file);
+        if (image.isEmpty()) throw new Error("无法读取这张图片");
+        const { width, height } = image.getSize();
+        if (Math.max(width, height) > 1200) image = image.resize(width >= height ? { width: 1200 } : { height: 1200 });
+        const output = image.toPNG();
+        coverFile = crypto.createHash("sha256").update(output).digest("hex") + ".png";
+        const directory = path.join(path.dirname(libraryEdits.file), "artwork");
+        await fs.promises.mkdir(directory, { recursive: true });
+        const target = path.join(directory, coverFile);
+        const staged = target + "." + crypto.randomUUID() + ".tmp";
+        try {
+          await fs.promises.writeFile(staged, output, { flag: "wx" });
+          await fs.promises.rename(staged, target);
+        } finally { await fs.promises.unlink(staged).catch(() => {}); }
+      }
+      if (workspaceTransition) return { ok: false, message: "工作区正在切换" };
+      await libraryEdits.update(trackPath, String(payload.resourceId || ""), payload.updates || {}, { reset: payload.reset === true, coverFile });
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, message: error.code ? "无法写入工作区歌曲资料" : error.message };
+    }
+  });
+  ipcMain.handle("lx-lyric-local-source", async (event, payload = {}) => {
+    if (!isSongInfoSender(event)) return { ok: false };
+    try {
+      const trackPath = await validateSongInfoPath(payload.trackPath);
+      const inspected = await lyricSidecarStore.inspect(trackPath, { includeBody: true });
+      let text = inspected.body ? decodeLyricBuffer(inspected.body) : "";
+      if (!inspected.version.exists) {
+        const info = await metadata.getMeta(trackPath, { includeLyricsModel: true, resourceId: String(payload.resourceId || "") });
+        const model = info?.lyricsModel;
+        text = (model?.synced ? exportEnhancedLrc(model, { includeTranslation: true, includeRomanization: true }) : "") || info?.lyrics || "";
+      }
+      return { ok: true, text, version: inspected.version.sha256 };
+    } catch (_) { return { ok: false, message: "无法读取歌词进行编辑" }; }
+  });
+  ipcMain.handle("lx-lyric-local-prepare", async (event, payload = {}) => {
+    if (!isSongInfoSender(event) || workspaceTransition || !["edit", "delete"].includes(payload.action)) return { ok: false };
+    try {
+      await validateSongInfoPath(payload.trackPath);
+      return await lyricSaveService.prepareLocal(payload);
+    } catch (_) { return { ok: false, message: "无法准备歌词修改，请检查歌词内容与文件位置" }; }
   });
   for (const [channel, handler] of Object.entries({
     "lx-song-tags-prepare": payload => { if (app.isPackaged) return { ok: false, message: "公开版资料写入尚未开放" }; return tagEditor.prepare(payload); },
@@ -1900,13 +2033,15 @@ function registerIpc() {
     try { return (await backendHttp.get(`${BACKEND_URL}/tracks/tags/capabilities`, { timeout: 3000 })).data; }
     catch (_) { return { editable: false }; }
   });
-  ipcMain.handle("lx-song-info-query", async (_event, payload) => {
+  ipcMain.handle("lx-song-info-query", async (event, payload) => {
+    if (!isSongInfoSender(event)) return { ok: false };
     try {
       const request = payload || {};
       if (request.mode === "lyrics") {
+        await validateSongInfoPath(request.trackPath);
         metadata.setLibraryAudioRoot(loadLibraryAudioRoots());
         const result = await lyricLookupService.query({ ...request, onlyMissing: false, storageTarget: "sidecar" });
-        const inspected = await lyricSidecarStore.inspect(request.trackPath);
+        const inspected = await lyricSidecarStore.inspect(request.trackPath, { stateOnly: true });
         result.destination = path.relative(lyricSidecarStore.audioRoot(inspected.audioPath), inspected.sidecarPath);
         result.targetExists = Boolean(inspected.version.exists);
         return lyricSaveService.stageQueryResult({
@@ -1979,7 +2114,8 @@ function registerIpc() {
       return { ok: true };
     } catch (_) { return { ok: false, message: "无法定位歌词文件" }; }
   });
-  ipcMain.handle("lx-lyric-save-prepare", async (_event, payload) => {
+  ipcMain.handle("lx-lyric-save-prepare", async (event, payload) => {
+    if (!isSongInfoSender(event) || workspaceTransition) return { ok: false };
     try {
       return await lyricSaveService.prepare(payload || {});
     } catch (error) {
@@ -1992,7 +2128,8 @@ function registerIpc() {
       };
     }
   });
-  ipcMain.handle("lx-lyric-save-commit", async (_event, payload) => {
+  ipcMain.handle("lx-lyric-save-commit", async (event, payload) => {
+    if (!isSongInfoSender(event) || workspaceTransition) return { ok: false };
     try {
       return await lyricSaveService.commit(payload || {});
     } catch (error) {
@@ -2004,22 +2141,22 @@ function registerIpc() {
       return { ok: false, code, message };
     }
   });
-  ipcMain.handle("lx-lyric-save-cancel", async (_event, confirmationId) => ({
-    ok: true,
-    cancelled: lyricSaveService.cancel(confirmationId),
-  }));
-  ipcMain.handle("lx-lyric-save-recent", async () => {
+  ipcMain.handle("lx-lyric-save-cancel", async (event, confirmationId) =>
+    isSongInfoSender(event) ? { ok: true, cancelled: lyricSaveService.cancel(confirmationId) } : { ok: false });
+  ipcMain.handle("lx-lyric-save-recent", async event => {
+    if (!isSongInfoSender(event)) return { ok: false, transaction: null };
     try {
       await lyricSidecarRecovery.wait();
-      return await lyricSaveService.recentUndo();
+      return await lyricSaveService.recentUndo({ includeTrackPath: true });
     } catch (error) {
       console.warn("[lyrics] recent save lookup failed", { code: String(error?.code || "") });
       return { ok: false, transaction: null };
     }
   });
-  ipcMain.handle("lx-lyric-save-undo", async (_event, transactionId) => {
+  ipcMain.handle("lx-lyric-save-undo", async (event, transactionId) => {
+    if (!isSongInfoSender(event) || workspaceTransition) return { ok: false };
     try {
-      return await lyricSaveService.undo(transactionId);
+      return await lyricSaveService.undo(transactionId, { includeTrackPath: true });
     } catch (error) {
       const code = String(error?.code || "UNDO_CONFLICT");
       console.warn("[lyrics] undo failed", { code });
@@ -2069,14 +2206,17 @@ function registerIpc() {
       return { ok: false, code: "CACHE_CLEAR_FAILED", message: "缓存清理失败" };
     }
   });
-  ipcMain.handle("lx-song-info-batch-list", async () => ({
+  const isSongInfoBatchSender = event =>
+    event.sender === mainWindow?.webContents && secureProtocols.isTrustedRendererUrl(event.senderFrame?.url);
+  ipcMain.handle("lx-song-info-batch-list", async event => isSongInfoBatchSender(event) ? ({
     ok: true,
     loadStatus: batchSongInfoTasks.loadStatus,
     writeBlocked: batchSongInfoTasks.writeBlocked,
     lyricSidecarAvailable: lyricProviderRegistry.capabilities().saveProviders > 0,
     tasks: batchSongInfoTasks.list(),
-  }));
-  ipcMain.handle("lx-song-info-batch-create", async (_event, payload) => {
+  }) : { ok: false });
+  ipcMain.handle("lx-song-info-batch-create", async (event, payload) => {
+    if (!isSongInfoBatchSender(event)) return { ok: false };
     try {
       return { ok: true, task: batchSongInfoTasks.create(payload || {}) };
     } catch (error) {
@@ -2089,7 +2229,8 @@ function registerIpc() {
       };
     }
   });
-  ipcMain.handle("lx-song-info-batch-start", async (_event, taskId) => {
+  ipcMain.handle("lx-song-info-batch-start", async (event, taskId) => {
+    if (!isSongInfoBatchSender(event)) return { ok: false };
     try {
       const task = batchSongInfoTasks.get(taskId);
       if (!task) return { ok: false, code: "TASK_NOT_FOUND", message: "任务不存在" };
@@ -2105,30 +2246,39 @@ function registerIpc() {
       return { ok: false, code, message: code === "TASK_BUSY" ? "已有任务正在进行" : "无法开始任务" };
     }
   });
-  ipcMain.handle("lx-song-info-batch-cancel", async (_event, taskId) => ({
+  ipcMain.handle("lx-song-info-batch-cancel", async (event, taskId) => isSongInfoBatchSender(event) ? ({
     ok: batchSongInfoTasks.cancel(taskId),
     task: batchSongInfoTasks.get(taskId),
-  }));
-  ipcMain.handle("lx-song-info-batch-retry", async (_event, payload) => {
+  }) : { ok: false });
+  ipcMain.handle("lx-song-info-batch-retry", async (event, payload) => {
+    if (!isSongInfoBatchSender(event)) return { ok: false };
     try {
       return { ok: true, ...batchSongInfoTasks.retry(payload?.taskId, payload?.itemIds) };
     } catch (error) {
       return { ok: false, code: String(error?.code || "RETRY_FAILED"), message: "无法重试" };
     }
   });
-  ipcMain.handle("lx-song-info-batch-confirm", async (_event, payload) => {
+  ipcMain.handle("lx-song-info-batch-confirm", async (event, payload) => {
+    if (!isSongInfoBatchSender(event)) return { ok: false };
     try {
       return {
         ok: true,
         task: await batchSongInfoTasks.confirmCandidate(payload?.taskId, payload?.itemId, payload?.candidateIndex),
       };
     } catch (error) {
+      if (error?.code === "CANDIDATE_CHANGED") {
+        return { ok: false, code: "CANDIDATE_CHANGED", message: "歌词或匹配结果已变化，请重新核对。" };
+      }
       return { ok: false, code: String(error?.code || "CONFIRM_FAILED"), message: "无法确认结果" };
     }
   });
-  ipcMain.handle("lx-song-info-batch-skip", async (_event, payload) => {
+  ipcMain.handle("lx-song-info-batch-skip", async (event, payload) => {
+    if (!isSongInfoBatchSender(event)) return { ok: false };
     try {
-      return { ok: true, task: batchSongInfoTasks.skipItem(payload?.taskId, payload?.itemId) };
+      const task = payload?.finishReview === true
+        ? batchSongInfoTasks.finishReview(payload.taskId)
+        : batchSongInfoTasks.skipItem(payload?.taskId, payload?.itemId);
+      return { ok: true, task };
     } catch (error) {
       return { ok: false, code: String(error?.code || "SKIP_FAILED"), message: "无法跳过" };
     }
@@ -2348,6 +2498,18 @@ function registerIpc() {
       lyricOverlayWindow.close();
     }
     return { ok: true };
+  });
+  ipcMain.handle("lx-lyric-overlay-reset-position", event => {
+    if (event.sender !== mainWindow?.webContents || !secureProtocols.isTrustedRendererUrl(event.senderFrame?.url)) {
+      return { ok: false, message: "当前页面无法恢复桌面歌词位置。" };
+    }
+    const win = lyricOverlayWindow && !lyricOverlayWindow.isDestroyed() ? lyricOverlayWindow : null;
+    const bounds = resolveLyricOverlayBounds(win?.getBounds() ?? lyricOverlayState.bounds, true);
+    if (win) win.setBounds(bounds);
+    lyricOverlayState.bounds = bounds;
+    return saveLyricOverlayConfig()
+      ? { ok: true }
+      : { ok: false, message: "无法保存桌面歌词位置，请重试。" };
   });
   ipcMain.handle("lx-lyric-overlay-update", async (_event, payload) => {
     if (!lyricOverlayWindow || lyricOverlayWindow.isDestroyed()) return { ok: false, reason: "not-open" };

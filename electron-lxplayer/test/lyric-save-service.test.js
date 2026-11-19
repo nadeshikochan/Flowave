@@ -6,6 +6,7 @@ const test = require("node:test");
 
 const { LyricSaveService } = require("../song-info/lyric-save-service");
 const { LyricSidecarStore } = require("../song-info/lyric-sidecar-store");
+const { LibraryEdits } = require("../song-info/library-edits");
 
 async function fixture(t, options = {}) {
   const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), "flowave-lyric-save-"));
@@ -28,6 +29,59 @@ async function fixture(t, options = {}) {
   });
   return { root, audioPath, service };
 }
+
+test("local editing checks its source version and deleting keeps an undo snapshot", async (t) => {
+  const { audioPath, service } = await fixture(t);
+  const edited = await service.prepareLocal({ trackPath: audioPath, action: "edit",
+    expectedVersion: "", text: "[00:01.00]Edited line" });
+  assert.equal(edited.ok, true);
+  assert.equal((await service.commit(edited)).status, "committed");
+  assert.equal((await service.prepareLocal({ trackPath: audioPath, action: "edit",
+    expectedVersion: "", text: "[00:01.00]Stale edit" })).ok, false);
+  const original = await service.store.inspect(audioPath, { includeBody: true });
+  assert.match(original.body.toString(), /user-selected/);
+
+  const deletion = await service.prepareLocal({ trackPath: audioPath, action: "delete" });
+  const committed = await service.commit(deletion);
+  assert.equal(committed.status, "committed");
+  assert.equal((await service.store.inspect(audioPath)).version.exists, false);
+  assert.equal((await service.recentUndo({ includeTrackPath: true })).transaction.trackPath, audioPath);
+  await fs.promises.writeFile(original.sidecarPath, "[00:01.00]External");
+  await assert.rejects(() => service.undo(committed.transactionId), { code: "UNDO_CONFLICT" });
+  await fs.promises.unlink(original.sidecarPath);
+  assert.equal((await service.undo(committed.transactionId, { includeTrackPath: true })).trackPath, audioPath);
+  assert.deepEqual((await service.store.inspect(audioPath, { includeBody: true })).body, original.body);
+  assert.equal(await fs.promises.readFile(audioPath, "utf8"), "audio");
+});
+
+test("workspace song edits persist with stable identity and restore without touching other tracks", async t => {
+  const { root, audioPath } = await fixture(t);
+  const file = path.join(root, "config", "edits.json");
+  const store = new LibraryEdits(file);
+  const original = { title: "Tagged", artist: "Singer", artists: ["Singer"], album: "Original",
+    cover: "original.png", lyrics: "Text", lyricsModel: { synced: true }, duration: 150 };
+  await Promise.all([
+    store.update(audioPath, "resource", { title: "", artists: [], album: "Edited", trackNumber: "3" }, { coverFile: "" }),
+    store.update(audioPath, "resource", { lyricsHidden: true }),
+  ]);
+  const reopened = new LibraryEdits(file);
+  const moved = path.join(root, "moved", "Song.mp3");
+  const edited = await reopened.apply(original, moved, "resource");
+  assert.equal(edited.title, "Song");
+  assert.equal(edited.editableTitle, "");
+  assert.equal(edited.artist, "");
+  assert.equal(edited.album, "Edited");
+  assert.equal(edited.cover, "");
+  assert.equal(edited.trackNumber, 3);
+  assert.equal(edited.lyricsModel, null);
+  assert.equal(edited.duration, 150);
+  assert.deepEqual(await reopened.apply(original, audioPath, "other-resource"), original);
+  await assert.rejects(() => reopened.update(audioPath, "resource", { trackNumber: "-1" }));
+  await reopened.update(moved, "resource", {}, { reset: true });
+  assert.equal((await reopened.apply(original, moved, "resource")).lyricsHidden, true);
+  await reopened.update(moved, "resource", { lyricsHidden: false });
+  assert.deepEqual(await reopened.apply(original, moved, "resource"), original);
+});
 
 function stageCandidate(service, audioPath, lyrics, options = {}) {
   const requestId = options.requestId || `request-${Math.random()}`;

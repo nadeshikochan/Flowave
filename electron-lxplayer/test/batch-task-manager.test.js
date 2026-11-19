@@ -256,6 +256,23 @@ test("terminal tasks ignore cancellation and empty retries do not broaden scope"
   assert.equal(manager.get(completed.id).items[0].status, "no-match");
 });
 
+test("uncertain matches are opt-in and remaining review can be ended together", async (t) => {
+  const { manager } = await taskFixture(t, async () => ({
+    candidates: [{ recommendation: "medium" }],
+    sources: [],
+  }));
+  const tracks = [track("One"), track("Two")];
+  const reliable = await manager.start(manager.create({ tracks, reviewUncertain: false }).id);
+  assert.equal(reliable.state, "completed");
+  assert.equal(reliable.counts.deferredReview, 2);
+  const review = await manager.start(manager.create({ tracks, reviewUncertain: true }).id);
+  assert.equal(review.state, "awaiting-confirmation");
+  const result = manager.finishReview(review.id);
+  assert.equal(result.state, "completed");
+  assert.equal(result.counts.deferredReview, 2);
+  assert.equal(result.counts.awaitingConfirmation, 0);
+});
+
 test("manual review can be skipped without changing any candidate data", async (t) => {
   const { manager } = await taskFixture(t, async () => ({
     candidates: [ranked("medium", "One")],
@@ -275,7 +292,7 @@ test("an all-provider rate limit pauses the task without turning it into no-matc
     candidates: [],
     sources: [{ id: "test", status: "rate-limited", retryable: true }],
   }));
-  const created = manager.create({ tracks: [track("One"), track("Two")] });
+  const created = manager.create({ tracks: [track("One"), track("Two")], concurrency: 1 });
   const task = await manager.start(created.id);
 
   assert.equal(task.state, "paused-rate-limit");
@@ -421,6 +438,35 @@ test("manual lyric confirmation refuses a candidate whose identity changed", asy
   assert.equal(retained.items[0].errorCode, "CANDIDATE_CHANGED");
 });
 
+test("confirming a lyric upgrade requires review again if the local file changed", async (t) => {
+  let targetVersion = "first";
+  let saveCalls = 0;
+  const { manager } = await taskFixture(t, undefined, {
+    queryLyrics: async request => {
+      assert.equal(request.lyricCompleteness, "word");
+      assert.equal(request.matchIdentity, "filename");
+      assert.deepEqual(request.lyricSources, ["lddc"]);
+      return { ok: true, replacingExisting: true, targetVersion,
+        candidates: [lyricRanked("medium", "lyrics:one", "body")], sources: [] };
+    },
+    saveLyrics: async ({ replaceExisting, result }) => {
+      assert.equal(replaceExisting, true);
+      assert.equal(result.targetVersion, "second");
+      saveCalls += 1;
+      return { ok: true, status: "committed" };
+    },
+  });
+  const created = manager.create({ mode: "lyric-sidecar", tracks: [track("One")], matchIdentity: "filename",
+    lyricOptions: { completeness: "word", sources: ["lddc"] } });
+  const reviewed = await manager.start(created.id);
+  targetVersion = "second";
+  const confirm = () => manager.confirmCandidate(reviewed.id, reviewed.items[0].id, 0);
+  await assert.rejects(confirm(), { code: "CANDIDATE_CHANGED" });
+  assert.equal(saveCalls, 0);
+  assert.equal((await confirm()).items[0].status, "confirmed");
+  assert.equal(saveCalls, 1);
+});
+
 test("interrupted lyric write resumes as a missing-only lookup", async (t) => {
   const queryLyrics = async () => ({ candidates: [], sources: [] });
   const saveLyrics = async () => ({ ok: true, status: "committed" });
@@ -505,6 +551,7 @@ test("cancelling during a lyric write lets the atomic save finish and stops late
   const created = manager.create({
     mode: "lyric-sidecar",
     tracks: [track("One"), track("Two")],
+    concurrency: 1,
   });
   const running = manager.start(created.id);
   await writeStarted;

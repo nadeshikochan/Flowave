@@ -1886,6 +1886,7 @@ summary:focus-visible {
 
 .song-info-review-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 9px;
   padding: 14px 2px 8px;
@@ -1909,7 +1910,7 @@ summary:focus-visible {
 
 .song-info-review-row {
   display: grid;
-  grid-template-columns: minmax(360px, 1.55fr) minmax(220px, 0.85fr) auto;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 0.85fr) max-content;
   align-items: start;
   gap: 14px;
   min-height: 64px;
@@ -1985,6 +1986,7 @@ summary:focus-visible {
   display: flex;
   gap: 7px;
   margin-top: 4px;
+  white-space: nowrap;
 }
 
 .song-info-review-more {
@@ -4028,6 +4030,7 @@ input[type="range"] {
 .confirm-modal {
   width: min(400px, 100%);
 }
+.confirmation-mask { z-index: 260; }
 
 .confirm-message,
 .confirm-detail {

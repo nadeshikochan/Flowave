@@ -47,6 +47,7 @@ function createMusicPlatformProvider({ source, searchMusic } = {}) {
     id: definition.id,
     version: "catalog-search-v1",
     label: definition.label,
+    supportedFields: ["title", "artists", "album"],
     timeoutMs: 18000,
     maxAttempts: 2,
     retryBaseMs: 600,

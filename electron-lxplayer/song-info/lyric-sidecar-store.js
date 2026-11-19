@@ -50,17 +50,21 @@ function temporaryPathForSidecar(sidecarPath, transactionIdValue) {
   );
 }
 
-async function captureSidecarVersion(sidecarPath) {
+async function captureSidecarVersion(sidecarPath, { includeBody = false } = {}) {
   const target = path.resolve(String(sidecarPath || ""));
   try {
     const stat = await fs.promises.stat(target);
     if (!stat.isFile()) throw new LyricSidecarError("lyric path is not a file", "INVALID_LYRIC_PATH");
+    if (includeBody && stat.size > MAX_LYRIC_BYTES) {
+      throw new LyricSidecarError("lyric is too large", "LYRIC_TOO_LARGE");
+    }
     const body = await fs.promises.readFile(target);
     return {
       exists: true,
       size: body.length,
       mtimeMs: Number(stat.mtimeMs),
       sha256: sha256(body),
+      ...(includeBody ? { body } : {}),
     };
   } catch (error) {
     if (error?.code === "ENOENT") return { exists: false, size: 0, mtimeMs: 0, sha256: "" };
@@ -153,12 +157,20 @@ class LyricSidecarStore {
     return isSupportedLyricPathForAudio(audioPath, lyricPath, this.audioRoot(audioPath));
   }
 
-  async inspect(audioPath) {
+  async inspect(audioPath, options) {
     const audio = path.resolve(String(audioPath || ""));
     const audioStat = await fs.promises.stat(audio);
     if (!audioStat.isFile()) throw new LyricSidecarError("audio file is missing", "AUDIO_MISSING");
     const sidecarPath = this.lyricPath(audio);
-    return { audioPath: audio, sidecarPath, version: await captureSidecarVersion(sidecarPath) };
+    if (options?.stateOnly) {
+      const stat = await fs.promises.stat(sidecarPath).catch(error => {
+        if (error.code === "ENOENT" || error.code === "ENOTDIR") return null;
+        throw error;
+      });
+      return { audioPath: audio, sidecarPath, version: { exists: Boolean(stat?.isFile()) } };
+    }
+    const { body, ...version } = await captureSidecarVersion(sidecarPath, options);
+    return { audioPath: audio, sidecarPath, version, ...(body ? { body } : {}) };
   }
 
   async recoverIncomplete() {
@@ -213,9 +225,9 @@ class LyricSidecarStore {
       const current = await captureSidecarVersion(sidecarPath);
       const before = manifest.before || {};
       const after = manifest.after || {};
-      if (current.exists
-        && current.size === Number(after.size || 0)
-        && current.sha256 === String(after.sha256 || "")) {
+      const deletionSnapshotValid = after.exists !== false || (before.exists
+        && sameVersion(before, await captureSidecarVersion(path.join(path.dirname(manifestPath), "original.lrc"))));
+      if (typeof after.exists === "boolean" && sameVersion(after, current) && deletionSnapshotValid) {
         manifest.status = "committed";
         manifest.committedAt = this.now();
         manifest.after = current;
@@ -298,6 +310,7 @@ class LyricSidecarStore {
     source = "",
     candidateId = "",
     resourceId = "",
+    remove = false,
   } = {}) {
     const resolvedAudioPath = path.resolve(String(audioPath || ""));
     const sidecarPath = this.lyricPath(resolvedAudioPath);
@@ -319,11 +332,12 @@ class LyricSidecarStore {
         source,
         candidateId,
         resourceId,
+        remove,
       });
     });
   }
 
-  async writeLocked({ audioPath, sidecarPath, lyrics, expected, skipExisting, source, candidateId, resourceId }) {
+  async writeLocked({ audioPath, sidecarPath, lyrics, expected, skipExisting, source, candidateId, resourceId, remove }) {
     if (!expected || typeof expected !== "object") {
       throw new LyricSidecarError("expected sidecar version is required", "EXPECTED_VERSION_REQUIRED");
     }
@@ -331,14 +345,13 @@ class LyricSidecarStore {
     if (!sameVersion(expected, before)) {
       throw new LyricSidecarError("lyric changed after confirmation", "EXTERNAL_CHANGE");
     }
-    if (skipExisting && before.exists) {
+    if (skipExisting && before.exists && !remove) {
       return { ok: true, status: "skipped-existing", audioPath, sidecarPath, before };
     }
 
-    const text = normalizeLyricText(lyrics);
-    const body = Buffer.from(text, "utf8");
-    const afterHash = sha256(body);
-    if (before.exists && before.sha256 === afterHash) {
+    const body = remove ? null : Buffer.from(normalizeLyricText(lyrics), "utf8");
+    const after = { exists: !remove, size: body?.length || 0, sha256: body ? sha256(body) : "" };
+    if (sameVersion(before, after)) {
       return { ok: true, status: "unchanged", audioPath, sidecarPath, before };
     }
 
@@ -361,7 +374,7 @@ class LyricSidecarStore {
       source: String(source || ""),
       candidateId: String(candidateId || ""),
       before,
-      after: { exists: true, size: body.length, sha256: afterHash },
+      after,
     };
 
     let replaced = false;
@@ -378,10 +391,10 @@ class LyricSidecarStore {
         }
         manifest.snapshotPath = snapshotPath;
       }
-      await writeDurable(temporary, body);
-      const staged = await fs.promises.readFile(temporary);
-      if (staged.length !== body.length || sha256(staged) !== afterHash) {
-        throw new LyricSidecarError("lyric staging verification failed", "VERIFY_FAILED");
+      if (body) {
+        await writeDurable(temporary, body);
+        const staged = await captureSidecarVersion(temporary);
+        if (!sameVersion(after, staged)) throw new LyricSidecarError("lyric staging verification failed", "VERIFY_FAILED");
       }
       const latest = await captureSidecarVersion(sidecarPath);
       if (!sameVersion(before, latest)) {
@@ -390,10 +403,11 @@ class LyricSidecarStore {
       manifest.status = "prepared";
       atomicWriteJson(manifestPath, manifest);
 
-      await fs.promises.rename(temporary, sidecarPath);
+      if (remove) await fs.promises.unlink(sidecarPath);
+      else await fs.promises.rename(temporary, sidecarPath);
       replaced = true;
       const final = await captureSidecarVersion(sidecarPath);
-      if (!final.exists || final.size !== body.length || final.sha256 !== afterHash) {
+      if (!sameVersion(after, final)) {
         throw new LyricSidecarError("saved lyric verification failed", "VERIFY_FAILED");
       }
       manifest.status = "committed";
@@ -407,7 +421,7 @@ class LyricSidecarStore {
       }
       return { ok: true, status: "committed", audioPath, sidecarPath, manifestPath, transactionId, before, after: final };
     } catch (error) {
-      if (replaced) await this.restoreAfterFailedCommit(sidecarPath, snapshotPath, before, afterHash);
+      if (replaced) await this.restoreAfterFailedCommit(sidecarPath, snapshotPath, before, after);
       throw error;
     } finally {
       try {
@@ -416,9 +430,9 @@ class LyricSidecarStore {
     }
   }
 
-  async restoreAfterFailedCommit(sidecarPath, snapshotPath, before, expectedAfterHash) {
+  async restoreAfterFailedCommit(sidecarPath, snapshotPath, before, expectedAfter) {
     const current = await captureSidecarVersion(sidecarPath);
-    if (!current.exists || current.sha256 !== expectedAfterHash) {
+    if (!sameVersion(current, expectedAfter)) {
       throw new LyricSidecarError("lyric rollback conflict", "ROLLBACK_CONFLICT");
     }
     if (!before.exists) {
@@ -464,7 +478,7 @@ class LyricSidecarStore {
     }
     return this.withLock(sidecarPath, async () => {
       const current = await captureSidecarVersion(sidecarPath);
-      if (!current.exists || current.sha256 !== String(manifest.after?.sha256 || "")) {
+      if (typeof manifest.after?.exists !== "boolean" || !sameVersion(current, manifest.after)) {
         throw new LyricSidecarError("lyric changed after Flowave save", "UNDO_CONFLICT");
       }
       const before = manifest.before || {};
@@ -539,7 +553,7 @@ class LyricSidecarStore {
     });
   }
 
-  async readUndoableTransaction(transactionIdValue) {
+  async readUndoableTransaction(transactionIdValue, includeTrackPath = false) {
     const transactionId = String(transactionIdValue || "");
     if (!validTransactionId(transactionId)) return null;
     const manifestPath = path.join(this.snapshotRoot, transactionId, "manifest.json");
@@ -554,17 +568,18 @@ class LyricSidecarStore {
       const sidecarPath = path.resolve(String(manifest.sidecarPath || ""));
       if (!this.supportsLyricPath(audioPath, sidecarPath)) return null;
       const current = await captureSidecarVersion(sidecarPath);
-      if (!current.exists || current.sha256 !== String(manifest.after?.sha256 || "")) return null;
+      if (typeof manifest.after?.exists !== "boolean" || !sameVersion(current, manifest.after)) return null;
       return {
         transactionId,
         committedAt: Math.max(0, Number(manifest.committedAt) || 0),
+        ...(includeTrackPath ? { trackPath: audioPath } : {}),
       };
     } catch (_) {
       return null;
     }
   }
 
-  async scanUndoableTransactions() {
+  async scanUndoableTransactions(includeTrackPath = false) {
     let ids;
     try {
       ids = (await fs.promises.readdir(this.snapshotRoot, { withFileTypes: true }))
@@ -576,7 +591,7 @@ class LyricSidecarStore {
     const candidates = [];
     for (let offset = 0; offset < ids.length; offset += 16) {
       const batch = await Promise.all(
-        ids.slice(offset, offset + 16).map((id) => this.readUndoableTransaction(id)),
+        ids.slice(offset, offset + 16).map((id) => this.readUndoableTransaction(id, includeTrackPath)),
       );
       candidates.push(...batch.filter(Boolean));
       candidates.sort((left, right) => right.committedAt - left.committedAt);
@@ -587,7 +602,7 @@ class LyricSidecarStore {
     return candidates;
   }
 
-  async listRecentUndoable({ limit = 1 } = {}) {
+  async listRecentUndoable({ limit = 1, includeTrackPath = false } = {}) {
     const safeLimit = Math.max(1, Math.min(10, Number(limit) || 1));
     let ids = [];
     try {
@@ -597,16 +612,16 @@ class LyricSidecarStore {
         .filter(validTransactionId)
         .slice(0, MAX_RECENT_TRANSACTIONS);
     } catch (_) {}
-    let candidates = (await Promise.all(ids.map((id) => this.readUndoableTransaction(id))))
+    let candidates = (await Promise.all(ids.map((id) => this.readUndoableTransaction(id, includeTrackPath))))
       .filter(Boolean)
       .sort((left, right) => right.committedAt - left.committedAt);
     if (candidates.length < safeLimit) {
-      candidates = await this.scanUndoableTransactions();
+      candidates = await this.scanUndoableTransactions(includeTrackPath);
       if (candidates.length) {
         try {
           atomicWriteJson(this.recentIndexPath, {
             schemaVersion: 1,
-            transactions: candidates,
+            transactions: candidates.map(({ transactionId, committedAt }) => ({ transactionId, committedAt })),
           });
         } catch (_) {
           // 最近记录是可重建索引，修复失败不影响已验证事务的撤销能力。

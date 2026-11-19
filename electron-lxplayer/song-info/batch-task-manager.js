@@ -7,6 +7,7 @@ const { FIELD_NAMES } = require("./candidate-model");
 const STORE_VERSION = 1;
 const TASK_MODES = new Set(["preview", "lyric-sidecar"]);
 const RUNNING_STATES = new Set(["scanning", "querying", "scoring", "cancelling", "writing", "verifying"]);
+const MATCH_OUTCOMES = new Set(["local-review", "identity-rejected", "timing-insufficient", "source-incomplete", "source-empty"]);
 const TERMINAL_STATES = new Set(["completed", "cancelled", "failed"]);
 const RETRYABLE_ITEM_STATES = new Set(["failed", "cancelled"]);
 
@@ -88,6 +89,11 @@ function safeCandidates(candidates, options = {}) {
     return {
       candidate,
       score: Number(item?.score || 0),
+      ...(options.lyricMode && item?.timing ? { timing: {
+        lines: Number(item.timing.lines) || 0,
+        timedLines: Number(item.timing.timedLines) || 0,
+        complete: item.timing.complete === true,
+      } } : {}),
       recommendation: ["strong", "medium", "none"].includes(item?.recommendation)
         ? item.recommendation
         : "none",
@@ -163,18 +169,24 @@ function taskCounts(task) {
     writtenAuto: 0,
     skippedComplete: 0,
     skipped: 0,
+    deferredReview: 0,
+    diagnostics: {},
     noMatch: 0,
     failed: 0,
     cancelled: 0,
   };
   for (const item of task.items) {
+    if (MATCH_OUTCOMES.has(item.matchOutcome) && ["no-match", "skipped"].includes(item.status)) {
+      counts.diagnostics[item.matchOutcome] = (counts.diagnostics[item.matchOutcome] || 0) + 1;
+    }
     if (["pending", "querying", "writing", "verifying"].includes(item.status)) counts.pending += 1;
     else if (item.status === "matched-auto") counts.matchedAuto += 1;
     else if (item.status === "awaiting-confirmation") counts.awaitingConfirmation += 1;
     else if (item.status === "confirmed") counts.confirmed += 1;
     else if (item.status === "written-auto") counts.writtenAuto += 1;
     else if (item.status === "skipped-complete") counts.skippedComplete += 1;
-    else if (item.status === "skipped") counts.skipped += 1;
+    else if (item.status === "skipped" && item.errorCode === "REVIEW_DEFERRED") counts.deferredReview += 1;
+    else if (item.status === "skipped" && item.matchOutcome !== "local-review") counts.skipped += 1;
     else if (item.status === "no-match") counts.noMatch += 1;
     else if (item.status === "failed") counts.failed += 1;
     else if (item.status === "cancelled") counts.cancelled += 1;
@@ -323,6 +335,8 @@ class BatchSongInfoTaskManager {
     concurrency = 4,
     mode = "preview",
     lyricOptions = {},
+    matchIdentity,
+    reviewUncertain = true,
   } = {}) {
     this.ensureWritable();
     if ([...this.tasks.values()].some((task) => !TERMINAL_STATES.has(task.state))) {
@@ -354,6 +368,8 @@ class BatchSongInfoTaskManager {
       schemaVersion: 1,
       id: String(this.idFactory()),
       mode: taskMode,
+      matchIdentity: ["tags", "filename"].includes(matchIdentity) ? matchIdentity : "auto",
+      reviewUncertain: reviewUncertain !== false,
       state: "draft",
       createdAt: now,
       updatedAt: now,
@@ -369,7 +385,8 @@ class BatchSongInfoTaskManager {
         includeRomanization: lyricOptions?.includeRomanization === true,
         sources: (Array.isArray(lyricOptions?.sources) ? lyricOptions.sources : ["external", "embedded"])
           .map(String)
-          .filter((source) => ["external", "embedded"].includes(source)),
+          .filter((source) => ["lddc", "external", "embedded"].includes(source)),
+        completeness: ["line", "word"].includes(lyricOptions?.completeness) ? lyricOptions.completeness : undefined,
         skipExisting: lyricOptions?.skipExisting !== false,
         format: lyricOptions?.format === "lrc" ? "lrc" : "enhanced-lrc",
       } : undefined,
@@ -426,9 +443,8 @@ class BatchSongInfoTaskManager {
       includeTranslation: task.lyricOptions?.includeTranslation !== false,
       includeRomanization: task.lyricOptions?.includeRomanization === true,
       format: task.lyricOptions?.format || "enhanced-lrc",
-      replaceExisting: automatic !== true
-        && task.lyricOptions?.skipExisting === false
-        && result?.replacingExisting === true,
+      replaceExisting: automatic !== true && result?.replacingExisting === true
+        && (task.lyricOptions?.skipExisting === false || Boolean(task.lyricOptions?.completeness)),
     });
     if (!saved?.ok) {
       throw new BatchTaskError("lyric sidecar save failed", String(saved?.code || "LYRIC_SAVE_FAILED"));
@@ -477,6 +493,8 @@ class BatchSongInfoTaskManager {
         item.status = "querying";
         item.attempts = Number(item.attempts || 0) + 1;
         item.errorCode = "";
+        delete item.matchOutcome;
+        delete item.localReviewReason;
         const requestId = `batch:${task.id}:${item.id}:${item.attempts}`;
         item.requestId = requestId;
         this.touch(task, { persist: false, changedItems: [item] });
@@ -487,6 +505,7 @@ class BatchSongInfoTaskManager {
             trackPath: item.track.path,
             resourceId: item.track.resourceId,
             requestedFields: task.mode === "lyric-sidecar" ? undefined : task.requestedFields,
+            matchIdentity: task.matchIdentity,
             autoThreshold: task.thresholds.auto,
             manualThreshold: task.thresholds.manual,
             minimumGap: task.thresholds.minimumGap,
@@ -495,17 +514,26 @@ class BatchSongInfoTaskManager {
               : true,
             storageTarget: task.mode === "lyric-sidecar" ? "sidecar" : undefined,
             lyricSources: task.mode === "lyric-sidecar" ? task.lyricOptions?.sources : undefined,
+            lyricCompleteness: task.lyricOptions?.completeness,
+            includeTranslation: task.lyricOptions?.includeTranslation,
+            includeRomanization: task.lyricOptions?.includeRomanization,
             signal: controller.signal,
           });
           if (controller.signal.aborted) break;
           item.sources = safeSources(result?.sources);
           item.current = safeCurrent(result?.current);
           item.candidates = safeCandidates(result?.candidates, { lyricMode: task.mode === "lyric-sidecar" });
+          item.lyricTargetVersion = result?.targetVersion;
+          if (MATCH_OUTCOMES.has(result?.matchOutcome)) item.matchOutcome = result.matchOutcome;
           const best = item.candidates[0];
           const sourceWorked = item.sources.some((source) => ["ok", "empty"].includes(source?.status));
           const rateLimited = item.sources.some((source) => source?.status === "rate-limited");
           if (result?.skipped === "complete") {
             item.status = "skipped-complete";
+          } else if (result?.skipped === "local-review") {
+            item.status = "skipped";
+            item.matchOutcome = "local-review";
+            item.localReviewReason = result.localReviewReason;
           } else if (result?.ok === false) {
             item.status = "failed";
             item.errorCode = String(result?.code || "QUERY_FAILED");
@@ -529,7 +557,10 @@ class BatchSongInfoTaskManager {
               automatic: true,
             });
           } else if (best.recommendation === "strong") item.status = "matched-auto";
-          else if (best.recommendation === "medium") item.status = "awaiting-confirmation";
+          else if (best.recommendation === "medium") {
+            item.status = task.reviewUncertain === false ? "skipped" : "awaiting-confirmation";
+            if (task.reviewUncertain === false) item.errorCode = "REVIEW_DEFERRED";
+          }
           else item.status = "no-match";
         } catch (error) {
           if (controller.signal.aborted || error?.name === "AbortError" || error?.code === "ABORTED") {
@@ -672,11 +703,19 @@ class BatchSongInfoTaskManager {
         onlyMissing: task.lyricOptions?.skipExisting !== false,
         storageTarget: "sidecar",
         lyricSources: task.lyricOptions?.sources,
+        lyricCompleteness: task.lyricOptions?.completeness,
+        includeTranslation: task.lyricOptions?.includeTranslation,
+        includeRomanization: task.lyricOptions?.includeRomanization,
+        matchIdentity: task.matchIdentity,
         signal: controller.signal,
       });
       if (controller.signal.aborted) throw new BatchTaskError("batch query aborted", "ABORTED");
       if (result?.skipped === "complete") {
         item.status = "skipped-complete";
+      } else if (result?.skipped === "local-review") {
+        item.status = "skipped";
+        item.matchOutcome = "local-review";
+        item.localReviewReason = result.localReviewReason;
       } else {
         const freshCandidates = Array.isArray(result?.candidates) ? result.candidates : [];
         const fresh = freshCandidates.find((entry) => (
@@ -687,6 +726,13 @@ class BatchSongInfoTaskManager {
           item.status = "awaiting-confirmation";
           item.errorCode = "CANDIDATE_CHANGED";
           throw new BatchTaskError("lyric candidate changed", "CANDIDATE_CHANGED");
+        }
+        if (task.lyricOptions?.completeness && item.lyricTargetVersion !== result.targetVersion) {
+          item.status = "awaiting-confirmation";
+          item.errorCode = "CANDIDATE_CHANGED";
+          item.lyricTargetVersion = result.targetVersion;
+          item.candidates = safeCandidates(freshCandidates, { lyricMode: true });
+          throw new BatchTaskError("lyric target changed", "CANDIDATE_CHANGED");
         }
         item.candidates = safeCandidates(freshCandidates, { lyricMode: true });
         await this.saveLyricResult({
@@ -761,6 +807,23 @@ class BatchSongInfoTaskManager {
       ? "awaiting-confirmation"
       : "completed";
     this.touch(task, { changedItems: [item] });
+    return this.get(task.id);
+  }
+
+  finishReview(taskId) {
+    this.ensureWritable();
+    const task = this.tasks.get(String(taskId || ""));
+    if (task?.state !== "awaiting-confirmation" || this.controllers.has(task.id)) {
+      throw new BatchTaskError("task is not awaiting review", "INVALID_TASK_STATE");
+    }
+    const changedItems = task.items.filter(item => item.status === "awaiting-confirmation");
+    for (const item of changedItems) {
+      item.status = "skipped";
+      item.errorCode = "REVIEW_DEFERRED";
+      delete item.selectedCandidate;
+    }
+    task.state = "completed";
+    this.touch(task, { changedItems });
     return this.get(task.id);
   }
 

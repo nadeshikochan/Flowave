@@ -3106,11 +3106,12 @@ test("song information candidate summary shows date, duration, version and lyric
   assert.equal(app.songInfoCandidateMeta({ candidate: {} }), "");
 });
 
-test("single song lookup requests real metadata differences without mixing blocked lyric sources", async () => {
+test("single song opens from local data and looks up online only when requested", async () => {
   const requests = [];
   const trackPath = "C:\\Music\\A.mp3";
   const { app } = createRendererHarness({
     lxEnv: {
+      getSongInfo: async () => ({ title: "A", artists: ["Artist"] }),
       querySongInfo: async (payload) => {
         requests.push(payload);
         return { ok: true, current: {}, candidates: [], sources: [] };
@@ -3124,11 +3125,13 @@ test("single song lookup requests real metadata differences without mixing block
 
   await app.openSongInfoLookup(trackPath);
 
+  assert.equal(requests.length, 0);
+  await app.retrySongInfoLookup();
   assert.equal(requests.length, 1);
   assert.ok(requests[0].requestedFields.includes("title"));
   assert.ok(requests[0].requestedFields.includes("cover"));
   assert.equal(requests[0].requestedFields.includes("lyrics"), false);
-  assert.equal(requests[0].includeLyrics, true);
+  assert.equal(requests[0].includeLyrics, false);
   assert.equal(requests[0].resourceId, "resource-1");
 });
 
@@ -3181,7 +3184,7 @@ test("song information lyric save commits the selected candidate and retains und
   assert.equal(commitPayloads[0].confirmationId, "confirm-1");
   assert.equal(commitPayloads[0].replaceExisting, false);
   assert.equal(app.lastLyricSaveTransactionId, "tx-1");
-  assert.equal(app.songInfoDialog.lyricSaveMessage, "已保存到歌曲旁");
+  assert.equal(app.songInfoDialog.lyricSaveMessage, "歌词已保存");
   assert.equal(app.songInfoDialog.lyricSaveBusy, false);
 });
 
@@ -3301,7 +3304,7 @@ test("undo refreshes current lyrics and then restores the next undoable transact
   const refreshed = [];
   const { app } = createRendererHarness({
     lxEnv: {
-      undoLyricSave: async (transactionId) => ({ ok: transactionId === "tx-latest", status: "undone" }),
+      undoLyricSave: async (transactionId) => ({ ok: transactionId === "tx-latest", status: "undone", trackPath: "C:\\Music\\A.mp3" }),
       getRecentLyricSave: async () => ({
         ok: true,
         transaction: { transactionId: "tx-older", committedAt: 1000 },

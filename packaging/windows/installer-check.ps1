@@ -1,5 +1,7 @@
-param([Parameter(Mandatory=$true)][string]$InstallDir, [string]$RegisteredDir = '')
+﻿param([Parameter(Mandatory=$true)][string]$InstallDir, [string]$RegisteredDir = '')
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = New-Object Text.UTF8Encoding($false)
+Write-Output '正在检查程序目录与运行状态…'
 try {
   $dataRoot = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'Flowave'))
   $pointer = Join-Path $dataRoot 'data-location.txt'

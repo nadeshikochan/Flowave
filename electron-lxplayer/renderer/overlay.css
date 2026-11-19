@@ -8,7 +8,6 @@
   --ov-stroke-width: 0.55px;
   --ov-stroke-color: rgba(0, 0, 0, 0.92);
   --ov-switch-duration: 300ms;
-  --ov-pending-word-color: color-mix(in srgb, var(--ov-inactive) 72%, transparent);
 }
 
 * {
@@ -177,7 +176,8 @@ body {
 .ov-word {
   display: inline-block;
   white-space: pre-wrap;
-  color: var(--ov-pending-word-color);
+  /* A translucent fill lets the black stroke show through intersecting contours. */
+  color: var(--ov-inactive);
   -webkit-text-stroke: var(--ov-stroke-width) var(--ov-stroke-color);
   paint-order: stroke fill;
   --word-progress: 0%;
@@ -188,24 +188,21 @@ body {
   transform: translateY(-0.6px);
 }
 
-.ov-word.pending {
-  color: var(--ov-pending-word-color);
+.ov-word.current {
+  position: relative;
+  transform: translateY(-0.6px);
 }
 
-.ov-word.current {
-  color: transparent;
-  background-image: linear-gradient(
-    90deg,
-    var(--ov-active) 0,
-    var(--ov-active) var(--word-progress),
-    var(--ov-pending-word-color) var(--word-progress),
-    var(--ov-pending-word-color) 100%
-  );
-  background-repeat: no-repeat;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  transform: translateY(-0.6px);
+/* Keep the fill above the native stroke, including intersecting font contours. */
+.ov-word.current::after {
+  content: attr(data-word-text) / "";
+  position: absolute;
+  inset: 0;
+  color: var(--ov-active);
+  -webkit-text-fill-color: var(--ov-active);
+  -webkit-text-stroke-width: 0;
+  clip-path: inset(0 calc(100% - var(--word-progress)) 0 0);
+  pointer-events: none;
 }
 
 @keyframes lyric-in {

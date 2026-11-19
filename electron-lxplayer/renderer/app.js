@@ -94,15 +94,17 @@ const SONG_INFO_BATCH_SCOPE_OPTIONS = Object.freeze([
 ]);
 const SONG_INFO_BATCH_SCOPES = new Set(SONG_INFO_BATCH_SCOPE_OPTIONS.map((option) => option.value));
 const SONG_INFO_LOOKUP_FIELDS = Object.freeze(SONG_INFO_BATCH_FIELD_OPTIONS.map((option) => option.key));
+const SONG_INFO_EXTRA_FIELDS = Object.freeze(["albumArtists", "releaseDate", "genres", "composers", "lyricists",
+  "trackNumber", "trackTotal", "discNumber", "discTotal", "isrcs"]);
 const DEFAULT_SONG_INFO_BATCH_FIELDS = Object.freeze({
   title: true,
   artists: true,
   album: true,
-  albumArtists: true,
-  releaseDate: true,
-  trackNumber: true,
-  discNumber: true,
-  genres: true,
+  albumArtists: false,
+  releaseDate: false,
+  trackNumber: false,
+  discNumber: false,
+  genres: false,
   cover: true,
   composers: false,
   lyricists: false,
@@ -2611,6 +2613,15 @@ const lyricMethods = {
     const toHex = (value) => Math.round(Math.min(255, Math.max(0, value))).toString(16).padStart(2, "0");
     return `#${toHex(rgb.r)}${toHex(rgb.g)}${toHex(rgb.b)}`;
   },
+  async resetLyricOverlayPosition() {
+    try {
+      const result = await window.lxEnv?.resetLyricOverlayPosition?.();
+      if (!result?.ok) throw new Error(result?.message || "无法恢复桌面歌词位置。");
+      this.showNotice("桌面歌词位置已恢复到主屏幕顶部居中。");
+    } catch (error) {
+      this.showNotice(this.getOperationUserMessage(error, "无法恢复桌面歌词位置。"), "error");
+    }
+  },
   sendLyricOverlay() {
     if (!window.lxEnv) return;
     if (!this.desktopLyricEnabled) {
@@ -3920,14 +3931,17 @@ const dataMethods = {
     this.closeOnlineContextMenu();
     this.closePlaylistContextMenu();
     this.closeTrackContextMenu();
-    if (this.audioDetail.visible) {
+    if (this.confirmDialog.visible) {
+      this.resolveConfirmation(false);
+      handled = true;
+    } else if (this.songInfoDialog.visible) {
+      this.closeSongInfoDialog();
+      handled = true;
+    } else if (this.audioDetail.visible) {
       if (this.audioDetail.mode!=="info") this.backToAudioDetail(); else this.closeAudioDetail();
       handled = true;
     } else if (this.equalizerOpen) {
       this.closeEqualizer();
-      handled = true;
-    } else if (this.confirmDialog.visible) {
-      this.resolveConfirmation(false);
       handled = true;
     } else if (this.playlistEditModalVisible) {
       this.cancelPlaylistEdit();
@@ -3937,9 +3951,6 @@ const dataMethods = {
       handled = true;
     } else if (this.onlineDownloadModalVisible && !this.onlineDownloading) {
       this.onlineDownloadModalVisible = false;
-      handled = true;
-    } else if (this.songInfoDialog.visible) {
-      this.closeSongInfoDialog();
       handled = true;
     } else if (this.seedModalVisible) {
       this.cancelSeedModal();
@@ -7341,133 +7352,111 @@ const playlistMethods = {
     this.closeTrackContextMenu();
     if (trackPath) this.openSongInfoLookup(trackPath, mode);
   },
-  async openSongInfoLookup(trackPath, mode = "metadata", search = null) {
-    const pathValue = String(trackPath || "").trim();
-    if (!pathValue || this.isOnlineToken(pathValue)) return;
-    const retained = this.songInfoDialog.visible && this.songInfoDialog.path === pathValue
-      ? { draft: this.songInfoDialog.metadataDraft, original: this.songInfoDialog.metadataOriginal,
-          queued: this.songInfoDialog.metadataQueued, queuedId: this.songInfoDialog.metadataQueuedRequestId, signature: this.songInfoDialog.metadataSaveSignature } : null;
-    if (this.songInfoDialog.visible && this.songInfoDialog.path !== pathValue && this.songInfoHasUnsavedMetadata()) {
-      if (!await this.requestConfirmation({ title:"放弃未保存的修改？",message:"当前歌曲资料尚未保存。",confirmLabel:"放弃修改" })) return;
-    }
-    if (this.songInfoDialog.requestId) {
-      window.lxEnv?.cancelSongInfoQuery?.(this.songInfoDialog.requestId).catch?.(() => {});
-    }
-    if (this.songInfoDialog.coverRequestId) {
-      window.lxEnv?.cancelSongInfoCover?.(this.songInfoDialog.coverRequestId).catch?.(() => {});
-    }
-    const generation = Number(this._songInfoRequestGeneration || 0) + 1;
-    this._songInfoRequestGeneration = generation;
-    const requestId = `song-info-${generation}`;
+  songInfoPayload(dialog = this.songInfoDialog) {
+    return { trackPath: dialog.path, resourceId: dialog.resourceId };
+  },
+  async openSongInfoLookup(trackPath, mode = "metadata") {
+    const path = String(trackPath || "").trim();
+    if (!path || this.isOnlineToken(path)) return;
+    if (this.songInfoDialog.visible && !await this.closeSongInfoDialog()) return;
     this.songInfoDialog = {
-      visible: true,
-      mode: mode === "lyrics" ? "lyrics" : "metadata",
-      searchTitle: String(search?.title || ""),
-      manualIdentity: search?.manualIdentity === true,
-      queriedSearchTitle: "", queriedSearchArtist: "",
-      metadataDraft: retained?.draft || null, metadataOriginal: retained?.original || null,
-      metadataQueued: retained?.queued || false, metadataQueuedRequestId: retained?.queuedId || "", metadataSaveSignature: retained?.signature || "",
-      lyricFileExists: false,
-      searchArtist: String(search?.artist || ""),
-      destination: "",
-      targetExists: false,
-      showRejected: false,
-      format: search?.format === "lrc" ? "lrc" : "enhanced-lrc",
-      path: pathValue,
-      requestId,
-      loading: true,
-      error: "",
-      current: null,
-      candidates: [],
-      sources: [],
-      selectedIndex: 0,
-      coverUrls: {},
-      coverRequestId: "",
-      lyricSaveBusy: false,
-      lyricSaveMessage: "",
-      lyricConfirmationId: "",
+      visible: true, path, mode, resourceId: String(this.trackByPath.get(path)?.resourceId || ""),
+      requestId: "", localLoading: true, lyricsLoaded: false,
+      searchOpen: false, searchTitle: "", searchArtist: "", queriedSearchTitle: "", queriedSearchArtist: "",
+      format: "enhanced-lrc", candidates: [], selectedIndex: -1, sources: [], coverUrls: {},
+      lyricSaveBusy: false, lyricSaveMessage: "", lyricConfirmationId: "", operation: "",
     };
+    const dialog = this.songInfoDialog;
     this.$nextTick(() => this.$refs.songInfoClose?.focus?.());
-    this.refreshSongInfoLyricFile();
-    window.lxEnv?.getSongTagCapabilities?.().then(result => { this.songMetadataEditAvailable = result?.editable === true; }).catch(() => {});
-    try {
-      if (!window.lxEnv || typeof window.lxEnv.querySongInfo !== "function") {
-        throw new Error("当前版本缺少歌曲信息查询接口");
-      }
-      const result = await window.lxEnv.querySongInfo({
-        requestId,
-        trackPath: pathValue,
-        resourceId: String(this.trackByPath.get(pathValue)?.resourceId || ""),
-        requestedFields: SONG_INFO_LOOKUP_FIELDS.filter(field => field !== "lyrics"),
-        manualIdentity: this.songInfoDialog.manualIdentity,
-        forceRefresh: search?.forceRefresh === true,
-        mode: this.songInfoDialog.mode,
-        searchTitle: this.songInfoDialog.searchTitle,
-        searchArtist: this.songInfoDialog.searchArtist,
-        includeLyrics: false,
-        locale: "zh-CN",
-      });
-      if (generation !== this._songInfoRequestGeneration
-        || !this.songInfoDialog.visible
-        || this.songInfoDialog.requestId !== requestId) return;
-      if (!result?.ok) {
-        this.songInfoDialog.error = String(result?.message || "查找失败，请重试");
-        this.songInfoDialog.sources = Array.isArray(result?.sources) ? result.sources : [];
-        return;
-      }
-      this.songInfoDialog.current = result.current || null;
-      this.seedSongInfoMetadata(result.current);
-      this.songInfoDialog.queriedSearchTitle = search ? String(search.title || "") : String(result.current?.title || "");
-      this.songInfoDialog.queriedSearchArtist = search ? String(search.artist || "") : (result.current?.artists || []).join("、");
-      if (!search) {
-        this.songInfoDialog.searchTitle ||= String(result.current?.title || "");
-        this.songInfoDialog.searchArtist ||= (result.current?.artists || []).join("、");
-      }
-      if (Object.hasOwn(result, "destination")) this.songInfoDialog.destination = String(result.destination || "");
-      if (Object.hasOwn(result, "targetExists")) this.songInfoDialog.targetExists = Boolean(result.targetExists);
-      this.songInfoDialog.candidates = Array.isArray(result.candidates) ? result.candidates : [];
-      this.songInfoDialog.sources = Array.isArray(result.sources) ? result.sources : [];
-      this.songInfoDialog.selectedIndex = this.songInfoDialog.candidates.findIndex(item => item.recommendation !== "none");
-      this.loadSelectedSongInfoCover();
-    } catch (error) {
-      if (generation === this._songInfoRequestGeneration && this.songInfoDialog.visible) {
-        this.songInfoDialog.error = this.getOperationUserMessage(error, "查找失败");
-      }
-    } finally {
-      if (generation === this._songInfoRequestGeneration && this.songInfoDialog.visible) {
-        this.songInfoDialog.loading = false;
-      }
+    try { await this.loadSongInfoCurrent(dialog); }
+    catch (_) { if (dialog.visible) dialog.localError = "无法读取当前歌曲资料"; }
+    finally { dialog.localLoading = false; }
+  },
+  async loadSongInfoCurrent(dialog = this.songInfoDialog, preserveDraft = false) {
+    const { trackPath, resourceId } = this.songInfoPayload(dialog);
+    const includeLyrics = dialog.mode === "lyrics";
+    const [info] = await Promise.all([
+      window.lxEnv.getSongInfo(trackPath, { resourceId, includeLyrics }),
+      includeLyrics ? this.refreshSongInfoLyricFile() : null,
+    ]);
+    if (this.songInfoDialog !== dialog || !dialog.visible) return;
+    if (!info || info.metadataError) dialog.localError = "无法读取当前歌曲资料";
+    if (info?.libraryEditsUnavailable) dialog.localError = "无法读取工作区资料，原有修改已保留";
+    dialog.current = { ...dialog.current, ...info };
+    if (includeLyrics) dialog.lyricsLoaded = true;
+    if (!preserveDraft) dialog.metadataDraft = null;
+    this.seedSongInfoMetadata(dialog.current);
+    if (!dialog.searchOpen) {
+      dialog.searchTitle = info?.title || this.extractName(trackPath);
+      dialog.searchArtist = (info?.artists || []).join("、");
     }
+    return info;
   },
   async closeSongInfoDialog() {
-    if (this.songInfoDialog.lyricSaveBusy) return;
-    if (this.songInfoHasUnsavedMetadata() && !await this.requestConfirmation({title:"放弃未保存的修改？",message:"歌曲资料尚未保存。",confirmLabel:"放弃修改"})) return;
-    const requestId = String(this.songInfoDialog?.requestId || "");
-    const coverRequestId = String(this.songInfoDialog?.coverRequestId || "");
-    const lyricConfirmationId = String(this.songInfoDialog?.lyricConfirmationId || "");
-    this._songInfoRequestGeneration = Number(this._songInfoRequestGeneration || 0) + 1;
-    if (requestId) window.lxEnv?.cancelSongInfoQuery?.(requestId).catch?.(() => {});
-    if (coverRequestId) window.lxEnv?.cancelSongInfoCover?.(coverRequestId).catch?.(() => {});
-    if (lyricConfirmationId) window.lxEnv?.cancelLyricSave?.(lyricConfirmationId).catch?.(() => {});
-    this.songInfoDialog.visible = false;
-    this.songInfoDialog.loading = false;
-    this.songInfoDialog.lyricSaveBusy = false;
-    this.songInfoDialog.lyricConfirmationId = "";
+    const dialog = this.songInfoDialog;
+    const unsaved = this.songInfoHasUnsavedMetadata()
+      || (dialog.lyricEditor && dialog.lyricDraft !== dialog.lyricOriginal);
+    if (!dialog.lyricSaveBusy && unsaved && !await this.requestConfirmation({
+      title: "放弃未保存的修改？", message: "关闭后将丢弃当前草稿。", confirmLabel: "放弃修改",
+    })) return false;
+    if (this.songInfoDialog !== dialog) return false;
+    if (dialog.requestId) window.lxEnv?.cancelSongInfoQuery?.(dialog.requestId).catch?.(() => {});
+    if (dialog.coverRequestId) window.lxEnv?.cancelSongInfoCover?.(dialog.coverRequestId).catch?.(() => {});
+    if (dialog.lyricConfirmationId) window.lxEnv?.cancelLyricSave?.(dialog.lyricConfirmationId).catch?.(() => {});
+    dialog.visible = false;
+    return true;
   },
-  retrySongInfoLookup() {
-    const trackPath = String(this.songInfoDialog?.path || "");
-    if (!String(this.songInfoDialog.searchTitle || "").trim()) {
-      this.songInfoDialog.lyricSaveMessage = "请输入歌名"; return;
+  async retrySongInfoLookup() {
+    const dialog = this.songInfoDialog;
+    if (dialog.lyricSaveBusy) return;
+    const title = String(dialog.searchTitle || "").trim();
+    const artist = String(dialog.searchArtist || "").trim();
+    if (!title) { dialog.error = "请输入歌名"; return; }
+    if (dialog.requestId) window.lxEnv?.cancelSongInfoQuery?.(dialog.requestId).catch?.(() => {});
+    const generation = (this._songInfoRequestGeneration || 0) + 1;
+    this._songInfoRequestGeneration = generation;
+    const requestId = dialog.requestId = `song-info-${generation}`;
+    const mode = dialog.mode;
+    dialog.loading = true;
+    dialog.error = "";
+    dialog.candidates = [];
+    dialog.sources = [];
+    try {
+      const result = await window.lxEnv.querySongInfo({
+        ...this.songInfoPayload(dialog), requestId, mode,
+        requestedFields: SONG_INFO_LOOKUP_FIELDS.filter(field => field !== "lyrics"),
+        manualIdentity: dialog.filenameLookup === true || dialog.current?.libraryIdentityEdited === true || title !== dialog.current?.title
+          || artist !== (dialog.current?.artists || []).join("、"),
+        searchTitle: title, searchArtist: artist, locale: "zh-CN", includeLyrics: false,
+        forceRefresh: title === dialog.queriedSearchTitle && artist === dialog.queriedSearchArtist,
+      });
+      if (!dialog.visible || dialog.requestId !== requestId) return;
+      if (!result?.ok) throw new Error(result?.message || "查找失败，请重试");
+      dialog.queriedSearchTitle = title;
+      dialog.queriedSearchArtist = artist;
+      dialog.candidates = Array.isArray(result.candidates) ? result.candidates : [];
+      dialog.sources = Array.isArray(result.sources) ? result.sources : [];
+      dialog.selectedIndex = dialog.candidates.findIndex(item => item.recommendation !== "none");
+      dialog.error = dialog.selectedIndex < 0 ? this.songInfoLookupEmptyTitle() : "";
+      this.loadSelectedSongInfoCover();
+    } catch (error) {
+      if (dialog.visible && dialog.requestId === requestId) dialog.error = error.message || "查找失败";
+    } finally {
+      if (dialog.requestId === requestId) dialog.loading = false;
     }
-    if (trackPath && !this.songInfoDialog.lyricSaveBusy) this.openSongInfoLookup(trackPath, this.songInfoDialog.mode, {
-      title: this.songInfoDialog.searchTitle, artist: this.songInfoDialog.searchArtist, format: this.songInfoDialog.format, manualIdentity: true, forceRefresh: true,
-    });
   },
-  switchSongInfoMode(mode) {
-    if (this.songInfoDialog.lyricSaveBusy || mode === this.songInfoDialog.mode) return;
-    this.openSongInfoLookup(this.songInfoDialog.path, mode, {
-      title: this.songInfoDialog.searchTitle, artist: this.songInfoDialog.searchArtist, manualIdentity: this.songInfoDialog.manualIdentity || this.songInfoSearchPending(),
-    });
+  async switchSongInfoMode(mode) {
+    const dialog = this.songInfoDialog;
+    if (dialog.lyricSaveBusy || dialog.localLoading || mode === dialog.mode) return;
+    if (dialog.requestId) window.lxEnv?.cancelSongInfoQuery?.(dialog.requestId).catch?.(() => {});
+    if (dialog.coverRequestId) window.lxEnv?.cancelSongInfoCover?.(dialog.coverRequestId).catch?.(() => {});
+    dialog.coverRequestId = "";
+    Object.assign(dialog, { mode, requestId: "", loading: false, searchOpen: false, candidates: [], sources: [], selectedIndex: -1, error: "", lyricSaveMessage: "", filenameLookup: false });
+    if (mode !== "lyrics" || dialog.lyricsLoaded) return;
+    dialog.localLoading = true;
+    try { await this.loadSongInfoCurrent(dialog, true); }
+    catch (_) { dialog.localError = "无法读取当前歌词"; }
+    finally { dialog.localLoading = false; }
   },
   songInfoVisibleCandidates() {
     return this.songInfoDialog.candidates.map((item, index) => ({ item, index }))
@@ -7476,9 +7465,6 @@ const playlistMethods = {
   songInfoRejectedCount() {
     return this.songInfoDialog.candidates.filter(item => item.recommendation === "none").length;
   },
-  songInfoMetadataSupported() {
-    return this.songMetadataEditAvailable && /\.(mp3|flac|m4a|ogg)$/i.test(this.songInfoDialog.path || "");
-  },
   songInfoHasUnsavedMetadata() {
     return Object.keys(this.songInfoMetadataChanges()).length > 0
       && !(this.songInfoDialog.metadataQueued && JSON.stringify(this.songInfoDialog.metadataDraft) === this.songInfoDialog.metadataSaveSignature);
@@ -7486,8 +7472,9 @@ const playlistMethods = {
   seedSongInfoMetadata(current) {
     if (!current || this.songInfoDialog.metadataDraft) return;
     const draft = {};
-    for (const field of ["title", "artists", "album", "albumArtists", "releaseDate", "genres"]) {
-      draft[field] = Array.isArray(current[field]) ? current[field].join("、") : String(current[field] || "");
+    for (const field of ["title", "artists", "album", ...SONG_INFO_EXTRA_FIELDS]) {
+      const value = field === "title" ? (current.editableTitle ?? current.title) : current[field];
+      draft[field] = Array.isArray(value) ? value.join("、") : String(value || "");
     }
     this.songInfoDialog.metadataOriginal = { ...draft };
     this.songInfoDialog.metadataDraft = draft;
@@ -7497,7 +7484,7 @@ const playlistMethods = {
     if (!dialog.metadataDraft || !dialog.metadataOriginal) return updates;
     for (const field of Object.keys(dialog.metadataOriginal)) {
       const value = String(dialog.metadataDraft[field] || "").trim();
-      if (value !== String(dialog.metadataOriginal[field] || "").trim()) updates[field] = ["artists", "albumArtists", "genres"].includes(field)
+      if (value !== String(dialog.metadataOriginal[field] || "").trim()) updates[field] = ["artists", "albumArtists", "genres", "composers", "lyricists", "isrcs"].includes(field)
         ? value.split(/[、;；]/).map(item => item.trim()).filter(Boolean) : value;
     }
     return updates;
@@ -7511,34 +7498,62 @@ const playlistMethods = {
     }
     this.songInfoDialog.lyricSaveMessage = "已填入，保存后生效";
   },
-  async saveSongInfoMetadata() {
+  async saveSongInfoMetadata(options = {}) {
     const dialog = this.songInfoDialog;
-    if (!Object.keys(this.songInfoMetadataChanges()).length && this.selectedSongInfoCandidate()) this.useSongInfoMetadataCandidate();
-    const updates = this.songInfoMetadataChanges();
-    if (dialog.lyricSaveBusy || !this.songInfoMetadataSupported() || !Object.keys(updates).length || !dialog.metadataDraft?.title?.trim()) return;
-    const path = dialog.path, requestId = dialog.requestId;
-    dialog.lyricSaveBusy = true; dialog.lyricSaveMessage = "";
-    let token = "";
+    const updates = options.updates || (options.reset || options.cover ? {} : this.songInfoMetadataChanges());
+    if (dialog.lyricSaveBusy || (!options.reset && !options.cover && !Object.keys(updates).length)) return;
+    dialog.lyricSaveBusy = true;
+    dialog.lyricSaveMessage = "";
+    dialog.operation = "正在保存…";
     try {
-      await window.lxEnv?.setTagPlaybackTarget?.({ path: this.currentPath, generation: this.playbackGeneration });
-      const prepared = await window.lxEnv.prepareSongTagSave({ trackPath: path,
-        resourceId: this.trackByPath.get(path)?.resourceId || "", updates });
-      if (!prepared?.ok) throw new Error(prepared?.message || "无法保存资料");
-      if (prepared.status === "unchanged") { dialog.lyricSaveMessage = "没有需要保存的修改"; return; }
-      token = prepared.confirmationId;
-      if (requestId !== this.songInfoDialog.requestId || !this.songInfoDialog.visible) return;
-      const confirmed = await this.requestConfirmation({ title: "保存歌曲资料", message: "将修改音频文件中的以下资料：",
-        detail: prepared.changes.map(change => `${this.songInfoFieldLabel(change.field)}：${this.formatSongInfoValue(change.field, change.current)} → ${this.formatSongInfoValue(change.field, change.proposed)}`).join("\n"), confirmLabel: "保存" });
-      if (!confirmed || requestId !== this.songInfoDialog.requestId) return;
-      dialog.metadataSaveSignature = JSON.stringify(dialog.metadataDraft);
-      const result = await window.lxEnv.commitSongTagSave(token); token = "";
+      const result = await window.lxEnv.editLibrarySongInfo({ ...this.songInfoPayload(dialog), updates, ...options });
+      if (result?.cancelled) return;
       if (!result?.ok) throw new Error(result?.message || "资料保存失败");
-      dialog.metadataQueued = result.status === "queued";
-      dialog.metadataQueuedRequestId = result.requestId || "";
-      dialog.lyricSaveMessage = result.status === "queued" ? "已排队，切换歌曲后保存" : this.songInfoMetadataResultMessage(result);
-      if (result.status === "queued") this.showNotice("已排队，切换歌曲后保存资料");
-    } catch (error) { dialog.metadataQueued = false; if (requestId === this.songInfoDialog.requestId) dialog.lyricSaveMessage = this.getOperationUserMessage(error, "保存失败"); }
-    finally { if (token) { try { await window.lxEnv?.cancelSongTagSave?.(token); } catch (_) {} } dialog.lyricSaveBusy = false; }
+      dialog.lyricSaveMessage = options.reset ? "已恢复文件中的资料" : "已保存到工作区";
+      try {
+        const info = dialog.visible
+          ? await this.loadSongInfoCurrent(dialog, Boolean(options.cover) || options.preserveDraft === true) : null;
+        if (Object.hasOwn(updates, "lyricsHidden")) void this.refreshCurrentLyricsAfterSidecarChange(dialog.path);
+        else await this.refreshEditedTrackPresentation(dialog, info);
+      } catch (_) { dialog.lyricSaveMessage = "已保存到工作区，重新打开歌曲查看修改"; }
+      if (!dialog.visible) this.showNotice(dialog.lyricSaveMessage);
+    } catch (error) {
+      dialog.lyricSaveMessage = error.message || "保存失败";
+      if (!dialog.visible) this.showNotice(dialog.lyricSaveMessage, "error");
+    } finally { dialog.lyricSaveBusy = false; dialog.operation = ""; }
+  },
+  async resetSongInfoMetadata() {
+    const dialog = this.songInfoDialog;
+    if (await this.requestConfirmation({
+      title: "恢复文件中的资料", message: "清除这首歌在工作区中的资料和封面修改。", confirmLabel: "恢复",
+    }) && this.songInfoDialog === dialog && dialog.visible) await this.saveSongInfoMetadata({ reset: true });
+  },
+  async refreshEditedTrackPresentation(dialog, displayedInfo) {
+    const { trackPath, resourceId } = this.songInfoPayload(dialog);
+    const info = displayedInfo || await window.lxEnv.getSongInfo(trackPath, { resourceId, includeLyrics: false });
+    if (!info || info.metadataError || info.libraryEditsUnavailable) return;
+    const track = this.trackByPath.get(trackPath);
+    if (track) {
+      Object.assign(track, {
+        title: info.title, name: info.title, artist: info.artist, album: info.album,
+        artists: info.artists, albumArtist: info.albumArtist, trackNumber: info.trackNumber,
+        discNumber: info.discNumber, cover: this.pathToFile(info.cover || ""),
+        cover_thumb: this.pathToFile(info.cover_thumb || info.cover || ""), _searchDoc: null, _metaLoaded: true,
+      });
+      track._searchText = this.prepareTrackForList(track, { buildDoc: false })._searchText;
+      this._localMetadataRevision = Number(this._localMetadataRevision || 0) + 1;
+      this.queueSearchIndexRebuild();
+      this.queueUiSnapshotSave();
+    }
+    if (trackPath === this.currentPath) {
+      this.currentMeta = { ...this.currentMeta, title: info.title, artist: info.artist, album: info.album };
+      this.currentCover = this.pathToFile(info.cover_thumb || info.cover || "");
+      this.currentCoverFull = this.pathToFile(info.cover || info.cover_thumb || "");
+      this.updateMediaSessionMetadata();
+    }
+    if (this.audioDetail.visible && this.audioDetail.path === trackPath && this.audioDetail.info) {
+      this.audioDetail.info = { ...this.audioDetail.info, ...info };
+    }
   },
   songInfoMetadataResultMessage(result) {
     const action = result?.undo ? "资料修改已撤销" : "资料已写入";
@@ -7616,17 +7631,16 @@ const playlistMethods = {
     const parts = filename.split(/\s+-\s+/);
     this.songInfoDialog.searchTitle = parts.length === 2 ? parts[1].trim() : filename;
     this.songInfoDialog.searchArtist = parts.length === 2 ? parts[0].trim() : "";
+    this.songInfoDialog.filenameLookup = true;
     this.retrySongInfoLookup();
   },
   async refreshSongInfoLyricFile() {
-    const trackPath = this.songInfoDialog.path;
-    const requestId = this.songInfoDialog.requestId;
+    const dialog = this.songInfoDialog;
     try {
-      const result = await window.lxEnv?.getLyricFileState?.(trackPath);
-      if (!result?.ok || !this.songInfoDialog.visible || requestId !== this.songInfoDialog.requestId) return;
-      this.songInfoDialog.lyricFileExists = Boolean(result.exists);
-      this.songInfoDialog.targetExists = Boolean(result.targetExists);
-      this.songInfoDialog.destination = String(result.destination || "");
+      const result = await window.lxEnv?.getLyricFileState?.(dialog.path);
+      if (!result?.ok || !dialog.visible) return;
+      dialog.lyricFileExists = Boolean(result.exists);
+      dialog.targetExists = Boolean(result.targetExists);
     } catch (_) { /* File action stays unavailable; lookup remains independent. */ }
   },
   async showSongInfoLyricFolder() {
@@ -7653,6 +7667,7 @@ const playlistMethods = {
     return assetId ? String(this.songInfoDialog.coverUrls?.[assetId] || "") : "";
   },
   async loadSelectedSongInfoCover() {
+    if (this.songInfoDialog.mode !== "metadata") return;
     const assetId = String(this.selectedSongInfoCandidate()?.candidate?.cover?.assetId || "");
     if (!assetId || this.songInfoDialog.coverUrls?.[assetId]) return;
     const generation = Number(this._songInfoRequestGeneration || 0);
@@ -7684,13 +7699,6 @@ const playlistMethods = {
   songInfoCandidateHasLyrics(item = this.selectedSongInfoCandidate()) {
     return Boolean(item?.lyricSaveToken && item?.candidate?.lyrics?.available);
   },
-  songInfoSaveContextMatches(generation, trackPath, candidateId) {
-    const selectedId = String(this.selectedSongInfoCandidate()?.candidate?.candidateId || "");
-    return Number(generation) === Number(this._songInfoRequestGeneration)
-      && this.songInfoDialog.visible
-      && String(this.songInfoDialog.path || "") === String(trackPath || "")
-      && selectedId === String(candidateId || "");
-  },
   async refreshCurrentLyricsAfterSidecarChange(trackPath) {
     const targetPath = String(trackPath || "");
     if (!targetPath || targetPath !== String(this.currentPath || "")) return false;
@@ -7718,105 +7726,112 @@ const playlistMethods = {
       return false;
     }
   },
-  async saveSelectedSongInfoLyrics() {
+  songInfoExtraFields() {
+    return SONG_INFO_EXTRA_FIELDS;
+  },
+  songInfoCurrentLyricPreview() {
+    return String(this.songInfoDialog.current?.lyrics || "").slice(0, 16000)
+      .split(/\r?\n/u).map(line => line.replace(/\[[\w-]+:.*?\]|\[\d+:\d+(?:\.\d+)?\]|<\d+:\d+(?:\.\d+)?>/gu, "").trim())
+      .filter(Boolean).slice(0, 6);
+  },
+  async openSongInfoLyricEditor() {
+    const dialog = this.songInfoDialog;
+    if (dialog.lyricSaveBusy || dialog.lyricEditorLoading) return;
+    dialog.lyricEditorLoading = true;
+    dialog.lyricSaveMessage = "";
+    try {
+      const result = await window.lxEnv.readEditableLyrics(this.songInfoPayload(dialog));
+      if (!dialog.visible || dialog.mode !== "lyrics") return;
+      if (!result?.ok) throw new Error(result?.message || "无法读取歌词");
+      dialog.lyricDraft = dialog.lyricOriginal = result.text;
+      dialog.lyricEditVersion = result.version;
+      dialog.lyricEditor = true;
+      this.$nextTick(() => this.$refs.songInfoLyricEditor?.focus?.());
+    } catch (error) { dialog.lyricSaveMessage = error.message || "无法读取歌词"; }
+    finally { dialog.lyricEditorLoading = false; }
+  },
+  async removeSongInfoLyrics() {
+    const dialog = this.songInfoDialog;
+    if (dialog.targetExists) return this.applySongInfoLyricChange("delete");
+    if (!await this.requestConfirmation({
+      title: "移除歌词显示", message: "隐藏这首歌从其他来源读取的歌词。你可以随时恢复。",
+      confirmLabel: "移除显示", tone: "danger",
+    }) || this.songInfoDialog !== dialog || !dialog.visible) return;
+    await this.saveSongInfoMetadata({ updates: { lyricsHidden: true }, preserveDraft: true });
+  },
+  saveSelectedSongInfoLyrics() {
+    return this.applySongInfoLyricChange("candidate");
+  },
+  async applySongInfoLyricChange(action) {
+    const dialog = this.songInfoDialog;
     const item = this.selectedSongInfoCandidate();
-    const candidate = item?.candidate || null;
-    const trackPath = String(this.songInfoDialog?.path || "");
-    const candidateId = String(candidate?.candidateId || "");
-    if (!trackPath || !candidateId || !this.songInfoCandidateHasLyrics(item) || this.songInfoSearchPending() || this.songInfoDialog.loading || this.songInfoDialog.lyricSaveBusy) return;
-    if (!window.lxEnv || typeof window.lxEnv.prepareLyricSave !== "function") {
-      this.songInfoDialog.lyricSaveMessage = "当前版本无法保存歌词";
-      return;
-    }
-    const generation = Number(this._songInfoRequestGeneration || 0);
-    this.songInfoDialog.lyricSaveBusy = true;
-    this.songInfoDialog.lyricSaveMessage = "";
+    if (dialog.lyricSaveBusy || (action === "candidate"
+      && (!this.songInfoCandidateHasLyrics(item) || this.songInfoSearchPending() || dialog.loading))) return;
+    const deleting = action === "delete";
+    dialog.lyricSaveBusy = true;
+    dialog.lyricSaveMessage = "";
+    dialog.operation = "正在准备…";
     let confirmationId = "";
     try {
-      const prepared = await window.lxEnv.prepareLyricSave({
+      const prepared = action === "candidate" ? await window.lxEnv.prepareLyricSave({
         candidateToken: String(item.lyricSaveToken || ""),
         includeTranslation: this.lyricSaveIncludeTranslation,
         includeRomanization: this.lyricSaveIncludeRomanization,
-        format: this.songInfoDialog.format,
+        format: dialog.format,
+      }) : await window.lxEnv.prepareLocalLyricEdit({
+        ...this.songInfoPayload(dialog), action, text: deleting ? undefined : dialog.lyricDraft,
+        expectedVersion: dialog.lyricEditVersion,
       });
       confirmationId = String(prepared?.confirmationId || "");
-      if (!this.songInfoSaveContextMatches(generation, trackPath, candidateId)) {
-        if (confirmationId) {
-          await window.lxEnv.cancelLyricSave?.(confirmationId);
-          confirmationId = "";
-        }
-        return;
-      }
-      if (!prepared?.ok || !confirmationId) {
-        this.songInfoDialog.lyricSaveMessage = String(prepared?.message || "歌词无法保存");
-        return;
-      }
-      this.songInfoDialog.lyricConfirmationId = confirmationId;
-      let replaceExisting = false;
-      if (prepared.targetExists || prepared.identityCorrection) {
-        const corrected = prepared.identityCorrection;
-        const confirmed = await this.requestConfirmation({
-          title: prepared.targetExists ? "替换歌词" : "确认歌曲",
-          message: corrected ? `将「${candidate.title} · ${candidate.artists.join("、")}」的歌词保存给当前歌曲？` : "替换已有歌词？",
-          detail: corrected ? "按你修正的歌名与歌手匹配。只保存歌词，不修改音频标签。" : "原歌词可撤销恢复。",
+      if (!dialog.visible) return;
+      if (!prepared?.ok || !confirmationId) throw new Error(prepared?.message || "无法准备歌词修改");
+      dialog.lyricConfirmationId = confirmationId;
+      if (deleting || (action === "candidate" && (prepared.targetExists || prepared.identityCorrection || item.recommendation === "medium"))) {
+        dialog.operation = "等待确认…";
+        const confirmed = await this.requestConfirmation(deleting ? {
+          title: "删除 KTV 歌词文件", message: "删除这首歌在 KTV 目录中的歌词文件？",
+          detail: "可以撤销。删除后会尝试显示歌曲自带或其他文件中的歌词。", confirmLabel: "删除", tone: "danger",
+        } : {
+          title: prepared.targetExists ? "替换歌词" : "确认保存歌词",
+          message: `使用「${item.candidate.title}」的歌词？`,
+          detail: item.blockers?.map(blocker => blocker.message).join("\n") || (prepared.targetExists ? "原歌词可撤销恢复。" : "请核对歌曲版本。"),
           confirmLabel: prepared.targetExists ? "替换" : "保存",
         });
-        if (!confirmed || !this.songInfoSaveContextMatches(generation, trackPath, candidateId)) {
-          await window.lxEnv.cancelLyricSave?.(confirmationId);
-          confirmationId = "";
-          if (this.songInfoSaveContextMatches(generation, trackPath, candidateId)) {
-            this.songInfoDialog.lyricConfirmationId = "";
-          }
-          return;
-        }
-        replaceExisting = Boolean(prepared.targetExists);
+        if (!confirmed || !dialog.visible) return;
       }
-      const committed = await window.lxEnv.commitLyricSave({ confirmationId, replaceExisting });
-      confirmationId = "";
-      if (!committed?.ok) {
-        if (this.songInfoSaveContextMatches(generation, trackPath, candidateId)) {
-          this.songInfoDialog.lyricSaveMessage = String(committed?.message || "保存失败");
-        } else {
-          this.showNotice(String(committed?.message || "歌词保存失败"), "error");
-        }
-        return;
-      }
+      dialog.operation = deleting ? "正在删除…" : "正在保存…";
+      const committed = await window.lxEnv.commitLyricSave({ confirmationId, replaceExisting: prepared.targetExists });
+      if (!committed?.ok) throw new Error(committed?.message || "歌词修改失败");
       if (committed.status !== "committed") {
-        if (this.songInfoSaveContextMatches(generation, trackPath, candidateId)) {
-          this.songInfoDialog.lyricSaveMessage = committed.status === "unchanged" ? "与现有歌词完全相同，无需替换" : "已有歌词未修改";
-          this.songInfoDialog.lyricConfirmationId = "";
-        }
+        dialog.lyricSaveMessage = committed.status === "unchanged" ? "歌词内容没有变化" : "原有歌词已保留";
         return;
       }
+      confirmationId = "";
       this._lyricUndoStateGeneration += 1;
       this.lastLyricSaveTransactionId = String(committed.transactionId || "");
-      this.lastLyricSaveTrackPath = trackPath;
-      if (this.songInfoSaveContextMatches(generation, trackPath, candidateId)) {
-        this.songInfoDialog.lyricConfirmationId = "";
-        this.songInfoDialog.lyricSaveMessage = committed.refreshFailed ? "歌词已保存，但刷新失败，请重新打开歌曲" : "已保存到对应的 KTV 歌词目录";
-        this.songInfoDialog.targetExists = true;
-        this.songInfoDialog.lyricFileExists = true;
+      this.lastLyricSaveTrackPath = dialog.path;
+      dialog.lyricEditor = false;
+      dialog.lyricSaveMessage = deleting ? "已删除，可撤销" : (dialog.current?.lyricsHidden ? "已保存。点击恢复显示查看新歌词" : "歌词已保存");
+      if (committed.refreshFailed) dialog.lyricSaveMessage += "，请重新打开歌曲以刷新";
+      if (dialog.visible) {
+        dialog.targetExists = !deleting;
+        void this.loadSongInfoCurrent(dialog, true).catch(() => {});
       }
-      await this.refreshCurrentLyricsAfterSidecarChange(trackPath);
-      this.showNotice("歌词已保存");
+      void this.refreshCurrentLyricsAfterSidecarChange(dialog.path);
+      if (!dialog.visible) this.showNotice(dialog.lyricSaveMessage);
     } catch (error) {
-      const message = this.getOperationUserMessage(error, "歌词保存失败");
-      if (this.songInfoSaveContextMatches(generation, trackPath, candidateId)) {
-        this.songInfoDialog.lyricSaveMessage = message;
-      } else {
-        this.showNotice(message, "error");
-      }
+      dialog.lyricSaveMessage = error.message || "歌词修改失败";
+      if (!dialog.visible) this.showNotice(dialog.lyricSaveMessage, "error");
     } finally {
       if (confirmationId) window.lxEnv?.cancelLyricSave?.(confirmationId).catch?.(() => {});
-      if (this.songInfoSaveContextMatches(generation, trackPath, candidateId)) {
-        this.songInfoDialog.lyricConfirmationId = "";
-        this.songInfoDialog.lyricSaveBusy = false;
-      }
+      dialog.lyricConfirmationId = "";
+      dialog.lyricSaveBusy = false;
+      dialog.operation = "";
     }
   },
   async undoLastLyricSave() {
     const transactionId = String(this.lastLyricSaveTransactionId || "");
-    const trackPath = String(this.lastLyricSaveTrackPath || this.currentPath || "");
+    const savedTrackPath = String(this.lastLyricSaveTrackPath || "");
     if (!transactionId || this.lyricUndoBusy) return;
     const undoStateGeneration = ++this._lyricUndoStateGeneration;
     this.lyricUndoBusy = true;
@@ -7831,11 +7846,15 @@ const playlistMethods = {
       if (undoStateGeneration !== this._lyricUndoStateGeneration) return;
       this.lastLyricSaveTransactionId = "";
       this.lastLyricSaveTrackPath = "";
-      if (this.songInfoDialog.visible) {
+      const trackPath = String(result.trackPath || savedTrackPath);
+      if (this.songInfoDialog.visible && this.normalizeComparablePath(this.songInfoDialog.path) === this.normalizeComparablePath(trackPath)) {
         this.songInfoDialog.lyricSaveMessage = "已撤销";
-        await this.refreshSongInfoLyricFile();
+        void this.loadSongInfoCurrent(this.songInfoDialog, true).catch(() => {});
       }
-      await this.refreshCurrentLyricsAfterSidecarChange(trackPath);
+      const currentPath = this.currentPath;
+      if (trackPath && this.normalizeComparablePath(currentPath) === this.normalizeComparablePath(trackPath)) {
+        void this.refreshCurrentLyricsAfterSidecarChange(currentPath);
+      }
       await this.loadRecentLyricSave();
       this.showNotice("歌词保存已撤销");
     } catch (error) {
@@ -7851,7 +7870,7 @@ const playlistMethods = {
       const result = await window.lxEnv.getRecentLyricSave();
       if (!result?.ok || undoStateGeneration !== this._lyricUndoStateGeneration) return;
       this.lastLyricSaveTransactionId = String(result.transaction?.transactionId || "");
-      this.lastLyricSaveTrackPath = "";
+      this.lastLyricSaveTrackPath = String(result.transaction?.trackPath || "");
     } catch (_) {
       // 撤销记录恢复失败不影响播放和歌曲信息查询。
     }
@@ -7929,6 +7948,7 @@ const playlistMethods = {
       lyrics: "歌词",
       composers: "作曲",
       lyricists: "作词",
+      isrcs: "ISRC",
     }[field] || field;
   },
   formatSongInfoValue(field, value) {
@@ -8237,8 +8257,6 @@ const songInfoBatchMethods = {
     const selected = this.songInfoBatchFieldOptions
       .filter((option) => Boolean(this.songInfoBatchSettings.fields[option.key]))
       .map((option) => option.key);
-    if (selected.includes("trackNumber")) selected.push("trackTotal");
-    if (selected.includes("discNumber")) selected.push("discTotal");
     return [...new Set(selected)];
   },
   songInfoBatchSourceTracks(scope = this.songInfoBatchSettings.scope) {
@@ -8361,7 +8379,7 @@ const songInfoBatchMethods = {
   songInfoBatchSummary(task) {
     if (!task?.counts) return "";
     const total = Math.max(0, Number(task.counts.total || 0));
-    const checked = Math.max(0, total - Number(task.counts.pending || 0));
+    const checked = Math.max(0, total - Number(task.counts.pending || 0) - Number(task.counts.cancelled || 0));
     const parts = [`已检查 ${checked}/${total}`];
     if (task.counts.matchedAuto) parts.push(`高匹配 ${task.counts.matchedAuto}`);
     if (task.counts.writtenAuto) parts.push(`已保存 ${task.counts.writtenAuto}`);
@@ -8369,10 +8387,14 @@ const songInfoBatchMethods = {
     if (task.counts.confirmed) parts.push(`${task.mode === "lyric-sidecar" ? "已保存" : "已确认"} ${task.counts.confirmed}`);
     if (task.counts.skippedComplete) parts.push(`无需补充 ${task.counts.skippedComplete}`);
     if (task.counts.skipped) parts.push(`已跳过 ${task.counts.skipped}`);
+    if (task.counts.deferredReview) parts.push(`未采用 ${task.counts.deferredReview}`);
     const lowMatch = this.songInfoBatchUncertainCount(task);
-    const empty = Math.max(0, Number(task.counts.noMatch || 0) - lowMatch);
+    const empty = this.songInfoBatchEmptyCount(task);
     if (lowMatch) parts.push(`低匹配 ${lowMatch}`);
     if (empty) parts.push(`无结果 ${empty}`);
+    for (const [reason, count] of Object.entries(task.counts.diagnostics || {})) {
+      parts.push(`${this.songInfoBatchDiagnosticLabel(reason)} ${count}`);
+    }
     if (task.counts.failed) parts.push(`失败 ${task.counts.failed}`);
     if (task.counts.cancelled) parts.push(`已取消 ${task.counts.cancelled}`);
     return parts.join(" · ");
@@ -8387,19 +8409,42 @@ const songInfoBatchMethods = {
   },
   songInfoBatchUncertainItems(task = this.currentSongInfoBatchTask()) {
     return (task?.items || [])
-      .filter((item) => item.status === "no-match" && item.candidates?.length)
+      .filter((item) => item.status === "no-match" && !item.matchOutcome && item.candidates?.length)
       .slice(0, this.songInfoBatchUncertainLimit);
   },
   songInfoBatchUncertainCount(task = this.currentSongInfoBatchTask()) {
-    return (task?.items || []).filter((item) => item.status === "no-match" && item.candidates?.length).length;
+    return (task?.items || []).filter((item) => item.status === "no-match" && !item.matchOutcome && item.candidates?.length).length;
   },
   songInfoBatchEmptyItems(task = this.currentSongInfoBatchTask()) {
     return (task?.items || [])
-      .filter((item) => item.status === "no-match" && !item.candidates?.length)
+      .filter((item) => item.status === "no-match" && !item.matchOutcome && !item.candidates?.length)
       .slice(0, this.songInfoBatchEmptyLimit);
   },
   songInfoBatchEmptyCount(task = this.currentSongInfoBatchTask()) {
-    return (task?.items || []).filter((item) => item.status === "no-match" && !item.candidates?.length).length;
+    return (task?.items || []).filter((item) => item.status === "no-match" && !item.matchOutcome && !item.candidates?.length).length;
+  },
+  songInfoBatchDiagnosticLabel(reason) {
+    return {
+      "local-review": "已有歌词待校对",
+      "identity-rejected": "歌曲身份未通过",
+      "timing-insufficient": "未达到所选歌词质量",
+      "source-incomplete": "部分来源查询失败",
+      "source-empty": "所有来源均未返回歌词",
+    }[reason] || "未匹配";
+  },
+  songInfoBatchDiagnosticItems(task, reason) {
+    return (task?.items || []).filter(item => item.matchOutcome === reason && ["no-match", "skipped"].includes(item.status))
+      .slice(0, this.songInfoBatchEmptyLimit);
+  },
+  songInfoBatchLocalReviewLabel(reason) {
+    return {
+      unreadable: "已有歌词文件无法解析",
+      "missing-duration": "无法核对歌曲时长",
+      timing: "歌词时间超出歌曲长度",
+      version: "歌词与歌曲的版本标注有冲突",
+      title: "歌词内歌名与歌曲标签有差异",
+      artists: "歌词内署名与歌曲标签有差异",
+    }[reason] || "已有歌词待校对";
   },
   songInfoBatchSourceResultText(item) {
     const sources = Array.isArray(item?.sources) ? item.sources : [];
@@ -8512,6 +8557,8 @@ const songInfoBatchMethods = {
       const created = await window.lxEnv.createSongInfoBatchTask({
         tracks,
         requestedFields,
+        matchIdentity: this.songInfoBatchSettings.metadataIdentity,
+        reviewUncertain: this.songInfoBatchSettings.reviewUncertain,
         autoThreshold,
         manualThreshold,
         minimumGap: 8,
@@ -8535,10 +8582,6 @@ const songInfoBatchMethods = {
     if (this.songInfoBatchBusy || this.songInfoBatchStoreBlocked) return;
     if (!this.songInfoLyricBatchAvailable) {
       this.songInfoBatchMessage = "暂无歌词来源";
-      return;
-    }
-    if (!Object.values(this.songInfoBatchSettings.lyricSources || {}).some(Boolean)) {
-      this.songInfoBatchMessage = "请选择歌词来源";
       return;
     }
     const unfinished = this.songInfoBatchTasks.find((task) => this.songInfoBatchTaskIsUnfinished(task));
@@ -8567,6 +8610,8 @@ const songInfoBatchMethods = {
         mode: "lyric-sidecar",
         tracks,
         requestedFields: ["lyrics"],
+        matchIdentity: this.songInfoBatchSettings.lyricIdentity,
+        reviewUncertain: this.songInfoBatchSettings.reviewUncertain,
         autoThreshold,
         manualThreshold,
         minimumGap: 8,
@@ -8574,10 +8619,9 @@ const songInfoBatchMethods = {
         lyricOptions: {
           includeTranslation: this.lyricSaveIncludeTranslation,
           includeRomanization: this.lyricSaveIncludeRomanization,
-          sources: Object.entries(this.songInfoBatchSettings.lyricSources || {})
-            .filter(([, enabled]) => Boolean(enabled))
-            .map(([source]) => source),
-          skipExisting: this.songInfoBatchSettings.skipExistingLyrics !== false,
+          sources: ["lddc"],
+          completeness: this.songInfoBatchSettings.lyricFormat === "lrc" ? "line" : "word",
+          skipExisting: true,
           format: this.songInfoBatchSettings.lyricFormat || "enhanced-lrc",
         },
       });
@@ -8669,6 +8713,19 @@ const songInfoBatchMethods = {
     const result = await window.lxEnv?.skipSongInfoBatchItem?.({ taskId: task.id, itemId: item.id });
     if (result?.task) this.applySongInfoBatchUpdate(result.task);
     else if (!result?.ok) this.songInfoBatchMessage = result?.message || "无法跳过";
+  },
+  async finishSongInfoBatchReview(task) {
+    if (!task?.id || this.songInfoBatchBusy) return;
+    this.songInfoBatchBusy = true;
+    try {
+      const result = await window.lxEnv?.skipSongInfoBatchItem?.({ taskId: task.id, finishReview: true });
+      if (result?.task) this.applySongInfoBatchUpdate(result.task);
+      else this.songInfoBatchMessage = result?.message || "无法结束审核";
+    } catch (_) {
+      this.songInfoBatchMessage = "无法结束审核";
+    } finally {
+      this.songInfoBatchBusy = false;
+    }
   },
 };
 
@@ -10513,7 +10570,6 @@ function mountedHook() {
       this.applyInstallerProgress(payload);
     }));
   }
-  window.lxEnv?.getSongTagCapabilities?.().then(result => { this.songMetadataEditAvailable = result?.editable === true; }).catch(() => {});
   if (window.lxEnv?.onSongTagsUpdated) rememberIpcUnsubscribe(window.lxEnv.onSongTagsUpdated(result => {
     this.handleSongTagsUpdated(result).catch(() => this.showNotice("资料已写入，请刷新音乐库查看", "error"));
   }));
@@ -10925,7 +10981,6 @@ const kumikoVueApp = createApp({
         lyricConfirmationId: "",
       },
       _songInfoRequestGeneration: 0,
-      songMetadataEditAvailable: false,
       lastMetadataSave: readStoredObject("metadata-last-save", null),
       lastLyricSaveTransactionId: "",
       lastLyricSaveTrackPath: "",
@@ -10939,14 +10994,10 @@ const kumikoVueApp = createApp({
         autoThreshold: storedSongInfoAutoThreshold,
         manualThreshold: storedSongInfoManualThreshold,
         concurrency: storedSongInfoConcurrency,
-        lyricSources: {
-          lddc: storedSongInfoBatch.lyricSources?.lddc !== false,
-          external: storedSongInfoBatch.lyricSources?.external !== false,
-          embedded: storedSongInfoBatch.lyricSources?.embedded !== false,
-        },
-        lyricSaveTarget: "sidecar",
+        metadataIdentity: ["tags", "filename"].includes(storedSongInfoBatch.metadataIdentity) ? storedSongInfoBatch.metadataIdentity : "auto",
+        lyricIdentity: ["tags", "filename"].includes(storedSongInfoBatch.lyricIdentity) ? storedSongInfoBatch.lyricIdentity : "auto",
+        reviewUncertain: storedSongInfoBatch.reviewUncertain === true,
         lyricFormat: storedSongInfoBatch.lyricFormat === "lrc" ? "lrc" : "enhanced-lrc",
-        skipExistingLyrics: storedSongInfoBatch.skipExistingLyrics !== false,
       },
       songInfoBatchTasks: [],
       songInfoBatchCurrentId: "",

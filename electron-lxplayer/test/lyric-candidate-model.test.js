@@ -2,10 +2,23 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const {
+  compareLyricCredits,
   normalizeLyricCandidate,
   rankLyricCandidates,
   scoreLyricCandidate,
 } = require("../lyrics/candidate-model");
+
+test("credit separators and explicit voice actors match without conflating collaborators or roles", () => {
+  assert.equal(compareLyricCredits(["ななひら/宇佐美宏/IOSYS"], ["ななひら", "宇佐美宏", "IOSYS"]).equivalent, true);
+  assert.equal(compareLyricCredits(["久島鴎(CV.嶺内ともみ)"], ["嶺内ともみ"]).equivalent, true);
+  assert.equal(compareLyricCredits(["久島鴎(CV.嶺内ともみ)"], ["別役(CV.嶺内ともみ)"]).equivalent, false);
+  assert.equal(compareLyricCredits(["ななひら/宇佐美宏"], ["ななひら"]).equivalent, false);
+  assert.deepEqual(compareLyricCredits(["水瀬いのり"], ["水濑祈 (水瀬いのり)"]), { equivalent: false, similarity: 1 });
+  const aliases = compareLyricCredits(["水树奈奈、水瀬いのり"], ["水樹奈々", "水濑祈 (水瀬いのり)"]);
+  assert.equal(aliases.equivalent, false);
+  assert.ok(aliases.similarity >= 0.65);
+  assert.equal(compareLyricCredits(["AC/DC"], ["AC", "DC"]).equivalent, false);
+});
 
 const local = {
   title: "Blue Sky",
@@ -50,8 +63,15 @@ test("version and duration conflicts are hard lyric identity gates", () => {
   assert.ok(long.blockers.some((item) => item.code === "duration-conflict"));
 });
 
+test("lyrics attached to a matched instrumental version require manual review", () => {
+  const instrumental = { ...local, title: "Blue Sky (Instrumental)" };
+  const result = scoreLyricCandidate(instrumental, candidate({ trackName: instrumental.title }));
+  assert.equal(result.recommendation, "medium");
+  assert.ok(result.blockers.some(item => item.code === "instrumental-with-lyrics"));
+});
+
 test("two close strong candidates cannot be selected automatically", () => {
-  const ranked = rankLyricCandidates(local, [candidate({ id: "one" }), candidate({ id: "two" })], {
+  const ranked = rankLyricCandidates(local, [candidate({ id: "one" }), candidate({ id: "two", syncedLyrics: "[00:02.000]Line" })], {
     autoThreshold: 90,
     manualThreshold: 75,
     minimumGap: 8,
@@ -60,6 +80,16 @@ test("two close strong candidates cannot be selected automatically", () => {
   assert.equal(ranked[0].recommendation, "medium");
   assert.ok(ranked[0].blockers.some((item) => item.code === "ambiguous-best"));
   assert.ok(ranked.every((item) => item.recommendation === "medium"));
+});
+
+test("an identical local or online timeline is one match, and placeholders never count as lyrics", () => {
+  const first = candidate({ id: "one" });
+  const duplicate = candidate({ id: "two", syncedLyrics: "[00:01.00]Line" });
+  const placeholder = candidate({ id: "instrumental", syncedLyrics: "[00:00.000]纯音乐，请欣赏" });
+  const ranked = rankLyricCandidates(local, [first, duplicate, placeholder], { lyricCompleteness: "line" });
+  assert.equal(ranked.length, 1);
+  assert.equal(ranked[0].recommendation, "strong");
+  assert.equal(rankLyricCandidates(local, [first, duplicate], { lyricCompleteness: "word" }).length, 0);
 });
 
 test("a lyric candidate with different collaborator credits requires confirmation", () => {

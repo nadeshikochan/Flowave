@@ -112,6 +112,8 @@ function resolveRendererAsset(rendererDir, requestUrl) {
 function remapWorkspaceArtwork(filePath, cacheRoot) {
   if (!cacheRoot || !path.isAbsolute(filePath)) return filePath;
   const normalized = filePath.replace(/\\/g, "/");
+  const custom = /\/config\/song-info\/artwork\/([a-f0-9]{64}\.png)$/i.exec(normalized);
+  if (custom) return path.resolve(cacheRoot, "..", "config", "song-info", "artwork", custom[1]);
   const match = /\/cache\/metadata\/((?:covers|thumbs)\/[^/]+\.(?:png|jpe?g|webp|avif|gif|bmp))$/i.exec(normalized);
   if (!match) return filePath;
   const candidate = path.resolve(cacheRoot, "metadata", ...match[1].split("/"));

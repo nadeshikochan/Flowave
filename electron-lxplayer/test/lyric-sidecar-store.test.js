@@ -299,6 +299,26 @@ test("prepared recovery records a replaced sidecar as committed and undoable", a
   assert.equal((await store.listRecentUndoable({ limit: 1 }))[0].transactionId, "tx-recover-commit");
 });
 
+test("prepared deletion is recoverable only with a verified original snapshot", async (t) => {
+  const { audioPath, sidecarPath, store } = await fixture(t);
+  const original = "[00:01.00]original\n";
+  await fs.promises.writeFile(sidecarPath, original);
+  const deleted = await store.write({ audioPath, expected: (await store.inspect(audioPath)).version, remove: true });
+  const manifest = JSON.parse(await fs.promises.readFile(deleted.manifestPath, "utf8"));
+  manifest.status = "prepared";
+  await fs.promises.writeFile(deleted.manifestPath, JSON.stringify(manifest));
+  assert.equal((await store.recoverIncomplete())[0].status, "committed");
+  await store.undoById(deleted.transactionId);
+  assert.equal(await fs.promises.readFile(sidecarPath, "utf8"), original);
+
+  const next = await store.write({ audioPath, expected: (await store.inspect(audioPath)).version, remove: true });
+  const pending = JSON.parse(await fs.promises.readFile(next.manifestPath, "utf8"));
+  pending.status = "prepared";
+  await fs.promises.writeFile(next.manifestPath, JSON.stringify(pending));
+  await fs.promises.writeFile(pending.snapshotPath, "corrupt snapshot");
+  assert.equal((await store.recoverIncomplete())[0].status, "conflict");
+});
+
 test("prepared recovery aborts an unchanged target and preserves external conflicts", async (t) => {
   const { root, audioPath, sidecarPath, store } = await fixture(t);
   const before = await captureSidecarVersion(sidecarPath);

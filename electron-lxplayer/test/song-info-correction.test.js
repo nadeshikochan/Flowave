@@ -49,7 +49,11 @@ test("metadata correction uses new title and allows clearing a wrong artist with
 test("missing singer is not counted as a mismatch; ambiguous or wrong-duration lyrics remain blocked", () => {
   const evidence = { title: corrected.title, artists: [], durationSeconds: 135 };
   assert.equal(rankLyricCandidates(evidence, [lyric])[0].recommendation, "medium");
-  assert.ok(rankLyricCandidates(evidence, [lyric, { ...lyric, candidateId: "other-version" }]).every(item => item.recommendation === "none"));
+  const differentTimeline = normalizeLyricCandidate({
+    sourceRecordId: "2", trackName: corrected.title, artists: corrected.artists, durationSeconds: 135,
+    syncedLyrics: "[00:02.00]First line\n[00:05.00]Next line",
+  }, { id: "remote", version: "1" });
+  assert.ok(rankLyricCandidates(evidence, [lyric, differentTimeline]).every(item => item.recommendation === "none"));
   assert.equal(rankLyricCandidates(evidence, [{ ...lyric, durationSeconds: 200 }])[0].recommendation, "none");
 });
 

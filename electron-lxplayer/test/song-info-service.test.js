@@ -70,6 +70,42 @@ test("complete selected fields skip provider lookup in batch mode", async () => 
   assert.equal(missingLocalField({ title: "Track01", titleFromFileName: true }, "title"), true);
 });
 
+test("batch checks that local cover exists and isolates filename evidence from bad tags", async () => {
+  let request;
+  const gone = Object.assign(new Error("missing cover"), { code: "ENOENT" });
+  const service = new SongInfoService({
+    stat: async file => { if (file.endsWith(".jpg")) throw gone; return fileStat(); },
+    getMeta: async (_path, options) => {
+      assert.equal(options.includeLyrics, false);
+      return { title: "Wrong", titleFromTag: true, artist: "Incorrect", album: "Wrong album",
+        cover: require("../secure-protocols").toLocalMediaUrl("D:/Music/missing.jpg"), duration: 180 };
+    },
+    registry: {
+      async queryAll(options) {
+        request = options;
+        const raw = { title: "Song", artists: ["Artist"], durationSeconds: 180,
+          cover: { assetId: "cover:correct", provider: "fixture" } };
+        return { sources: [], candidates: [
+          require("../song-info/candidate-model").normalizeCandidate(raw, {id: "fixture"}),
+          require("../song-info/candidate-model").normalizeCandidate({ ...raw, title: "Song (Live)" }, {id: "fixture"}),
+        ] };
+      },
+    },
+  });
+  const result = await service.query({
+    trackPath: require("node:path").join("D:/Music", "01 - Song - Artist.mp3"),
+    requestedFields: ["title", "album", "cover"], onlyMissing: true,
+  });
+  assert.deepEqual(request.requestedFields, ["cover"]);
+  assert.equal(request.evidence.album, undefined);
+  assert.equal(result.current.title, "Wrong");
+  assert.equal(result.current.cover, false);
+  assert.equal(result.candidates[0].candidate.title, "Song");
+  assert.equal(result.candidates[0].recommendation, "medium");
+  assert.deepEqual(result.candidates[0].differences.map(difference => difference.field), ["cover"]);
+  assert.equal(result.candidates[1].recommendation, "none");
+});
+
 test("song info service returns ranked read-only candidates with field differences", async () => {
   let observed = null;
   const registry = {

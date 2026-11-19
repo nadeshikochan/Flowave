@@ -570,7 +570,7 @@
 
               <section class="settings-card" data-setting-id="setting-song-info-22b15a534b">
                 <div class="settings-card-title">
-                  <div><h3>补充内容</h3></div>
+                  <div><h3>检查范围</h3><p>先读本地资料和歌词，只为缺少所选内容的歌曲联网。</p></div>
                 </div>
                 <label class="form-row" data-setting-id="setting-song-info-songinfobatchsettings-scope">
                   <span>范围</span>
@@ -582,9 +582,16 @@
                       :disabled="option.value === 'selected' && !songInfoBatchSelectedLocalAvailable"
                     >{{ option.label }}</option>
                   </select>
-                  <span class="unit">{{ songInfoBatchTrackCount }} 首</span>
+                  <span class="unit">{{ songInfoBatchTrackCount }} 首待检查</span>
                 </label>
-                <div class="song-info-field-grid" role="group" aria-label="补充内容">
+                <label class="form-row checkbox-row">
+                  <span>保留不确定结果供人工审核</span>
+                  <input class="ui-toggle" type="checkbox" v-model="songInfoBatchSettings.reviewUncertain" />
+                </label>
+              </section>
+              <section class="settings-card" data-setting-id="setting-song-info-f9e4f28179">
+                <div class="settings-card-title"><div><h3>歌曲资料与封面</h3><p>列出缺失字段的候选，供核对。</p></div></div>
+                <div class="song-info-field-grid" role="group" aria-label="要补全的资料">
                   <button
                     v-for="option in songInfoBatchFieldOptions"
                     :key="option.key"
@@ -597,51 +604,38 @@
                     <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5.5 10.2 2.8 2.8 6.2-6.4"/></svg>
                   </button>
                 </div>
-                <div class="settings-task-actions" data-setting-id="setting-song-info-f9e4f28179">
-
+                <label class="form-row" data-setting-id="setting-song-info-metadata-identity">
+                  <span>资料匹配依据</span>
+                  <select v-model="songInfoBatchSettings.metadataIdentity">
+                    <option value="auto">标签与文件名交叉核对</option>
+                    <option value="filename">优先使用文件名</option>
+                    <option value="tags">使用歌曲标签</option>
+                  </select>
+                </label>
+                <div class="settings-task-actions">
                 <div class="song-info-start-actions">
                   <button @click="startSongInfoBatch" :disabled="songInfoBatchBusy || songInfoBatchStoreBlocked || hasUnfinishedSongInfoBatchTask() || !songInfoBatchTrackCount">
-                    {{ songInfoBatchBusy ? '正在准备' : '查找歌曲信息' }}
-                  </button>
-                  <button v-if="songInfoLyricBatchAvailable" class="mini" @click="startLyricSidecarBatch" :disabled="songInfoBatchBusy || songInfoBatchStoreBlocked || hasUnfinishedSongInfoBatchTask() || !songInfoBatchTrackCount">
-                    {{ songInfoBatchBusy ? '正在准备' : '查找缺失歌词' }}
+                    查找缺失资料
                   </button>
                 </div>
-                <small class="hint">歌曲信息只补空白；歌词按下方选项保存。</small>
-                </div></section><details class="settings-card settings-disclosure" data-setting-id="setting-song-info-315d810f5e"><summary><span><strong>歌词选项</strong><small>来源、格式与保存内容</small></span><span class="settings-disclosure-arrow" aria-hidden="true">›</span></summary>
-                <div class="song-info-field-grid" role="group" aria-label="歌词来源">
-                  <button type="button" :class="['song-info-field-option', { selected: songInfoBatchSettings.lyricSources.lddc }]" @click="songInfoBatchSettings.lyricSources.lddc = !songInfoBatchSettings.lyricSources.lddc">
-                    <span>在线歌词（LDDC 优先）</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5.5 10.2 2.8 2.8 6.2-6.4"/></svg>
-                  </button>
-                  <button type="button" :class="['song-info-field-option', { selected: songInfoBatchSettings.lyricSources.external }]" @click="songInfoBatchSettings.lyricSources.external = !songInfoBatchSettings.lyricSources.external">
-                    <span>KTV 歌词</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5.5 10.2 2.8 2.8 6.2-6.4"/></svg>
-                  </button>
-                  <button type="button" :class="['song-info-field-option', { selected: songInfoBatchSettings.lyricSources.embedded }]" @click="songInfoBatchSettings.lyricSources.embedded = !songInfoBatchSettings.lyricSources.embedded">
-                    <span>歌曲内嵌歌词</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5.5 10.2 2.8 2.8 6.2-6.4"/></svg>
-                  </button>
                 </div>
-                <label class="form-row" data-setting-id="setting-song-info-songinfobatchsettings-lyricsavetarget">
-                  <span>保存位置</span>
-                  <select v-model="songInfoBatchSettings.lyricSaveTarget">
-                    <option value="sidecar">对应的 KTV 歌词目录</option>
-                    <option value="tag" disabled>写入歌曲（暂不可用）</option>
-                    <option value="both" disabled>两者同时（暂不可用）</option>
-                  </select>
-                </label>
+              </section>
+              <section class="settings-card" data-setting-id="setting-song-info-315d810f5e">
+                <div class="settings-card-title"><div><h3>歌词</h3><p>检查曲库 KTV 目录、同名歌词文件和内嵌歌词。补全结果保存到对应的 KTV 歌词目录。</p></div></div>
                 <label class="form-row" data-setting-id="setting-song-info-songinfobatchsettings-lyricformat">
-                  <span>歌词格式</span>
+                  <span>补全目标</span>
                   <select v-model="songInfoBatchSettings.lyricFormat">
-                    <option value="enhanced-lrc">逐字 LRC</option>
-                    <option value="lrc">标准 LRC</option>
+                    <option value="enhanced-lrc">逐字 KTV 歌词</option>
+                    <option value="lrc">逐句歌词即可</option>
                   </select>
                 </label>
-                <label class="form-row checkbox-row" data-setting-id="setting-song-info-songinfobatchsettings-skipexistinglyrics">
-                  <span>跳过已有歌词</span>
-                  <input class="ui-toggle" type="checkbox" v-model="songInfoBatchSettings.skipExistingLyrics" />
-                </label>
-                <label class="form-row checkbox-row" data-setting-id="setting-song-info-4d69dbdf62">
-                  <span>原文</span>
-                  <input class="ui-toggle" type="checkbox" checked disabled />
+                <label class="form-row" data-setting-id="setting-song-info-lyric-identity">
+                  <span>歌词匹配依据</span>
+                  <select v-model="songInfoBatchSettings.lyricIdentity">
+                    <option value="auto">标签与文件名交叉核对</option>
+                    <option value="filename">优先使用文件名</option>
+                    <option value="tags">使用歌曲标签</option>
+                  </select>
                 </label>
                 <label class="form-row checkbox-row" data-setting-id="setting-song-info-lyricsaveincludetranslation">
                   <span>翻译</span>
@@ -651,8 +645,11 @@
                   <span>罗马音</span>
                   <input class="ui-toggle" type="checkbox" v-model="lyricSaveIncludeRomanization" @change="saveLyricSettings" />
                 </label>
-                <small class="hint">罗马音仅保存来源提供的内容。</small>
-                </details><details class="settings-card settings-disclosure" data-setting-id="setting-song-info-c7127bb6ee"><summary><span><strong>匹配选项</strong><small>匹配阈值与并行数量</small></span><span class="settings-disclosure-arrow" aria-hidden="true">›</span></summary>
+                <div class="settings-task-actions"><div class="song-info-start-actions">
+                  <button v-if="songInfoLyricBatchAvailable" @click="startLyricSidecarBatch" :disabled="songInfoBatchBusy || songInfoBatchStoreBlocked || hasUnfinishedSongInfoBatchTask() || !songInfoBatchTrackCount">补全缺失歌词</button>
+                </div><small class="hint">已有歌词的升级需要开启人工审核，并逐首确认替换。</small></div>
+              </section>
+              <details class="settings-card settings-disclosure" data-setting-id="setting-song-info-c7127bb6ee"><summary><span><strong>高级匹配选项</strong><small>匹配阈值与并行数量</small></span><span class="settings-disclosure-arrow" aria-hidden="true">›</span></summary>
                 <label class="form-row" data-setting-id="setting-song-info-songinfobatchsettings-autothreshold">
                   <span>自动匹配</span>
                   <input type="number" min="90" max="99" step="1" v-model.number="songInfoBatchSettings.autoThreshold" />
@@ -710,15 +707,22 @@
                   <div class="song-info-review-head">
                     <strong>需要确认</strong>
                     <span>核对后选择结果。</span>
+                    <button type="button" class="mini ghost" :disabled="songInfoBatchBusy" @click="finishSongInfoBatchReview(currentSongInfoBatchTask())">结束审核，跳过剩余</button>
                   </div>
                   <div class="song-info-review-row" v-for="item in songInfoBatchReviewItems(currentSongInfoBatchTask())" :key="item.id">
                     <div class="song-info-review-track">
                       <strong>{{ pathBasename(item.track.path) }}</strong>
                       <span>当前：{{ songInfoBatchCurrentText(item) }}</span>
                       <span>候选：{{ songInfoBatchCandidateText(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item)) }}</span>
-                      <small class="song-info-review-reason">来源：{{ songInfoBatchCandidateSource(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item)) }} · 匹配：{{ songInfoBatchCandidateScore(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item)) }} 分</small>
-                      <small class="song-info-review-reason" v-if="songInfoBatchCandidateEvidence(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item))">依据：{{ songInfoBatchCandidateEvidence(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item)) }}</small>
                       <small class="song-info-review-reason" v-if="songInfoBatchCandidateDoubts(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item))">疑点：{{ songInfoBatchCandidateDoubts(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item)) }}</small>
+                      <details class="song-info-review-reason">
+                        <summary>匹配详情</summary>
+                        <div>来源 {{ songInfoBatchCandidateSource(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item)) }} · {{ songInfoBatchCandidateScore(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item)) }} 分</div>
+                        <div v-if="songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item)?.timing?.lines">
+                          有逐字时间的行 {{ songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item).timing.timedLines }} / {{ songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item).timing.lines }}
+                        </div>
+                        <div v-if="songInfoBatchCandidateEvidence(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item))">{{ songInfoBatchCandidateEvidence(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item)) }}</div>
+                      </details>
                       <div class="song-info-review-differences" v-if="visibleSongInfoDifferences(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item)).length">
                         <div class="song-info-review-diff-head"><span>字段</span><span>当前</span><span>查找结果</span></div>
                         <div class="song-info-review-diff" v-for="difference in visibleSongInfoDifferences(songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item))" :key="difference.field">
@@ -734,13 +738,13 @@
                       @change="setSongInfoBatchCandidateChoice(currentSongInfoBatchTask(), item, $event.target.value)"
                       aria-label="选择匹配结果"
                     >
-                      <option v-for="(candidate, index) in item.candidates" :key="candidate.candidate.candidateId || index" :value="index">
-                        {{ songInfoBatchCandidateText(candidate) }}
+                      <option v-for="(candidate, index) in item.candidates" :key="candidate.candidate.candidateId || index" :value="index" :disabled="candidate.recommendation === 'none'">
+                        {{ songInfoBatchCandidateText(candidate) }} · {{ songInfoBatchCandidateSource(candidate) }}
                       </option>
                     </select>
                     <div class="song-info-review-actions">
                       <button class="mini ghost" @click="skipSongInfoBatchItem(currentSongInfoBatchTask(), item)">跳过</button>
-                      <button class="mini primary" @click="confirmSongInfoBatchItem(currentSongInfoBatchTask(), item)">确认</button>
+                      <button class="mini primary" @click="confirmSongInfoBatchItem(currentSongInfoBatchTask(), item)">{{ currentSongInfoBatchTask().mode === 'lyric-sidecar' && songInfoBatchSelectedCandidate(currentSongInfoBatchTask(), item)?.differences?.[0]?.current ? '确认替换歌词' : '确认' }}</button>
                     </div>
                   </div>
                   <button
@@ -796,6 +800,18 @@
                   >显示更多</button>
                 </details>
 
+                <details class="song-info-failures" v-for="(count, reason) in currentSongInfoBatchTask().counts?.diagnostics" :key="reason">
+                  <summary>{{ songInfoBatchDiagnosticLabel(reason) }} {{ count }}</summary>
+                  <div class="song-info-failure-row" v-for="item in songInfoBatchDiagnosticItems(currentSongInfoBatchTask(), reason)" :key="item.id">
+                    <strong>{{ songInfoBatchItemText(item) }}</strong>
+                    <span v-if="reason === 'local-review'">{{ songInfoBatchLocalReviewLabel(item.localReviewReason) }}
+                      <button type="button" class="mini" @click="openSongInfoLookup(item.track.path, 'lyrics')">单曲查找与校对</button>
+                    </span>
+                    <span v-else-if="item.candidates?.length">{{ songInfoBatchCandidateText(item.candidates[0]) }} · {{ songInfoBatchCandidateDoubts(item.candidates[0]) || songInfoBatchDiagnosticLabel(reason) }}</span>
+                    <span v-else>{{ songInfoBatchSourceResultText(item) }}</span>
+                  </div>
+                  <button v-if="count > songInfoBatchEmptyLimit" type="button" class="mini ghost" @click="songInfoBatchEmptyLimit += 20">显示更多</button>
+                </details>
                 <details class="song-info-failures" v-if="songInfoBatchEmptyCount(currentSongInfoBatchTask())">
                   <summary>无结果 {{ songInfoBatchEmptyCount(currentSongInfoBatchTask()) }}</summary>
                   <div class="song-info-failure-row" v-for="item in songInfoBatchEmptyItems(currentSongInfoBatchTask())" :key="item.id">
@@ -1222,6 +1238,10 @@
                 <span>锁定并点击穿透</span>
                 <input class="ui-toggle" type="checkbox" v-model="desktopLyricLocked" :disabled="!desktopLyricEnabled" @change="saveDesktopLyricSettings" />
               </label>
+              <div class="form-row" data-setting-id="setting-desktop-lyric-reset-position">
+                <span>窗口位置</span>
+                <button type="button" class="mini" @click="resetLyricOverlayPosition">恢复桌面歌词位置</button>
+              </div>
               <label class="form-row checkbox-row" data-setting-id="setting-desktop-lyric-desktoplyriccovercolor">
                 <span>颜色跟随封面</span>
                 <input class="ui-toggle" type="checkbox" v-model="desktopLyricCoverColor" :disabled="!desktopLyricEnabled" @change="saveDesktopLyricSettings" />
@@ -1524,7 +1544,7 @@
       </button>
     </div>
 
-    <div class="modal-mask" v-if="confirmDialog.visible" @click.self="resolveConfirmation(false)">
+    <div class="modal-mask confirmation-mask" v-if="confirmDialog.visible" @click.self="resolveConfirmation(false)">
       <form
         class="modal confirm-modal"
         ref="confirmDialog"
@@ -1578,172 +1598,129 @@
       <div class="context-menu-separator" role="separator"></div>
       <button class="mini"  @click="openAudioDetail(trackContextMenu.path); closeTrackContextMenu()" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 11v6M12 7v.1M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0"/></svg><span>音频详情</span></button>
       <button class="mini" v-if="!isOnlineToken(trackContextMenu.path)" @click="revealTrackInFolder" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v11H3zM3 7V4h7l2 3"/></svg><span>在文件夹中显示</span></button>
-      <button class="mini" v-if="!isOnlineToken(trackContextMenu.path)" @click="openSongInfoLookupFromContextMenu('metadata')" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16M16 16l6 6"/></svg><span>查找歌曲资料…</span></button>
-      <button class="mini" v-if="!isOnlineToken(trackContextMenu.path)" @click="openSongInfoLookupFromContextMenu('lyrics')" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM8 8h8M8 12h8M8 16h5"/></svg><span>查找或替换歌词…</span></button>
+      <button class="mini" v-if="!isOnlineToken(trackContextMenu.path)" @click="openSongInfoLookupFromContextMenu('metadata')" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16M16 16l6 6"/></svg><span>歌曲资料…</span></button>
+      <button class="mini" v-if="!isOnlineToken(trackContextMenu.path)" @click="openSongInfoLookupFromContextMenu('lyrics')" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM8 8h8M8 12h8M8 16h5"/></svg><span>歌词…</span></button>
       <template v-if="canRemoveTrackFromCurrentPlaylist(trackContextMenu.path)"><div class="context-menu-separator" role="separator"></div><button class="mini danger-menu" @click="removeTrackFromCurrentPlaylist(trackContextMenu.path)" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6"/></svg><span>移出当前歌单</span></button></template>
     </div>
 
-    <div class="modal-mask song-info-mask" v-if="songInfoDialog.visible" @click.self="closeSongInfoDialog">
-      <section
-        class="modal song-info-modal"
-        @keydown.tab="trapDialogFocus"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="song-info-title"
-      >
+    <div class="modal-mask song-info-mask" v-if="songInfoDialog.visible" :inert="confirmDialog.visible || undefined" @click.self="closeSongInfoDialog">
+      <section class="modal song-info-modal" @keydown.tab="trapDialogFocus" role="dialog" aria-modal="true" aria-labelledby="song-info-title">
         <header class="song-info-header">
           <div>
-            <h3 id="song-info-title">歌曲信息</h3>
-            <p>{{ extractName(songInfoDialog.path) }}</p>
+            <h3 id="song-info-title">{{ songInfoDialog.current?.title || extractName(songInfoDialog.path) }}</h3>
+            <p v-if="songInfoDialog.current?.artist">{{ songInfoDialog.current.artist }}</p>
           </div>
-<nav class="song-info-task-tabs" aria-label="选择查找内容">
-          <button :class="{active: songInfoDialog.mode === 'metadata'}" :disabled="songInfoDialog.lyricSaveBusy" @click="switchSongInfoMode('metadata')">歌曲资料</button>
-          <button :class="{active: songInfoDialog.mode === 'lyrics'}" :disabled="songInfoDialog.lyricSaveBusy" @click="switchSongInfoMode('lyrics')">歌词</button>
-        </nav>
-          <button ref="songInfoClose" class="song-info-close" :disabled="songInfoDialog.lyricSaveBusy" @click="closeSongInfoDialog" aria-label="关闭">
+          <button ref="songInfoClose" class="song-info-close" @click="closeSongInfoDialog" aria-label="关闭">
             <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg>
           </button>
         </header>
-
-        <form class="song-info-search" @submit.prevent="retrySongInfoLookup">
-          <label>歌名<input v-model="songInfoDialog.searchTitle" maxlength="240" placeholder="输入正确歌名" :disabled="songInfoDialog.lyricSaveBusy" /></label>
-          <label>歌手<input v-model="songInfoDialog.searchArtist" maxlength="240" placeholder="可选" :disabled="songInfoDialog.lyricSaveBusy" /></label>
-          <button class="primary" type="submit" :disabled="songInfoDialog.lyricSaveBusy">查找</button>
-        </form>
-        <div class="song-info-toolbar">
-          <button class="song-info-text-action" :disabled="songInfoDialog.lyricSaveBusy" @click="lookupSongInfoByFilename">用文件名查找</button>
-          <button v-if="songInfoRejectedCount()" class="song-info-text-action" :aria-pressed="songInfoDialog.showRejected" :disabled="songInfoDialog.lyricSaveBusy" @click="songInfoDialog.showRejected = !songInfoDialog.showRejected">{{ songInfoDialog.showRejected ? '收起' : '其他结果' }} · {{ songInfoRejectedCount() }}</button>
-          <button class="song-info-text-action song-info-file-action" :disabled="!songInfoDialog.lyricFileExists || songInfoDialog.lyricSaveBusy" :title="songInfoDialog.lyricFileExists ? '在资源管理器中选中歌词文件' : '尚无独立歌词文件'" @click="showSongInfoLyricFolder">打开歌词文件位置</button>
-        </div>
-
-        <div class="song-info-loading" v-if="songInfoDialog.loading" role="status">
-          <span class="song-info-spinner" aria-hidden="true"></span>
-          <span>正在查找…</span>
-        </div>
-
-        <div class="song-info-empty" v-else-if="songInfoDialog.error">
-          <strong>{{ songInfoDialog.error }}</strong>
-          <button class="mini" @click="retrySongInfoLookup">重试</button>
-        </div>
-
-        <div class="song-info-empty" v-else-if="!songInfoVisibleCandidates().length && songInfoDialog.mode !== 'metadata'">
-          <strong>{{ songInfoLookupEmptyTitle() }}</strong>
-          <span>试试修正歌名，或清空歌手后查找。</span>
-          <button class="mini" @click="retrySongInfoLookup">重新查找</button>
-        </div>
-
-        <div class="song-info-body" v-else>
-          <div class="song-info-candidates" role="listbox" aria-label="候选歌曲信息">
-            <div class="song-info-results-heading">查找结果 <span>{{ songInfoVisibleCandidates().length }}</span></div>
-            <p v-if="!songInfoVisibleCandidates().length" class="song-info-list-empty">暂无结果，可直接编辑右侧资料</p>
-            <button
-              v-for="{item, index} in songInfoVisibleCandidates()"
-              :key="item.candidate.candidateId || index"
-              :class="['song-info-candidate', { selected: songInfoDialog.selectedIndex === index }]"
-              @click="selectSongInfoCandidate(index)"
-              :disabled="songInfoDialog.lyricSaveBusy"
-              role="option"
-              :aria-selected="songInfoDialog.selectedIndex === index"
-            >
-              <img v-if="songInfoCoverUrl(item)" :src="songInfoCoverUrl(item)" alt="" />
-              <span v-else class="song-info-cover-empty"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l11-2v13M9 8l11-2"/><ellipse cx="6" cy="18" rx="3" ry="2"/><ellipse cx="17" cy="16" rx="3" ry="2"/></svg></span>
-              <span class="song-info-candidate-text">
-                <strong>{{ item.candidate.title }}</strong>
-                <span>{{ item.candidate.artists.join('、') || '未知歌手' }}</span>
-                <span>{{ item.candidate.album || '未知专辑' }}</span>
-                <span v-if="songInfoCandidateMeta(item)">{{ songInfoCandidateMeta(item) }}</span>
-              </span>
-              <span :class="['song-info-match', item.recommendation]">{{ songInfoCandidateStatus(item) }}</span>
-            </button>
-          </div>
-
-          <div class="song-info-detail" v-if="selectedSongInfoCandidate() || (songInfoDialog.mode === 'metadata' && songInfoDialog.metadataDraft)">
-            <template v-if="songInfoDialog.mode === 'metadata' && songInfoDialog.metadataDraft">
-              <div class="song-info-editor-head"><div><h4>歌曲资料</h4><p>保存到音频文件，可撤销</p></div></div>
-              <div class="song-info-suggestion" v-if="selectedSongInfoCandidate()">
-                <div><strong>{{ selectedSongInfoCandidate().candidate.title }}</strong><span>{{ selectedSongInfoCandidate().candidate.artists.join('、') }}</span></div>
-                <button class="mini" :disabled="songInfoDialog.lyricSaveBusy" @click="useSongInfoMetadataCandidate">填入资料</button>
+        <nav class="song-info-task-tabs" aria-label="歌曲信息">
+          <button :class="{active: songInfoDialog.mode === 'metadata'}" :disabled="songInfoDialog.lyricSaveBusy" @click="switchSongInfoMode('metadata')">资料</button>
+          <button :class="{active: songInfoDialog.mode === 'lyrics'}" :disabled="songInfoDialog.lyricSaveBusy" @click="switchSongInfoMode('lyrics')">歌词</button>
+        </nav>
+        <div class="song-info-content">
+          <p v-if="songInfoDialog.localLoading" role="status">正在读取当前歌曲…</p>
+          <p v-else-if="songInfoDialog.localError" class="song-info-warning" role="status">{{ songInfoDialog.localError }}</p>
+          <template v-if="!songInfoDialog.localLoading && songInfoDialog.mode === 'metadata' && songInfoDialog.metadataDraft">
+            <div class="song-info-art-row">
+              <img v-if="songInfoDialog.current?.cover" :src="pathToFile(songInfoDialog.current.cover_thumb || songInfoDialog.current.cover)" alt="当前封面" />
+              <span v-else class="song-info-art-empty">无封面</span>
+              <div class="song-info-actions">
+                <button class="mini" :disabled="songInfoDialog.lyricSaveBusy" @click="saveSongInfoMetadata({cover:'pick'})">{{ songInfoDialog.current?.cover ? '更换封面' : '添加封面' }}</button>
+                <button v-if="songInfoDialog.current?.cover" class="song-info-link" :disabled="songInfoDialog.lyricSaveBusy" @click="saveSongInfoMetadata({cover:'clear'})">移除封面</button>
               </div>
-              <div class="song-info-editor-fields">
-                <label>歌名<input v-model="songInfoDialog.metadataDraft.title" maxlength="500" :disabled="songInfoDialog.lyricSaveBusy" /></label>
-                <label>歌手<input v-model="songInfoDialog.metadataDraft.artists" maxlength="500" :disabled="songInfoDialog.lyricSaveBusy" /></label>
-                <label>专辑<input v-model="songInfoDialog.metadataDraft.album" maxlength="500" :disabled="songInfoDialog.lyricSaveBusy" /></label>
-                <details><summary>更多资料</summary>
-                  <label>专辑艺人<input v-model="songInfoDialog.metadataDraft.albumArtists" maxlength="500" :disabled="songInfoDialog.lyricSaveBusy" /></label>
-                  <label>发行日期<input v-model="songInfoDialog.metadataDraft.releaseDate" maxlength="500" placeholder="YYYY-MM-DD" :disabled="songInfoDialog.lyricSaveBusy" /></label>
-                  <label>流派<input v-model="songInfoDialog.metadataDraft.genres" maxlength="500" :disabled="songInfoDialog.lyricSaveBusy" /></label>
-                </details>
-              </div>
-            </template>
-            <template v-else-if="selectedSongInfoCandidate()">
-            <div class="song-info-detail-title">
-              <div class="song-info-detail-art"><img v-if="songInfoCoverUrl(selectedSongInfoCandidate())" :src="songInfoCoverUrl(selectedSongInfoCandidate())" alt="" /><svg v-else viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l11-2v13M9 8l11-2"/><ellipse cx="6" cy="18" rx="3" ry="2"/><ellipse cx="17" cy="16" rx="3" ry="2"/></svg></div>
-              <div class="song-info-detail-copy">
-                <h4>{{ selectedSongInfoCandidate().candidate.title }}</h4>
-                <p>{{ selectedSongInfoCandidate().candidate.artists.join('、') || '未知歌手' }}</p>
-                <p v-if="songInfoCandidateMeta(selectedSongInfoCandidate())">{{ songInfoCandidateMeta(selectedSongInfoCandidate()) }}</p>
-              </div>
-              <span>{{ selectedSongInfoCandidate().candidate.sourceLabel }}</span>
             </div>
-            <details class="song-info-match-details" v-if="selectedSongInfoCandidate().reasons.length || selectedSongInfoCandidate().blockers.length || selectedSongInfoCandidate().identityCorrection">
-              <summary>匹配详情</summary>
-              <p v-if="selectedSongInfoCandidate().identityCorrection">按修正后的歌名与歌手匹配，保存前需确认。</p>
-              <div class="song-info-reasons">
-              <span v-for="reason in selectedSongInfoCandidate().reasons" :key="'reason-' + reason">{{ reason }}</span>
-              <span v-for="blocker in selectedSongInfoCandidate().blockers" :key="'blocker-' + blocker.code" class="warning">{{ blocker.message }}</span>
+            <div class="song-info-fields">
+              <label v-for="field in ['title','artists','album']" :key="field">
+                <span>{{ songInfoFieldLabel(field) }}</span><input v-model="songInfoDialog.metadataDraft[field]" maxlength="500" :disabled="songInfoDialog.lyricSaveBusy" />
+              </label>
+            </div>
+            <details class="song-info-more">
+              <summary>更多资料</summary>
+              <div class="song-info-fields">
+                <label v-for="field in songInfoExtraFields()" :key="field">
+                  <span>{{ songInfoFieldLabel(field) }}</span><input v-model="songInfoDialog.metadataDraft[field]" maxlength="500" :disabled="songInfoDialog.lyricSaveBusy" />
+                </label>
               </div>
+              <button v-if="songInfoDialog.current?.libraryEdits" class="song-info-link" :disabled="songInfoDialog.lyricSaveBusy" @click="resetSongInfoMetadata">恢复文件中的资料</button>
             </details>
-            <section class="song-info-lyric-preview" v-if="selectedSongInfoCandidate().candidate.lyrics?.available">
-              <h5>歌词预览</h5>
-              <div v-if="selectedSongInfoCandidate().candidate.lyrics.preview?.length">
-                <div v-for="(line, lineIndex) in selectedSongInfoCandidate().candidate.lyrics.preview" :key="lineIndex" class="song-info-preview-line">
-                  <time>{{ formatTime(line.startMs / 1000) }}</time><div>{{ line.text }}<small v-if="line.translation">{{ line.translation }}</small></div>
-                </div>
+          </template>
+          <template v-if="!songInfoDialog.localLoading && songInfoDialog.mode === 'lyrics'">
+            <div class="song-info-row">
+              <strong>{{ songInfoDialog.current?.lyricsHidden ? '歌词已隐藏' : (songInfoDialog.current?.lyrics ? '当前歌词' : '暂无歌词') }}</strong>
+              <div class="song-info-actions" v-if="!songInfoDialog.lyricEditor">
+                <button v-if="songInfoDialog.current?.lyricsHidden" class="mini" :disabled="songInfoDialog.lyricSaveBusy" @click="saveSongInfoMetadata({updates:{lyricsHidden:false},preserveDraft:true})">恢复显示</button>
+                <button class="mini" :disabled="songInfoDialog.lyricSaveBusy || songInfoDialog.lyricEditorLoading" @click="openSongInfoLyricEditor">{{ songInfoDialog.lyricEditorLoading ? '读取中…' : (songInfoDialog.current?.lyrics || songInfoDialog.targetExists ? '编辑歌词' : '添加歌词') }}</button>
+                <button v-if="songInfoDialog.targetExists || songInfoDialog.current?.lyrics" class="song-info-link song-info-warning" :disabled="songInfoDialog.lyricSaveBusy" @click="removeSongInfoLyrics">{{ songInfoDialog.targetExists ? '删除 KTV 文件' : '移除显示' }}</button>
               </div>
-              <p v-else class="song-info-plain-preview">{{ selectedSongInfoCandidate().candidate.lyrics.plainPreview || '此结果没有可显示的歌词片段' }}</p>
-              <small>预览开头片段</small>
-            </section>
-            <div class="song-info-no-diff" v-else-if="!visibleSongInfoDifferences(selectedSongInfoCandidate()).length">没有可补充的信息</div>
-            <details class="song-info-provenance" v-if="songInfoProvenanceFields(selectedSongInfoCandidate())">
-              <summary>来源</summary>
-              <p>{{ songInfoProvenanceFields(selectedSongInfoCandidate()) }} · {{ selectedSongInfoCandidate().candidate.sourceLabel }}</p>
-            </details>
-            <p class="song-info-readonly" v-if="selectedSongInfoCandidate().recommendation === 'none'">此结果不匹配。请修正上方信息后查找。</p>
+            </div>
+            <template v-if="songInfoDialog.lyricEditor">
+              <textarea ref="songInfoLyricEditor" v-model="songInfoDialog.lyricDraft" aria-label="歌词正文" spellcheck="false" rows="10" maxlength="5242880" :disabled="songInfoDialog.lyricSaveBusy"></textarea>
+              <div class="song-info-actions">
+                <button class="primary" :disabled="songInfoDialog.lyricSaveBusy || !songInfoDialog.lyricDraft?.trim() || songInfoDialog.lyricDraft === songInfoDialog.lyricOriginal" @click="applySongInfoLyricChange('edit')">保存歌词</button>
+                <button class="mini" :disabled="songInfoDialog.lyricSaveBusy" @click="songInfoDialog.lyricEditor = false">取消编辑</button>
+              </div>
             </template>
-          </div>
-          <div class="song-info-empty" v-else>从左侧选择一项结果，查看差异和匹配依据。</div>
+            <div v-else-if="songInfoDialog.current?.lyrics" class="song-info-preview">
+              <div v-for="(line, index) in songInfoCurrentLyricPreview()" :key="index">{{ line }}</div>
+            </div>
+            <div v-if="!songInfoDialog.lyricEditor" class="song-info-actions song-info-secondary">
+              <button v-if="songInfoDialog.lyricFileExists" class="song-info-link" :disabled="songInfoDialog.lyricSaveBusy" @click="showSongInfoLyricFolder">打开文件位置</button>
+              <button v-if="lastLyricSaveTransactionId && normalizeComparablePath(lastLyricSaveTrackPath) === normalizeComparablePath(songInfoDialog.path)" class="song-info-link" :disabled="lyricUndoBusy || songInfoDialog.lyricSaveBusy" @click="undoLastLyricSave">撤销上次歌词修改</button>
+            </div>
+          </template>
+          <details v-if="!songInfoDialog.localLoading && !songInfoDialog.lyricEditor" class="song-info-lookup" :open="songInfoDialog.searchOpen" @toggle="songInfoDialog.searchOpen = $event.target.open">
+            <summary>在线查找{{ songInfoDialog.mode === 'lyrics' ? '歌词' : '资料' }}</summary>
+            <form class="song-info-search" @submit.prevent="retrySongInfoLookup">
+              <label><span>歌名</span><input v-model="songInfoDialog.searchTitle" maxlength="240" /></label>
+              <label><span>歌手</span><input v-model="songInfoDialog.searchArtist" maxlength="240" /></label>
+              <button class="primary" type="submit" :disabled="songInfoDialog.lyricSaveBusy">{{ songInfoDialog.loading ? '重新查找' : '查找' }}</button>
+            </form>
+            <button type="button" class="song-info-link" :disabled="songInfoDialog.lyricSaveBusy" @click="lookupSongInfoByFilename">按文件名查找</button>
+            <p v-if="songInfoDialog.loading" role="status">正在查找…</p>
+            <p v-else-if="songInfoDialog.error" role="status">{{ songInfoDialog.error }}</p>
+            <template v-if="songInfoDialog.candidates.length && !songInfoDialog.loading">
+              <label v-if="songInfoVisibleCandidates().length" class="song-info-result-choice">
+                <span>搜索结果</span>
+                <select :value="songInfoDialog.selectedIndex" :disabled="songInfoDialog.lyricSaveBusy" @change="selectSongInfoCandidate($event.target.value)">
+                  <option value="-1" disabled>选择一个结果</option>
+                  <option v-for="{item,index} in songInfoVisibleCandidates()" :key="index" :value="index">{{ item.candidate.title }} · {{ item.candidate.artists.join('、') }} · {{ item.candidate.sourceLabel }}</option>
+                </select>
+              </label>
+              <button v-if="songInfoRejectedCount()" class="song-info-link" :disabled="songInfoDialog.lyricSaveBusy" @click="songInfoDialog.showRejected = !songInfoDialog.showRejected">{{ songInfoDialog.showRejected ? '隐藏低匹配项' : '查看低匹配项' }}</button>
+              <template v-if="selectedSongInfoCandidate()">
+                <div class="song-info-result" v-for="item in [selectedSongInfoCandidate()]">
+                  <div>{{ songInfoCandidateStatus(item) }} <span v-if="songInfoCandidateMeta(item)">· {{ songInfoCandidateMeta(item) }}</span></div>
+                  <img v-if="songInfoDialog.mode === 'metadata' && songInfoCoverUrl(item)" class="song-info-result-art" :src="songInfoCoverUrl(item)" alt="候选封面" />
+                  <p v-if="item.blockers?.length" class="song-info-warning">{{ item.blockers.map(blocker => blocker.message).join(' · ') }}</p>
+                  <div v-if="songInfoDialog.mode === 'lyrics' && item.candidate.lyrics?.available" class="song-info-preview">
+                    <div v-for="(line,index) in item.candidate.lyrics.preview?.slice(0,6)" :key="index"><time>{{ formatTime(line.startMs / 1000) }}</time>{{ line.text }}</div>
+                    <div v-if="!item.candidate.lyrics.preview?.length">{{ item.candidate.lyrics.plainPreview }}</div>
+                  </div>
+                  <div v-else-if="songInfoDialog.mode === 'metadata'" class="song-info-preview">
+                    <div v-for="diff in visibleSongInfoDifferences(item).filter(diff => diff.field !== 'cover')" :key="diff.field">{{ songInfoFieldLabel(diff.field) }} · {{ formatSongInfoValue(diff.field,diff.proposed) }}</div>
+                  </div>
+                  <div class="song-info-actions">
+                    <button v-if="songInfoDialog.mode === 'metadata' && item.recommendation !== 'none'" class="mini" :disabled="songInfoDialog.lyricSaveBusy || songInfoSearchPending()" @click="useSongInfoMetadataCandidate">填入资料</button>
+                    <button v-if="songInfoDialog.mode === 'lyrics' && songInfoCandidateHasLyrics(item)" class="primary" :disabled="songInfoDialog.lyricSaveBusy || songInfoSearchPending()" @click="saveSelectedSongInfoLyrics">{{ songInfoDialog.targetExists ? '替换歌词' : '保存歌词' }}</button>
+                  </div>
+                  <details v-if="songInfoDialog.mode === 'lyrics' && songInfoCandidateHasLyrics(item)" class="song-info-more">
+                    <summary>保存选项</summary>
+                    <div class="song-info-actions">
+                      <select v-model="songInfoDialog.format" aria-label="歌词格式"><option value="enhanced-lrc">逐字 LRC</option><option value="lrc">逐行 LRC</option></select>
+                      <label v-if="item.candidate.lyrics.channels?.includes('translation')"><input type="checkbox" v-model="lyricSaveIncludeTranslation" />翻译</label>
+                      <label v-if="item.candidate.lyrics.channels?.includes('romanization')"><input type="checkbox" v-model="lyricSaveIncludeRomanization" />罗马音</label>
+                    </div>
+                  </details>
+                </div>
+              </template>
+            </template>
+          </details>
         </div>
-
-        <details class="song-info-export-options" v-if="songInfoDialog.mode === 'lyrics' && songInfoCandidateHasLyrics() && !songInfoDialog.loading">
-          <summary>保存选项</summary>
-          <div class="song-info-save-options">
-            <label>格式 <select v-model="songInfoDialog.format" :disabled="songInfoDialog.lyricSaveBusy"><option value="enhanced-lrc">逐字 LRC</option><option value="lrc">逐行 LRC</option></select></label>
-            <label v-if="selectedSongInfoCandidate()?.candidate.lyrics?.channels?.includes('translation')"><input type="checkbox" v-model="lyricSaveIncludeTranslation" :disabled="songInfoDialog.lyricSaveBusy" />翻译</label>
-            <label v-if="selectedSongInfoCandidate()?.candidate.lyrics?.channels?.includes('romanization')"><input type="checkbox" v-model="lyricSaveIncludeRomanization" :disabled="songInfoDialog.lyricSaveBusy" />罗马音</label>
-          </div>
-        </details>
-        <footer class="song-info-footer" v-if="!songInfoDialog.loading">
-          <span role="status">{{ songInfoDialog.lyricSaveMessage || (songInfoDialog.mode === 'metadata' && !songInfoMetadataSupported() ? (songMetadataEditAvailable ? '此格式暂不支持保存资料' : '当前版本尚未开放资料写入') : '') }}</span>
-          <div class="song-info-footer-actions">
-            <button v-if="songInfoDialog.metadataQueued" class="mini song-info-secondary" @click="cancelQueuedSongInfoMetadata">取消待保存</button>
-            <button v-if="songInfoDialog.mode === 'metadata' && lastMetadataSave?.trackPath === songInfoDialog.path" class="mini song-info-secondary" :disabled="songInfoDialog.lyricSaveBusy || songInfoDialog.metadataQueued" @click="undoSongInfoMetadata">撤销资料修改</button>
-            <button v-if="songInfoDialog.mode === 'metadata'" class="primary song-info-save-lyrics" :disabled="songInfoDialog.lyricSaveBusy || songInfoDialog.metadataQueued || !songInfoMetadataSupported() || (!Object.keys(songInfoMetadataChanges()).length && !selectedSongInfoCandidate()) || !songInfoDialog.metadataDraft?.title?.trim()" @click="saveSongInfoMetadata">{{ songInfoDialog.lyricSaveBusy ? '保存中…' : '保存资料' }}</button>
-            <button
-              v-if="songInfoDialog.mode === 'lyrics'"
-              class="primary song-info-save-lyrics"
-              :disabled="songInfoDialog.lyricSaveBusy || !songInfoCandidateHasLyrics() || songInfoSearchPending()"
-              @click="saveSelectedSongInfoLyrics"
-            >{{ songInfoDialog.lyricSaveBusy ? '保存中…' : (songInfoDialog.targetExists ? '替换歌词' : '保存歌词') }}</button>
-            <button
-              v-if="songInfoDialog.mode === 'lyrics' && lastLyricSaveTransactionId"
-              class="mini"
-              :disabled="lyricUndoBusy || songInfoDialog.lyricSaveBusy"
-              @click="undoLastLyricSave"
-            >{{ lyricUndoBusy ? '撤销中…' : '撤销上次保存' }}</button>
-            <button class="mini" :disabled="songInfoDialog.lyricSaveBusy" @click="closeSongInfoDialog">完成</button>
-          </div>
+        <footer class="song-info-footer">
+          <span role="status">{{ songInfoDialog.operation || songInfoDialog.lyricSaveMessage || (songInfoDialog.mode === 'metadata' && songInfoDialog.metadataDraft ? '资料修改保存在当前工作区' : '') }}</span>
+          <button v-if="songInfoDialog.mode === 'metadata' && songInfoHasUnsavedMetadata()" class="primary" :disabled="songInfoDialog.lyricSaveBusy" @click="saveSongInfoMetadata()">保存资料</button>
         </footer>
-        <details class="song-info-source-status" v-if="songInfoDialog.sources.length"><summary>查询来源</summary><p>{{ songInfoSourceSummary() }}</p></details>
       </section>
     </div>
 

@@ -273,6 +273,7 @@
       span.className = "ov-word pending";
       span.dataset.wordIdx = String(index);
       span.textContent = String(word?.text || "");
+      span.dataset.wordText = span.textContent;
       fragment.appendChild(span);
       wordEls.push(span);
     });

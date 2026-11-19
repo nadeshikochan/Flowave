@@ -1,6 +1,8 @@
 "use strict";
 
 const { coarseScore } = require("./lddc-strategy-provider");
+const { wordTimingQuality } = require("./word-timing-quality");
+const { lyricPerformerCredits, splitLyricCredits } = require("./candidate-model");
 
 const MUSIC_TAG_FALLBACK_SOURCES = Object.freeze(["kw"]);
 const MUSIC_TAG_STRATEGY_POLICY = Object.freeze({
@@ -12,7 +14,7 @@ const MUSIC_TAG_STRATEGY_POLICY = Object.freeze({
 });
 
 function artistsFromTrack(track) {
-  return String(track?.artist || "").split(/[、,，;/]+/u).map((item) => item.trim()).filter(Boolean);
+  return splitLyricCredits(track?.artist);
 }
 
 function createMusicTagStrategyLyricProvider({ searchMusic, getLyric } = {}) {
@@ -31,7 +33,7 @@ function createMusicTagStrategyLyricProvider({ searchMusic, getLyric } = {}) {
     async query({ evidence, signal } = {}) {
       const titleKeyword = String(evidence?.title || "").trim();
       if (!titleKeyword) return [];
-      const artist = Array.isArray(evidence?.artists) ? String(evidence.artists[0] || "").trim() : "";
+      const artist = lyricPerformerCredits(evidence?.artists)[0] || "";
       const combinedKeyword = [artist, titleKeyword].filter(Boolean).join(" ");
       const candidates = [];
       for (const source of MUSIC_TAG_FALLBACK_SOURCES) {
@@ -65,7 +67,7 @@ function createMusicTagStrategyLyricProvider({ searchMusic, getLyric } = {}) {
               providerPriority: 50,
               sourcePreference: 50,
             });
-            break;
+            if (wordTimingQuality(lyricsModel).complete) break;
           } catch (_) {}
         }
       }

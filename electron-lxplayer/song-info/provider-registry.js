@@ -130,7 +130,9 @@ class SongInfoProviderRegistry {
 
   async queryAll({ evidence, requestedFields = [], locale = "zh-CN", signal = null, forceRefresh = false } = {}) {
     const fields = sanitizeRequestedFields(requestedFields);
-    const tasks = [...this.providers.values()].map((provider) => (
+    const providers = [...this.providers.values()].filter(provider => !fields.length || !provider.supportedFields
+      || fields.some(field => provider.supportedFields.includes(field)));
+    const tasks = providers.map((provider) => (
       this.queryProvider(provider, { evidence, requestedFields: fields, locale, signal, forceRefresh })
     ));
     const settled = await Promise.all(tasks);

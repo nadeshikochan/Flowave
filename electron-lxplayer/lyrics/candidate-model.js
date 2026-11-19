@@ -10,6 +10,8 @@ const {
   LyricModelError,
   QUALITY_ORDER,
   buildUnifiedLyric,
+  exportEnhancedLrc,
+  isLeadingCreditText,
   parseLyricChannel,
 } = require("./unified-lyric");
 const { wordTimingQuality } = require("./word-timing-quality");
@@ -34,6 +36,47 @@ function textList(value) {
 function finitePositive(value) {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? number : 0;
+}
+
+const EAST_ASIAN_SCRIPT = /\p{sc=Han}|\p{sc=Hiragana}|\p{sc=Katakana}|\p{sc=Hangul}/u;
+const VOICE_ACTOR_CREDIT = /^(.+?)\s*\(\s*CV\s*[.:]?\s*([^()]+)\)\s*$/iu;
+
+function splitLyricCredits(value) {
+  return textList(textList(value).flatMap(credit => {
+    const separators = EAST_ASIAN_SCRIPT.test(credit) ? /[、,;\/]+/u : /[、,;]+|\s+\/\s+/u;
+    return credit.split(separators);
+  }));
+}
+
+function lyricPerformerCredits(value) {
+  return splitLyricCredits(value).map(credit => credit.match(VOICE_ACTOR_CREDIT)?.[2] || credit);
+}
+
+function compareLyricCredits(left, right) {
+  const a = lyricPerformerCredits(left);
+  const b = lyricPerformerCredits(right);
+  if (!a.length || !b.length) return { equivalent: false, similarity: 0 };
+  const equivalent = artistCreditsEquivalent(a, b);
+  if (equivalent) {
+    const characterCredits = credit => splitLyricCredits(credit).map(name => name.match(VOICE_ACTOR_CREDIT)).filter(Boolean);
+    const leftRoles = characterCredits(left);
+    const rightRoles = characterCredits(right);
+    const conflictingRole = leftRoles.some(([, role, actor]) => rightRoles.some(([, otherRole, otherActor]) =>
+      normalizeText(actor) === normalizeText(otherActor) && normalizeText(role) !== normalizeText(otherRole)));
+    return { equivalent: !conflictingRole, similarity: 1 };
+  }
+  const normalizeName = name => normalizeText(name.replace(/(\p{sc=Han})々/gu, "$1$1"));
+  const aliases = credit => {
+    const match = credit.match(/^([^()]+)\(\s*([^()]+)\)\s*$/u);
+    if (!match || !EAST_ASIAN_SCRIPT.test(match[1]) || !EAST_ASIAN_SCRIPT.test(match[2])) return [normalizeName(credit)];
+    return [normalizeName(match[1]), normalizeName(match[2])].filter(Boolean);
+  };
+  const leftNames = a.map(aliases);
+  const rightNames = b.map(aliases);
+  const overlap = (from, to) => from.reduce((sum, names) => sum + Math.max(0, ...to.map(other =>
+    names.some(name => other.includes(name)) ? 1 : textSimilarity(names[0], other[0]))), 0) / from.length;
+  const aliasSimilarity = Math.min(overlap(leftNames, rightNames), overlap(rightNames, leftNames));
+  return { equivalent, similarity: Math.max(artistCreditSimilarity(a, b), aliasSimilarity) };
 }
 
 function normalizeLyricEvidence(raw = {}) {
@@ -123,7 +166,8 @@ function inspectLyricQuality(candidate) {
     const plainMain = String(model?.plain?.main || "").trim();
     const hasMain = lines.some((line) => String(line?.main?.text || "").trim()) || Boolean(plainMain);
     const hasWords = lines.some((line) => Array.isArray(line?.main?.words) && line.main.words.length > 0);
-    const valid = Number(model.schemaVersion) === 1 && hasMain;
+    const valid = Number(model.schemaVersion) === 1 && hasMain
+      && !isInstrumentalNotice(lines.map(line => line.main?.text), plainMain);
     return {
       available: valid,
       qualityLevel: valid ? (hasWords ? "word" : (lines.length ? "line" : "plain")) : "invalid",
@@ -141,11 +185,12 @@ function inspectLyricQuality(candidate) {
       sourceId: `${candidate.provider}:${candidate.sourceRecordId || candidate.candidateId}`,
       format: candidate.syncedLyrics ? candidate.syncedFormat : "plain",
     });
+    const available = parsed.lines.length > 0 && !isInstrumentalNotice(parsed.lines.map(line => line.text));
     return {
-      available: parsed.lines.length > 0,
-      qualityLevel: parsed.qualityLevel,
-      parsed,
-      errorCode: parsed.lines.length ? "" : "LYRIC_EMPTY",
+      available,
+      qualityLevel: available ? parsed.qualityLevel : "invalid",
+      parsed: available ? parsed : null,
+      errorCode: available ? "" : "LYRIC_EMPTY",
     };
   } catch (error) {
     return {
@@ -157,15 +202,34 @@ function inspectLyricQuality(candidate) {
   }
 }
 
+function isInstrumentalNotice(timedText, plain = "") {
+  const text = [...timedText, ...String(plain).split(/\r?\n/u)]
+    .map(line => String(line || "").normalize("NFKC").trim())
+    .filter(line => line && !isLeadingCreditText(line));
+  return text.length > 0 && text.every(line => /^(?:本(?:曲|歌曲)(?:为|是))?(?:纯音乐|纯伴奏|伴奏曲|无人声)(?:[,，\s]*(?:请欣赏|敬请欣赏|无歌词))?[。.!！]*$|^(?:instrumental|no lyrics)[.!]*$/iu.test(line));
+}
+
+function lyricTimingFitsDuration(model, durationSeconds) {
+  if (!(durationSeconds > 0)) return false;
+  const limit = durationSeconds * 1000 + 2000;
+  return (model?.lines || []).every(line => (line.startMs ?? 0) <= limit && (line.endMs ?? 0) <= limit
+    && (line.main?.words || []).every(word => (word.endMs ?? word.startMs ?? 0) <= limit));
+}
+
+function meetsLyricTarget(item, target) {
+  if (target === "word") return item.timingQuality.complete;
+  if (target === "line") return Boolean(item.lyricsModel?.synced || item.parsed?.synced);
+  return true;
+}
+
 function scoreLyricCandidate(evidenceRaw, candidateRaw, options = {}) {
   const evidence = normalizeLyricEvidence(evidenceRaw);
   const candidate = candidateRaw?.candidateId
     ? candidateRaw
     : normalizeLyricCandidate(candidateRaw, options.provider);
   const titleScore = textSimilarity(evidence.title, candidate.trackName, { ignoreVersion: true });
-  const artistScore = evidence.artists.length && candidate.artists.length
-    ? artistCreditSimilarity(evidence.artists, candidate.artists)
-    : 0;
+  const credits = compareLyricCredits(evidence.artists, candidate.artists);
+  const artistScore = credits.similarity;
   const albumScore = evidence.album && candidate.album ? textSimilarity(evidence.album, candidate.album) : 0;
   const hasDuration = evidence.durationSeconds > 0 && candidate.durationSeconds > 0;
   const durationDifference = hasDuration
@@ -178,23 +242,30 @@ function scoreLyricCandidate(evidenceRaw, candidateRaw, options = {}) {
   if (titleScore < 0.7) blockers.push({ code: "title-conflict", message: "标题不一致" });
   if (evidence.artists.length && candidate.artists.length && artistScore < 0.5) {
     blockers.push({ code: "artist-conflict", message: "歌手不一致" });
-  } else if (evidence.artists.length && candidate.artists.length && !artistCreditsEquivalent(evidence.artists, candidate.artists)) {
+  } else if (evidence.artists.length && candidate.artists.length && !credits.equivalent) {
     blockers.push({ code: "artist-credit-difference", message: "演唱者不完全一致" });
   }
   if (!sameTerms(evidence.versionTerms, candidate.versionTerms)) {
     blockers.push({ code: "version-conflict", message: "版本不一致" });
+  } else if (evidence.versionTerms.includes("instrumental") && quality.available) {
+    blockers.push({ code: "instrumental-with-lyrics", message: "伴奏版带有歌词，请核实是否来自人声版" });
   }
   if (durationDifference !== null && durationDifference > 4) {
     blockers.push({ code: "duration-conflict", message: `时长相差 ${Math.round(durationDifference)} 秒` });
   }
   if (!quality.available) blockers.push({ code: quality.errorCode, message: "歌词不可用" });
+  const model = quality.model || (quality.parsed ? buildUnifiedLyric({ main: quality.parsed }) : null);
+  if (options.lyricCompleteness && model?.synced && evidence.durationSeconds > 0
+    && !lyricTimingFitsDuration(model, evidence.durationSeconds)) {
+    blockers.push({ code: "timing-outside-audio", message: "歌词时间超出音频长度" });
+  }
 
   if (titleScore >= 0.92) reasons.push("标题一致");
   if (artistScore >= 0.9) reasons.push("歌手一致");
   if (durationDifference !== null && durationDifference <= 2) reasons.push("时长一致");
   if (albumScore >= 0.9) reasons.push("专辑一致");
 
-  const hardBlockers = blockers.filter((blocker) => blocker.code !== "artist-credit-difference");
+  const hardBlockers = blockers.filter(({ code }) => !["artist-credit-difference", "instrumental-with-lyrics"].includes(code));
   let identityLevel = "reject";
   if (!hardBlockers.length) {
     if (titleScore >= 0.92 && artistScore >= 0.9 && durationDifference !== null && durationDifference <= 2) {
@@ -236,7 +307,7 @@ function scoreLyricCandidate(evidenceRaw, candidateRaw, options = {}) {
     qualityLevel: quality.qualityLevel,
     parsed: quality.parsed,
     lyricsModel: quality.model || null,
-    timingQuality: wordTimingQuality(quality.model || (quality.parsed ? buildUnifiedLyric({ main: quality.parsed }) : null)),
+    timingQuality: wordTimingQuality(model),
     evidence: {
       title: titleScore,
       artists: artistScore,
@@ -247,10 +318,12 @@ function scoreLyricCandidate(evidenceRaw, candidateRaw, options = {}) {
 }
 
 function rankLyricCandidates(evidence, candidates, options = {}) {
-  const ranked = (Array.isArray(candidates) ? candidates : [])
+  const scored = (Array.isArray(candidates) ? candidates : [])
     .map((candidate) => scoreLyricCandidate(evidence, candidate, options))
+    .filter(item => meetsLyricTarget(item, options.lyricCompleteness))
     .sort((left, right) => (
       Number(right.recommendation !== "none") - Number(left.recommendation !== "none")
+      || (options.lyricCompleteness ? Number(right.recommendation === "strong") - Number(left.recommendation === "strong") : 0)
       || IDENTITY_ORDER[right.identityLevel] - IDENTITY_ORDER[left.identityLevel]
       || right.timingQuality.coverage - left.timingQuality.coverage
       || right.timingQuality.textCoverage - left.timingQuality.textCoverage
@@ -262,6 +335,22 @@ function rankLyricCandidates(evidence, candidates, options = {}) {
       || right.candidate.sourcePreference - left.candidate.sourcePreference
       || left.candidate.candidateId.localeCompare(right.candidate.candidateId)
     ));
+  // Provider and local tag IDs describe provenance, not distinct lyric timelines.
+  const fingerprints = new Set();
+  const ranked = scored.filter(item => {
+    if (item.identityLevel === "reject") return true;
+    const model = item.lyricsModel || (item.parsed ? buildUnifiedLyric({ main: item.parsed }) : null);
+    if (!model) return true;
+    const fingerprint = exportEnhancedLrc(model, {
+      includeTranslation: options.includeTranslation !== false,
+      includeRomanization: options.includeRomanization !== false,
+      includeWordTiming: options.lyricCompleteness !== "line",
+    });
+    if (!fingerprint) return true;
+    if (fingerprints.has(fingerprint)) return false;
+    fingerprints.add(fingerprint);
+    return true;
+  });
   const viableWeak = ranked.filter((item) => item.identityLevel === "weak");
   const manualThreshold = Math.max(0, Math.min(100, Number(options.manualThreshold ?? 75)));
   if (
@@ -291,9 +380,14 @@ function rankLyricCandidates(evidence, candidates, options = {}) {
 
 module.exports = {
   IDENTITY_ORDER,
+  compareLyricCredits,
   inspectLyricQuality,
+  lyricTimingFitsDuration,
+  lyricPerformerCredits,
+  meetsLyricTarget,
   normalizeLyricCandidate,
   normalizeLyricEvidence,
   rankLyricCandidates,
   scoreLyricCandidate,
+  splitLyricCredits,
 };

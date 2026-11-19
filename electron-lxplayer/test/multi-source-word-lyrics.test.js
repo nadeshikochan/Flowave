@@ -46,6 +46,91 @@ test('partial word timing does not count as a complete word result',()=>{
   assert.equal(mixed.lines.length,2);assert.equal(wordTimingQuality(mixed).coverage,0.5);
 });
 
+test('batch inspects local timing before the network and sends existing sidecar upgrades to review', async () => {
+  let localModel = words();
+  let remoteModel = words();
+  const requests = [];
+  const service = new LyricLookupService({
+    stat: async () => ({ isFile: () => true }),
+    getMeta: async () => ({ title: "Song", titleFromTag: true, artists: ["Singer"], album: "Album", duration: 180 }),
+    inspectSidecar: async () => ({ version: { exists: true, sha256: "prior-sidecar" } }),
+    registry: {
+      async queryAll({ providerIds, localContext }) {
+        const [provider] = providerIds;
+        requests.push(provider);
+        if (provider === "local-library") {
+          assert.deepEqual(localContext.sources, ["external", "sidecar", "embedded"]);
+          const local = normalizeLyricCandidate({
+            id: "local", trackName: "Song", artists: ["Singer"], durationSeconds: 180,
+            unifiedLyrics: localModel, sourceType: "embedded", identityLevel: "strong", identityScore: 100,
+          }, { id: "local-library", localOnly: true });
+          return { candidates: [local], sources: [] };
+        }
+        return { candidates: [candidate(provider, remoteModel)], sources: [] };
+      },
+    },
+  });
+  const request = { trackPath: "Song.flac", storageTarget: "sidecar", onlyMissing: true,
+    lyricSources: ["lddc"], lyricCompleteness: "word" };
+  assert.equal((await service.query(request)).skipped, "complete");
+  assert.deepEqual(requests.splice(0), ["local-library"]);
+  localModel = sentence();
+  assert.equal((await service.query({ ...request, lyricCompleteness: "line" })).skipped, "complete");
+  assert.deepEqual(requests.splice(0), ["local-library"]);
+  const upgrade = await service.query(request);
+  assert.deepEqual(requests.splice(0), ["local-library", "lddc-strategy"]);
+  assert.equal(upgrade.targetVersion, "prior-sidecar");
+  assert.equal(upgrade.candidates[0].recommendation, "medium");
+  assert.equal(upgrade.candidates[0].differences[0].current, true);
+  remoteModel = sentence();
+  const lineOnly = await service.query(request);
+  assert.deepEqual(lineOnly.candidates, []);
+  assert.equal(lineOnly.matchOutcome, "timing-insufficient");
+  assert.deepEqual(requests, ["local-library", "lddc-strategy", "music-tag-strategy"]);
+});
+
+test("the exact KTV target short-circuits search and protects suspect timed files for review", async () => {
+  const body = Buffer.from(exportEnhancedLrc(words()));
+  let existing = body;
+  const service = new LyricLookupService({
+    stat: async () => ({ isFile: () => true }),
+    getMeta: async () => ({ title: "Song", titleFromTag: true, artists: ["Singer"], duration: 180 }),
+    inspectSidecar: async (_track, options) => {
+      assert.equal(options.includeBody, true);
+      return { body: existing, version: { exists: true, sha256: "current" } };
+    },
+    registry: { async queryAll() { assert.fail("existing word file must not enter provider lookup"); } },
+  });
+  const request = { trackPath: "Song.flac", storageTarget: "sidecar", lyricCompleteness: "word" };
+  assert.equal((await service.query(request)).skipped, "complete");
+  existing = Buffer.from("[ti:Different Track]\n" + body.toString());
+  assert.equal((await service.query(request)).skipped, "local-review");
+  existing = Buffer.from("[offset:300000]\n" + body.toString());
+  assert.equal((await service.query(request)).skipped, "local-review");
+});
+
+test("a source with no lyrics is distinguished from wrong identity and partial source failure", async () => {
+  let remote = [];
+  let failed = false;
+  const service = new LyricLookupService({
+    stat: async () => ({ isFile: () => true }),
+    getMeta: async () => ({ title: "Song", titleFromTag: true, artists: ["Singer"], duration: 180 }),
+    registry: {
+      async queryAll({ providerIds: [id] }) {
+        const candidates = id === "lddc-strategy" ? remote : [];
+        return { candidates, sources: [{ id, status: id === "lddc-strategy" && failed ? "timeout" : candidates.length ? "ok" : "empty" }] };
+      },
+    },
+  });
+  const request = { trackPath: "Song.flac", storageTarget: "sidecar", lyricCompleteness: "word" };
+  assert.equal((await service.query(request)).matchOutcome, "source-empty");
+  remote = [candidate("wrong-version", words(), { trackName: "Song (Live)" })];
+  assert.equal((await service.query(request)).matchOutcome, "identity-rejected");
+  remote = [];
+  failed = true;
+  assert.equal((await service.query(request)).matchOutcome, "source-incomplete");
+});
+
 test('one failed platform is isolated; a line result does not hide a later word result',async()=>{
   const fetched=[];
   const provider=createLddcStrategyLyricProvider({

@@ -76,6 +76,14 @@ test("workspace media requests repair migrated artwork without rereading track m
       }
     }
     const normalImage = path.join(directory, "cover.jpg");
+    const artwork = cache => path.join(cache, "..", "config", "song-info", "artwork", "a".repeat(64) + ".png");
+    for (const cache of [oldCache, currentCache]) {
+      fs.mkdirSync(path.dirname(artwork(cache)), { recursive: true });
+      fs.writeFileSync(artwork(cache), "custom cover");
+    }
+    const custom = secureProtocols.toLocalMediaUrl(artwork(oldCache));
+    assert.equal(secureProtocols.resolveLocalMediaPath(custom, currentCache), artwork(currentCache));
+    assert.equal(secureProtocols.resolveLocalMediaPath(custom, otherCache), "");
     fs.writeFileSync(normalImage, "external cover");
     assert.equal(secureProtocols.resolveLocalMediaPath(secureProtocols.toLocalMediaUrl(normalImage), currentCache), normalImage);
     const audio = path.join(oldCache, "metadata", "covers", "audio.mp3");

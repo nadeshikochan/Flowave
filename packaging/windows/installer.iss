@@ -59,6 +59,13 @@ Name: "{userdesktop}\{#ShortcutLabel}"; Filename: "{app}\Flowave.exe"
 Type: filesandordirs; Name: "{app}\backend\source\__pycache__"
 
 [Code]
+function GetSystemMenu(Window: HWND; Revert: Integer): THandle;
+  external 'GetSystemMenu@user32.dll stdcall';
+function GetMenuState(Menu: THandle; Command, Flags: LongWord): LongWord;
+  external 'GetMenuState@user32.dll stdcall';
+function EnableMenuItem(Menu: THandle; Command, Flags: LongWord): Integer;
+  external 'EnableMenuItem@user32.dll stdcall';
+
 var
   DataModePage: TInputOptionWizardPage;
   DataPage: TInputDirWizardPage;
@@ -158,9 +165,39 @@ procedure OnStorageProgress(const S: String; const Error, FirstLine: Boolean);
 begin
   Log(S);
   if not WizardSilent then begin
+    { ExecAndLogOutput disables its owner. The progress page already blocks
+      navigation, so allow the native caption to keep moving the window. }
+    WizardForm.Enabled := True;
+    if WizardForm.CurPageID <> StorageProgress.ID then exit;
     if DataModePage.SelectedValueIndex = 2 then StorageProgress.SetText(S, '复制校验完成后切换，旧目录保留。')
     else if DataModePage.SelectedValueIndex = 1 then StorageProgress.SetText(S, '正在确认已有工作区。')
     else StorageProgress.SetText(S, '正在准备全新工作区。');
+  end;
+end;
+
+function ExecInstallerHelper(const Parameters: String; var Code: Integer): Boolean;
+var
+  NextEnabled, BackEnabled, CancelEnabled: Boolean;
+  Menu: THandle;
+  CloseState: LongWord;
+begin
+  NextEnabled := WizardForm.NextButton.Enabled;
+  BackEnabled := WizardForm.BackButton.Enabled;
+  CancelEnabled := WizardForm.CancelButton.Enabled;
+  Menu := GetSystemMenu(WizardForm.Handle, 0);
+  CloseState := GetMenuState(Menu, $F060, 0);
+  WizardForm.NextButton.Enabled := False;
+  WizardForm.BackButton.Enabled := False;
+  WizardForm.CancelButton.Enabled := False;
+  if CloseState <> $FFFFFFFF then EnableMenuItem(Menu, $F060, 1);
+  try
+    Result := ExecAndLogOutput(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), Parameters,
+        '', SW_HIDE, ewWaitUntilTerminated, Code, @OnStorageProgress);
+  finally
+    WizardForm.NextButton.Enabled := NextEnabled;
+    WizardForm.BackButton.Enabled := BackEnabled;
+    WizardForm.CancelButton.Enabled := CancelEnabled;
+    if CloseState <> $FFFFFFFF then EnableMenuItem(Menu, $F060, CloseState and 3);
   end;
 end;
 
@@ -184,8 +221,7 @@ begin
     + ' -DataDir ' + AddQuotes(DataPage.Values[0]) + ' -InstallDir ' + AddQuotes(ExpandConstant('{app}'))
     + ' -DataMode ' + Mode
     + ' -ErrorFile ' + AddQuotes(ErrorFile);
-  if not ExecAndLogOutput(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), Parameters,
-      '', SW_HIDE, ewWaitUntilTerminated, Code, @OnStorageProgress) then Code := 44;
+  if not ExecInstallerHelper(Parameters, Code) then Code := 44;
   if Code <> 0 then begin
     Result := '数据目录准备失败，原数据保留。';
     if LoadStringsFromFile(ErrorFile, Lines) and (GetArrayLength(Lines) > 0) then Result := Lines[0];
@@ -200,8 +236,9 @@ begin
     + ' -InstallDir ' + AddQuotes(RemoveBackslashUnlessRoot(ProgramDir));
   if RegQueryStringValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#ApplicationId}_is1', 'InstallLocation', RegisteredDir) and (RegisteredDir <> '') then
     Parameters := Parameters + ' -RegisteredDir ' + AddQuotes(RemoveBackslashUnlessRoot(RegisteredDir));
-  if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), Parameters, '', SW_HIDE, ewWaitUntilTerminated, Result) then
-    Result := 43;
+  if IsUninstaller then begin
+    if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), Parameters, '', SW_HIDE, ewWaitUntilTerminated, Result) then Result := 43;
+  end else if not ExecInstallerHelper(Parameters, Result) then Result := 43;
 end;
 
 function CheckMessage(const Code: Integer): String;

@@ -95,6 +95,7 @@ function createItunesProvider({ requestJson = null, countries = ["CN", "US", "JP
     id: "itunes",
     version: "search-multistore-v4",
     label: "iTunes",
+    supportedFields: ["title", "artists", "album", "albumArtists", "releaseDate", "trackNumber", "trackTotal", "discNumber", "discTotal", "genres"],
     allowConcurrentQueries: true,
     timeoutMs: 25000,
     maxAttempts: 2,

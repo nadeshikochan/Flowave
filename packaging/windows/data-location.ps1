@@ -62,6 +62,7 @@ try {
   $marker = Join-Path $target '.flowave-data.json'
 
   if ($Action -eq 'Prepare') {
+    Write-Output '正在检查工作区与存储空间…'
     if ($same) { Write-Output '继续使用原数据目录。'; exit 0 }
     if ((Test-Path -LiteralPath $target) -and @(Get-ChildItem -LiteralPath $target -Force).Count) {
       if (-not (Test-Path -LiteralPath $marker)) { throw '目标目录已有内容，请新建空文件夹，避免覆盖或混合数据。' }

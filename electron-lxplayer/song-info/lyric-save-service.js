@@ -267,6 +267,9 @@ class LyricSaveService {
     if (!lyrics.trim()) throw new LyricSaveServiceError("lyric content is missing", "LYRIC_EMPTY");
     const savedLyrics = `[re:Flowave:user-selected]\n${lyrics}`;
     const inspected = await this.store.inspect(staged.trackPath);
+    if (payload.expectedTargetVersion !== undefined && (inspected.version.sha256 || "") !== payload.expectedTargetVersion) {
+      throw new LyricSaveServiceError("lyric target changed", "CANDIDATE_CHANGED");
+    }
     const confirmationId = String(this.idFactory());
     const expiresAt = this.now() + this.confirmationTtlMs;
     this.pending.set(confirmationId, {
@@ -298,6 +301,34 @@ class LyricSaveService {
     return this.pending.delete(String(confirmationId || ""));
   }
 
+  async prepareLocal({ trackPath, resourceId, action, text, expectedVersion } = {}) {
+    this.prune();
+    const inspected = await this.store.inspect(trackPath);
+    const remove = action === "delete";
+    if (remove && !inspected.version.exists) return { ok: false, message: "没有可删除的 KTV 歌词文件" };
+    if (!remove && expectedVersion !== inspected.version.sha256) {
+      return { ok: false, message: "歌词已变化，请重新打开编辑器" };
+    }
+    const content = typeof text === "string" ? text.trim() : "";
+    if (!remove) {
+      if (!content || content.includes("\0") || Buffer.byteLength(content) > 5 * 1024 * 1024
+        || content.split(/\r?\n/u, MAX_LINES + 1).length > MAX_LINES) {
+        return { ok: false, message: "请输入有效歌词，清空时请使用删除操作" };
+      }
+      if (!parseLyricChannel(content)?.lines?.some(line => String(line.text || "").trim())) {
+        return { ok: false, message: "没有可显示的歌词正文" };
+      }
+    }
+    const confirmationId = String(this.idFactory());
+    this.pending.set(confirmationId, {
+      trackPath: inspected.audioPath, expected: inspected.version, resourceId,
+      source: "manual",
+      lyrics: remove ? "" : `[re:Flowave:user-selected]\n${content.replace(/^\[re:.*?\][ \t]*\r?\n/gimu, "")}`,
+      remove, expiresAt: this.now() + this.confirmationTtlMs,
+    });
+    return { ok: true, confirmationId, targetExists: inspected.version.exists };
+  }
+
   async commit({ confirmationId, replaceExisting = false } = {}) {
     this.prune();
     const key = String(confirmationId || "");
@@ -307,6 +338,7 @@ class LyricSaveService {
     const operation = Promise.resolve().then(() => this.store.write({
       audioPath: prepared.trackPath,
       lyrics: prepared.lyrics,
+      remove: prepared.remove === true,
       expected: prepared.expected,
       skipExisting: !replaceExisting,
       source: prepared.source,
@@ -334,26 +366,28 @@ class LyricSaveService {
     };
   }
 
-  async undo(transactionId) {
+  async undo(transactionId, { includeTrackPath = false } = {}) {
     const result = await this.store.undoById(transactionId);
     let refreshFailed = false;
     if (result.status === "undone") {
       try { await this.onChanged(result.audioPath || ""); }
       catch (_) { refreshFailed = true; }
     }
-    return { ok: true, status: result.status, ...(refreshFailed ? { refreshFailed: true } : {}) };
+    return { ok: true, status: result.status, ...(refreshFailed ? { refreshFailed: true } : {}),
+      ...(includeTrackPath && result.audioPath ? { trackPath: result.audioPath } : {}) };
   }
 
-  async recentUndo() {
+  async recentUndo({ includeTrackPath = false } = {}) {
     if (typeof this.store.listRecentUndoable !== "function") {
       return { ok: true, transaction: null };
     }
-    const [transaction = null] = await this.store.listRecentUndoable({ limit: 1 });
+    const [transaction = null] = await this.store.listRecentUndoable({ limit: 1, includeTrackPath });
     return {
       ok: true,
       transaction: transaction ? {
         transactionId: String(transaction.transactionId || ""),
         committedAt: Math.max(0, Number(transaction.committedAt) || 0),
+        ...(includeTrackPath && transaction.trackPath ? { trackPath: transaction.trackPath } : {}),
       } : null,
     };
   }

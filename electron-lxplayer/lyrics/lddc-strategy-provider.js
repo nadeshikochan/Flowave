@@ -1,11 +1,10 @@
 "use strict";
 
 const {
-  artistCreditSimilarity,
   textSimilarity,
 } = require("../song-info/candidate-model");
 const { wordTimingQuality } = require("./word-timing-quality");
-const { normalizeLyricCandidate, rankLyricCandidates } = require("./candidate-model");
+const { compareLyricCredits, lyricPerformerCredits, normalizeLyricCandidate, rankLyricCandidates, splitLyricCredits } = require("./candidate-model");
 
 const LDDC_SOURCE_ORDER = Object.freeze(["tx", "kg", "wy"]);
 const SOURCE_LABELS = Object.freeze({ tx: "QQ 音乐", kg: "酷狗音乐", wy: "网易云音乐" });
@@ -18,15 +17,19 @@ const LDDC_STRATEGY_POLICY = Object.freeze({
 });
 
 function artistsFromTrack(track) {
-  return String(track?.artist || "").split(/[、,，;/]+/u).map((item) => item.trim()).filter(Boolean);
+  return splitLyricCredits(track?.artist);
 }
 
 function coarseScore(evidence, track) {
+  if (evidence?.alternatives?.length) {
+    const { alternatives, ...primary } = evidence;
+    return Math.max(coarseScore(primary, track), ...alternatives.map(item => coarseScore(item, track)));
+  }
   const title = textSimilarity(evidence?.title || "", track?.title || "", { ignoreVersion: true });
   const expectedArtists = Array.isArray(evidence?.artists) ? evidence.artists : [];
   const actualArtists = artistsFromTrack(track);
   const artists = expectedArtists.length && actualArtists.length
-    ? artistCreditSimilarity(expectedArtists, actualArtists)
+    ? compareLyricCredits(expectedArtists, actualArtists).similarity
     : 0;
   const expectedDuration = Math.max(0, Number(evidence?.durationSeconds) || 0);
   const actualDuration = Math.max(0, Number(track?.duration) || 0);
@@ -65,7 +68,7 @@ function createLddcStrategyLyricProvider({ searchMusic, getLyric } = {}) {
     allowStructuredLyrics: true,
     policy: LDDC_STRATEGY_POLICY,
     async query({ evidence, signal } = {}) {
-      const combinedKeyword = [...(Array.isArray(evidence?.artists) ? evidence.artists.slice(0, 1) : []), evidence?.title]
+      const combinedKeyword = [...lyricPerformerCredits(evidence?.artists).slice(0, 1), evidence?.title]
         .map((item) => String(item || "").trim()).filter(Boolean).join(" ");
       const titleKeyword = String(evidence?.title || "").trim();
       if (!titleKeyword) return [];
@@ -101,9 +104,11 @@ function createLddcStrategyLyricProvider({ searchMusic, getLyric } = {}) {
             const candidate = candidateFromTrack(track, result?.lyricsModel, sourceIndex, rank);
             if (candidate) {
               candidates.push(candidate);
-              const match = rankLyricCandidates(evidence, [normalizeLyricCandidate(candidate,
-                { id: "lddc-strategy", allowStructuredLyrics: true })])[0];
-              if (match?.recommendation !== "none" && wordTimingQuality(result.lyricsModel).complete) break;
+              const normalized = normalizeLyricCandidate(candidate,
+                { id: "lddc-strategy", allowStructuredLyrics: true });
+              const verified = [evidence, ...(evidence.alternatives || [])].some(identity =>
+                ["strong", "medium"].includes(rankLyricCandidates(identity, [normalized])[0]?.recommendation));
+              if (verified && wordTimingQuality(result.lyricsModel).complete) break;
             }
           } catch (error) { lyricFailures += 1; lastFailure = error; }
         }

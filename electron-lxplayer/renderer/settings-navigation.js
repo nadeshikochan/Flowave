@@ -153,7 +153,7 @@ const items=[
     "id": "setting-song-info-22b15a534b",
     "anchor": "setting-song-info-22b15a534b",
     "page": "song-info",
-    "title": "补充内容",
+    "title": "检查范围",
     "path": "曲库工具 / 歌曲资料与歌词补全",
     "keywords": ""
   },
@@ -162,14 +162,14 @@ const items=[
     "anchor": "setting-song-info-songinfobatchsettings-scope",
     "page": "song-info",
     "title": "范围",
-    "path": "曲库工具 / 歌曲资料与歌词补全 / 补充内容",
+    "path": "曲库工具 / 歌曲资料与歌词补全 / 检查范围",
     "keywords": ""
   },
   {
     "id": "setting-song-info-c7127bb6ee",
     "anchor": "setting-song-info-c7127bb6ee",
     "page": "song-info",
-    "title": "匹配选项",
+    "title": "高级匹配选项",
     "path": "曲库工具 / 歌曲资料与歌词补全",
     "keywords": " 匹配"
   },
@@ -201,41 +201,33 @@ const items=[
     "id": "setting-song-info-315d810f5e",
     "anchor": "setting-song-info-315d810f5e",
     "page": "song-info",
-    "title": "歌词选项",
+    "title": "补全缺失歌词",
     "path": "曲库工具 / 歌曲资料与歌词补全",
-    "keywords": " 歌词"
+    "keywords": "歌词 KTV 逐字 跳过已有歌词 保存位置 内嵌歌词 同名歌词"
   },
   {
-    "id": "setting-song-info-songinfobatchsettings-lyricsavetarget",
-    "anchor": "setting-song-info-songinfobatchsettings-lyricsavetarget",
+    "id": "setting-song-info-lyric-identity",
+    "anchor": "setting-song-info-lyric-identity",
     "page": "song-info",
-    "title": "保存位置",
+    "title": "歌词匹配依据",
     "path": "曲库工具 / 歌曲资料与歌词补全 / 歌词",
-    "keywords": ""
+    "keywords": "文件名 歌曲标签 错配"
   },
   {
     "id": "setting-song-info-songinfobatchsettings-lyricformat",
     "anchor": "setting-song-info-songinfobatchsettings-lyricformat",
     "page": "song-info",
-    "title": "歌词格式",
+    "title": "歌词补全目标",
     "path": "曲库工具 / 歌曲资料与歌词补全 / 歌词",
-    "keywords": ""
+    "keywords": "逐字 逐句 KTV 歌词格式"
   },
   {
-    "id": "setting-song-info-songinfobatchsettings-skipexistinglyrics",
-    "anchor": "setting-song-info-songinfobatchsettings-skipexistinglyrics",
+    "id": "setting-song-info-metadata-identity",
+    "anchor": "setting-song-info-metadata-identity",
     "page": "song-info",
-    "title": "跳过已有歌词",
-    "path": "曲库工具 / 歌曲资料与歌词补全 / 歌词",
-    "keywords": ""
-  },
-  {
-    "id": "setting-song-info-4d69dbdf62",
-    "anchor": "setting-song-info-4d69dbdf62",
-    "page": "song-info",
-    "title": "原文",
-    "path": "曲库工具 / 歌曲资料与歌词补全 / 歌词",
-    "keywords": ""
+    "title": "资料匹配依据",
+    "path": "曲库工具 / 歌曲资料与歌词补全 / 歌曲资料与封面",
+    "keywords": "文件名 歌曲标签 错配"
   },
   {
     "id": "setting-song-info-lyricsaveincludetranslation",
@@ -257,7 +249,7 @@ const items=[
     "id": "setting-song-info-f9e4f28179",
     "anchor": "setting-song-info-f9e4f28179",
     "page": "song-info",
-    "title": "查找歌曲信息",
+    "title": "查找缺失资料与封面",
     "path": "曲库工具 / 歌曲资料与歌词补全",
     "keywords": " 开始查找"
   },
@@ -860,6 +852,14 @@ const items=[
     "title": "锁定并点击穿透",
     "path": "歌词 / 桌面歌词",
     "keywords": ""
+  },
+  {
+    "id": "setting-desktop-lyric-reset-position",
+    "anchor": "setting-desktop-lyric-reset-position",
+    "page": "desktop-lyric",
+    "title": "恢复桌面歌词位置",
+    "path": "歌词 / 桌面歌词",
+    "keywords": "双屏 副屏 主屏 显示器 屏幕外 找回 窗口位置 复原 顶部居中"
   },
   {
     "id": "setting-desktop-lyric-desktoplyriccovercolor",
